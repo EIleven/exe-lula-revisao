@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Cor de destaque dos avisos (o mesmo valor que o servidor manda em functions/src/push.ts). -->
+    <color name="notificacao_cor">#D61F26</color>
+</resources>

@@ -1,0 +1,13 @@
+{
+  "versionName": "1.3.0",
+  "versionCode": 5,
+  "minSupportedVersionCode": 5,
+  "apkUrl": "/downloads/Soberan-1.3.0.apk",
+  "sha256": "9ffe467129cab29b2d192d01257b1e5f05b8b71d0f47397f3a18c6a9697c1313",
+  "releaseNotes": [
+    "Notificações push nativas e vibração no Android.",
+    "Rolagem do feed mais fluida e correção do primeiro gesto no topo.",
+    "Prévia única do YouTube, mídia por colar/arrastar e tema preto por padrão.",
+    "Melhorias no chat, navegação, enquetes, localização e resposta imediata das interações."
+  ]
+}

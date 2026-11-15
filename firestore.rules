@@ -1,0 +1,882 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // -------------------------
+    // Helpers
+    // -------------------------
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Para criar conteudo ou interagir, nao basta existir no Firebase Auth:
+    // o e-mail precisa estar confirmado e a conta precisa ter perfil/vaga.
+    // Leitura, configuracoes, canal LGPD, exportacao e exclusao nao dependem
+    // deste helper.
+    function isVerifiedMember() {
+      return isAuthenticated()
+        && request.auth.token.get('email_verified', false) == true
+        && request.auth.token.get('member', false) == true;
+    }
+
+    function isDataOwner(doc) {
+      return isOwner(doc.data.userId);
+    }
+
+    function isAdminUser() {
+      return isAuthenticated()
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('isAdmin', false) == true;
+    }
+
+    function getPostOwnerId(postId) {
+      return exists(/databases/$(database)/documents/posts/$(postId))
+        ? get(/databases/$(database)/documents/posts/$(postId)).data.userId
+        : "";
+    }
+
+    function doesProfileFollow(profileId, followerId) {
+      return exists(/databases/$(database)/documents/users/$(profileId)/followers/$(followerId));
+    }
+    
+    // Quem vê um post: público para todos; "followers" (todo post de perfil privado) para o autor e seus seguidores;
+    // "private" só para o autor. Antes o próprio autor não lia o seu post "followers".
+    function postVisibleTo(post) {
+      let visibility = post.get('visibility', 'public');
+      return visibility == 'public'
+        || isOwner(post.userId)
+        || (visibility == 'followers' && isAuthenticated() && doesProfileFollow(post.userId, request.auth.uid));
+    }
+
+    function canReadPost(postId) {
+      let path = /databases/$(database)/documents/posts/$(postId);
+      return exists(path) && get(path).data.get('isDeleted', false) == false && postVisibleTo(get(path).data);
+    }
+
+    // Respostas, curtidas e reposts de um post seguem a visibilidade dele (inclusive depois de "tombado").
+    function canSeePostThread(postId) {
+      let path = /databases/$(database)/documents/posts/$(postId);
+      return exists(path) && postVisibleTo(get(path).data);
+    }
+
+    // Todo post nasce com a visibilidade do perfil do autor: privado -> só seguidores; público -> público.
+    function visibilityForAuthor(authorData) {
+      return authorData.get('profileVisibility', 'public') == 'private' ? 'followers' : 'public';
+    }
+    
+    function canReadComment(commentData) {
+      return commentData.get('isDeleted', false) != true && (
+        commentData.get('postVisibility', 'public') == 'public'
+        || (commentData.get('postVisibility', 'public') == 'private' && isOwner(commentData.postAuthorId))
+        || (commentData.get('postVisibility', 'public') == 'followers' && (isOwner(commentData.postAuthorId) || (isAuthenticated() && doesProfileFollow(commentData.postAuthorId, request.auth.uid))))
+      );
+    }
+    
+    // --- COLLECTION GROUP RULES ---
+    
+    // ATENÇÃO: nada de resource.data.get(campo, padrão) em regras de LISTAGEM. Numa consulta sem filtro naquele campo,
+    // o motor de regras usa o padrão e libera: com get('postVisibility', 'public') qualquer pessoa, até sem login,
+    // listava as respostas de um post só para seguidores (medido no emulador). Com o campo direto, a consulta precisa
+    // filtrar por ele (where postVisibility == 'public') ou cair na regra do caminho do post.
+    match /{path=**}/comments/{commentId} {
+      allow list: if resource.data.postVisibility == 'public'
+        || (isAuthenticated() && resource.data.userId == request.auth.uid);
+    }
+
+    // Curtidas são marcadores (userId, createdAt) sem visibilidade: a regra antiga, com o mesmo get(..., 'public'),
+    // liberava tudo para todos sem dizer. Agora é explícito: quem curtiu e o que alguém curtiu exigem login (só ids; o
+    // post em si continua protegido pelas regras de leitura de posts).
+    match /{path=**}/likes/{likeId} {
+      allow list: if isAuthenticated();
+    }
+
+    match /{path=**}/reposts/{repostId} {
+      allow list: if true;
+    }
+
+    // -------------------------
+    // Users (Perfis)
+    // -------------------------
+    // Dados pessoais NUNCA ficam no perfil público (vão para users/{uid}/private/account).
+    function privateUserFields() {
+      return ['email', 'dateOfBirth', 'notificationPreferences', 'mutedWords', 'displaySensitiveContent',
+              'tabPreferences', 'totalUnreadMessages'];
+    }
+
+    match /users/{userId} {
+      // O perfil público é um "cartão" (nome, @, foto, bio, contadores): qualquer pessoa o lê, inclusive o de um perfil
+      // privado, cujos POSTS é que ficam só para seguidores. Listar exige login e limite de 100 por consulta (sem
+      // varredura anônima da base; quem lê sem conta resolve @ pelo índice usernames) e nunca devolve dados pessoais,
+      // que moram em private/account. Antes a listagem anônima trazia e-mail e nascimento de todos. O painel do
+      // administrador conta membros sem limite.
+      allow get: if true;
+      allow list: if (isAuthenticated() && request.query.limit != null && request.query.limit <= 100) || isAdminUser();
+
+      // O perfil NASCE só pelas Functions (createUserProfile e claimGoogleProfile), que reservam a vaga entre as
+      // primeiras (limite de cadastro) e gravam perfil, @ e dados pessoais numa única transação. Criar direto pelo
+      // cliente furaria o limite, deixaria duas pessoas ficarem com o mesmo @ e permitiria nascer administrador.
+      allow create: if false;
+
+      function canUpdateUserProfile() {
+        let diff = request.resource.data.diff(resource.data);
+        let allowedKeys = [
+          'name', 'name_lowercase', 'bio', 'avatarUrl', 'data-ai-hint', 'pinnedPostId',
+          'coverImageUrl', 'cover-image-ai-hint', 'updatedAt',
+          'dmPreference', 'profileVisibility', 'allowTagging', 'allowReposts', 'replyPermission',
+          // "username" fica de fora: a troca passa pela Function updateUserUsername, que garante que o nome é único
+          // (gravado direto, duas pessoas podiam ficar com o mesmo @).
+          'location', 'website', 'pronouns', 'links', 'pixKey', 'pixCity', 'pixDescription', 'explorePreferences', 'accentColor', 'e2eePublicKey'
+        ];
+        let hasPermissions = isOwner(userId) && isVerifiedMember()
+          && diff.affectedKeys().hasOnly(allowedKeys);
+        let isNameValid = !('name' in diff.affectedKeys()) || (request.resource.data.name is string && request.resource.data.name.size() > 0);
+        let isAccentColorValid = !('accentColor' in diff.affectedKeys())
+          || request.resource.data.accentColor == null
+          || (request.resource.data.accentColor is string && request.resource.data.accentColor.matches('^#[0-9a-fA-F]{6}$'));
+        return hasPermissions && isNameValid && isAccentColorValid;
+      }
+
+      // followersCount, followingCount e postsCount são gravados só pelas Functions (antes qualquer usuário logado somava
+      // ou subtraía 1 no perfil de qualquer pessoa).
+      allow update: if canUpdateUserProfile();
+
+      allow delete: if isOwner(userId);
+
+      // Dados pessoais: só o dono. O e-mail gravado é sempre o da conta; o contador de não lidas é só das Functions.
+      function isValidPrivateAccount(docId) {
+        return docId == 'account'
+          && request.resource.data.keys().hasOnly(privateUserFields().concat(['createdAt', 'updatedAt']))
+          && request.resource.data.get('email', request.auth.token.get('email', '')) == request.auth.token.get('email', '')
+          && (resource == null
+              || request.resource.data.get('dateOfBirth', null) == resource.data.get('dateOfBirth', null))
+          && request.resource.data.get('mutedWords', []).size() <= 200
+          && request.resource.data.get('totalUnreadMessages', 0)
+               == (resource == null ? 0 : resource.data.get('totalUnreadMessages', 0));
+      }
+      match /private/{docId} {
+        allow read: if isOwner(userId);
+        allow update: if isOwner(userId) && isValidPrivateAccount(docId);
+        // Criar (por exemplo, regravar depois de apagado) só para quem TEM vaga no limite de cadastro: a conta que
+        // existe só no Auth (criada direto pela API pública, sem passar pelo cadastro) não ganha nada aqui.
+        allow create: if isOwner(userId)
+          && isValidPrivateAccount(docId)
+          && exists(/databases/$(database)/documents/_signup/control/slots/$(userId));
+        // O estado de federação é do SERVIDOR: a pessoa o lê, mas não o apaga. Apagá-lo desligaria a federação sem
+        // retirá-la do Fediverso (sem o Delete do ator), e deixaria os seguidores remotos com um vínculo morto.
+        allow delete: if isOwner(userId) && docId != 'federation';
+      }
+
+      // Subcollections
+      match /customFeeds/{feedId} {
+        allow read, write, delete: if isOwner(userId);
+      }
+      // Só quem segue cria o próprio registro de seguidor (antes o dono do perfil criava seguidores com qualquer id e,
+      // com o contador no servidor, inflaria o próprio número). Quem bloqueou a pessoa não pode ser seguido por ela.
+      // O dono do perfil também apaga (remover seguidor, bloquear).
+      match /followers/{followerId} {
+        allow read: if isAuthenticated();
+        allow create: if isVerifiedMember() && isOwner(followerId)
+          && followerId != userId
+          && request.resource.data.keys().hasOnly(['userId', 'createdAt'])
+          && request.resource.data.userId == followerId
+          && exists(/databases/$(database)/documents/users/$(userId))
+          && !exists(/databases/$(database)/documents/users/$(userId)/blockedUsers/$(followerId));
+        allow delete: if isOwner(followerId) || isOwner(userId);
+      }
+
+      // O espelho "quem eu sigo". Quem é seguido também pode apagá-lo (bloquear quem o segue falhava: o lote do
+      // bloqueio apaga o following da outra pessoa e a regra só deixava o dono).
+      match /following/{followedId} {
+        allow read: if isAuthenticated();
+        allow create: if isVerifiedMember() && isOwner(userId)
+          && followedId != userId
+          && request.resource.data.keys().hasOnly(['userId', 'createdAt'])
+          && request.resource.data.userId == followedId;
+        allow delete: if isOwner(userId) || isOwner(followedId);
+      }
+
+      match /mutedUsers/{mutedId} { allow read, write: if isOwner(userId); }
+
+      match /blockedUsers/{blockedId} {
+        allow list: if isOwner(userId) && (request.query.limit == null || request.query.limit <= 50);
+        allow write: if isOwner(userId);
+        allow get: if isAuthenticated() && (isOwner(userId) || isOwner(blockedId));
+      }
+
+      match /subscribers/{subscriberId} {
+        allow read: if isAuthenticated() && (isOwner(userId) || isOwner(subscriberId));
+        allow create, update: if isVerifiedMember() && (isOwner(userId) || isOwner(subscriberId));
+        allow delete: if isAuthenticated() && (isOwner(userId) || isOwner(subscriberId));
+      }
+      match /bookmarks/{postId} { allow read, write: if isOwner(userId); }
+      match /pixReminders/{targetUserId} { allow read, write, delete: if isOwner(userId); }
+
+      // Aparelhos que recebem push (token do FCM, no id do documento): só o dono lê, grava e apaga, com campos fixos. As
+      // Functions (Admin SDK) leem para enviar e apagam o token que o FCM recusa. Sem esta regra o app não conseguia nem
+      // guardar o token (negado por padrão): por isso nenhum push chegou a ninguém.
+      match /fcmTokens/{token} {
+        allow read, delete: if isOwner(userId);
+        allow create, update: if isOwner(userId)
+          && token.size() >= 40 && token.size() <= 4096
+          && request.resource.data.keys().hasOnly(['platform', 'locale', 'registeredAt', 'updatedAt', 'userAgent'])
+          && request.resource.data.platform in ['web', 'android', 'ios']
+          && request.resource.data.locale in ['pt-BR', 'en']
+          && (!('userAgent' in request.resource.data)
+              || (request.resource.data.userAgent is string && request.resource.data.userAgent.size() <= 300));
+      }
+    }
+
+    // Índice @ -> uid: leitura pública (resolver menções e perfis), escrita SÓ pelas Functions. Antes qualquer conta
+    // logada criava quantos @ quisesse (e apagava o próprio, liberando o nome para outra pessoa).
+    match /usernames/{username} {
+      allow get: if true;
+      allow create, update, delete: if false;
+    }
+
+    // Limite dos primeiros usuários: documento de controle (limite e vagas usadas) e uma vaga por UID. Só as
+    // Functions (Admin SDK) leem e gravam: o cliente não enxerga os contadores nem consegue mexer neles.
+    match /_signup/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /conversations/{conversationId} {
+
+      function isParticipant() {
+        return isAuthenticated() && resource.data.participantIds.hasAny([request.auth.uid]);
+      }
+      
+      function isPotentialParticipant(convId) {
+        return isAuthenticated()
+          && convId.size() > request.auth.uid.size() + 1
+          && (
+            convId[0 : request.auth.uid.size() + 1] == request.auth.uid + '_'
+            || convId[convId.size() - request.auth.uid.size() - 1 : convId.size()] == '_' + request.auth.uid
+          );
+      }
+
+      allow get: if isPotentialParticipant(conversationId) || isParticipant();
+
+      // Só se listam conversas das quais o usuário participa: a consulta precisa filtrar por
+      // participantIds array-contains uid (o app já faz). Antes qualquer usuário logado listava todas.
+      allow list: if isAuthenticated()
+                  && request.auth.uid in resource.data.participantIds
+                  && (request.query.limit == null || request.query.limit <= 50);
+
+
+      // A conversa nasce com o id "<menor uid>_<maior uid>", só com quem a cria e a outra pessoa, respeitando bloqueios
+      // e a preferência de mensagens da outra pessoa. Antes só o navegador conferia isso: qualquer usuário criava a
+      // conversa de dois outros (ocupando o id) e mandava mensagem a quem escolheu "ninguém" ou o bloqueou.
+      // "createdBy", quando existe, só pode ser quem cria (a Function de nova conversa notifica o outro participante).
+      function isValidNewConversation(conversationId) {
+        let ids = request.resource.data.participantIds;
+        let me = request.auth.uid;
+        let other = ids[0] == me ? ids[1] : ids[0];
+        let pref = get(/databases/$(database)/documents/users/$(other)).data.get('dmPreference', 'everyone');
+        return ids.size() == 2
+          && ids[0] < ids[1]
+          && conversationId == ids[0] + '_' + ids[1]
+          && me in ids
+          && other != me
+          && request.resource.data.get('createdBy', me) == me
+          && pref != 'none'
+          && (pref != 'followed' || exists(/databases/$(database)/documents/users/$(other)/following/$(me)))
+          && !exists(/databases/$(database)/documents/users/$(other)/blockedUsers/$(me))
+          && !exists(/databases/$(database)/documents/users/$(me)/blockedUsers/$(other));
+      }
+
+      function isValidNewGroupConversation(conversationId) {
+        let ids = request.resource.data.participantIds;
+        let me = request.auth.uid;
+        let groupName = request.resource.data.get('groupName', '');
+        return conversationId.matches('^grp_[A-Za-z0-9_-]{8,64}$')
+          && request.resource.data.get('isGroup', false) == true
+          && groupName is string
+          && groupName.size() >= 1
+          && groupName.size() <= 80
+          && request.resource.data.get('createdBy', '') == me
+          && request.resource.data.get('adminIds', []) == [me]
+          && ids is list
+          && ids.size() >= 2
+          && ids.size() <= 1000
+          && me in ids;
+      }
+
+      function isValidSelfConversation(conversationId) {
+        let ids = request.resource.data.participantIds;
+        let me = request.auth.uid;
+        return conversationId == me + '_' + me
+          && ids is list
+          && ids.size() == 1
+          && ids[0] == me
+          && request.resource.data.get('isSelf', false) == true
+          && request.resource.data.get('isGroup', false) == false
+          && request.resource.data.get('createdBy', me) == me;
+      }
+
+      allow create: if isVerifiedMember()
+                    && (isValidNewConversation(conversationId) || isValidSelfConversation(conversationId) || isValidNewGroupConversation(conversationId));
+
+      // O participante só mexe no que é dele: zerar as próprias não lidas e marcar/desmarcar a própria saída. A prévia,
+      // os participantes e as não lidas do outro são do servidor (antes um participante podia reescrever tudo).
+      function isUpdatingOwnState() {
+        let me = request.auth.uid;
+        let changed = request.resource.data.diff(resource.data).affectedKeys();
+        let unread = request.resource.data.get('unreadCounts', {});
+        return changed.hasOnly(['unreadCounts', 'userLeftAt'])
+          && unread.diff(resource.data.get('unreadCounts', {})).affectedKeys().hasOnly([me])
+          && (!(me in unread) || unread[me] == 0)
+          && request.resource.data.get('userLeftAt', {}).diff(resource.data.get('userLeftAt', {})).affectedKeys().hasOnly([me]);
+      }
+
+      // Admins do grupo podem adicionar/remover participantes (até 1000), promover/rebaixar admins e renomear o grupo.
+      function isGroupAdminUpdating() {
+        let me = request.auth.uid;
+        let changed = request.resource.data.diff(resource.data).affectedKeys();
+        let newIds = request.resource.data.participantIds;
+        let newAdmins = request.resource.data.get('adminIds', []);
+        let newName = request.resource.data.get('groupName', '');
+        return resource.data.get('isGroup', false) == true
+          && me in resource.data.get('adminIds', [])
+          && changed.hasOnly(['participantIds', 'adminIds', 'groupName'])
+          && newIds is list
+          && newIds.size() >= 1
+          && newIds.size() <= 1000
+          && newAdmins is list
+          && newAdmins.size() >= 1
+          && newAdmins.size() <= 1000
+          && newName is string
+          && newName.size() >= 1
+          && newName.size() <= 80;
+      }
+
+      allow update: if isParticipant() && (isUpdatingOwnState() || isGroupAdminUpdating());
+      allow delete: if false;
+
+      match /messages/{messageId} {
+        function canReadMessages() {
+          return isAuthenticated()
+                 && get(/databases/$(database)/documents/conversations/$(conversationId))
+                    .data.participantIds.hasAny([request.auth.uid]);
+        }
+
+        allow get, list: if canReadMessages();
+
+        allow create: if isVerifiedMember() && canReadMessages() && isOwner(request.resource.data.senderId);
+
+        allow update: if false;
+        allow delete: if canReadMessages() && isOwner(resource.data.senderId);
+      }
+    }
+
+    // Quem foi bloqueado pelo autor não interage com o conteúdo dele (curtir, comentar, repostar, citar).
+    function isBlockedBy(authorId) {
+      return isAuthenticated()
+        && exists(/databases/$(database)/documents/users/$(authorId)/blockedUsers/$(request.auth.uid));
+    }
+
+    // Marcador de interação ("eu curti", "eu repostei", "eu vi"): id = uid de quem age, campos fixos e data do servidor.
+    function isValidMarker(userId) {
+      return isOwner(userId)
+        && request.resource.data.keys().hasOnly(['userId', 'createdAt'])
+        && request.resource.data.get('userId', userId) == userId
+        && request.resource.data.createdAt == request.time;
+    }
+
+    // Marcador que se apaga sozinho (visualização e clique no perfil). Carrega `expireAt` para a política de TTL do
+    // Firestore apagar o documento — ver os fieldOverrides com "ttl": true em firestore.indexes.json.
+    //
+    // Guardar QUEM viu cada post para sempre virava um registro de quem leu o quê; numa rede política isso é
+    // informação sensível. Decisão de 2026-11-11: fica a contagem agregada (o que o autor vê) e o marcador
+    // individual morre em 90 dias.
+    //
+    // A janela (minDias a maxDias) existe porque `createdAt` é o horário do SERVIDOR e o cliente calcula `expireAt`
+    // pelo relógio do aparelho: sem folga, poucos minutos de defasagem reprovariam a gravação. É estreita de
+    // propósito — ninguém escolhe por quanto tempo o próprio rastro fica guardado. Os limites têm de bater com
+    // src/lib/analytics/markerExpiry.ts (o `npm run e2e:marcadores` reprova se discordarem).
+    function isExpiringMarker(userId, minDias, maxDias) {
+      return isOwner(userId)
+        && request.resource.data.keys().hasOnly(['userId', 'createdAt', 'expireAt'])
+        && request.resource.data.get('userId', userId) == userId
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.expireAt > request.time + duration.value(minDias, 'd')
+        && request.resource.data.expireAt < request.time + duration.value(maxDias, 'd');
+    }
+
+    match /posts/{postId} {
+      // resource == null: ler um post que não existe responde "não encontrado" (sem dado nenhum) em vez de "negado";
+      // é o que deixa a página separar o post que não existe ("Página não encontrada") do restrito (que carrega no
+      // navegador com o login de quem abriu).
+      allow get: if resource == null
+        || (resource.data.get('isDeleted', false) == false && postVisibleTo(resource.data));
+      // Listar exige uma consulta que garanta a visibilidade: visibility == 'public', ou só os posts do próprio usuário,
+      // ou visibility == 'followers' de autores que ele segue (userId == X ou userId in [até 10 autores]). Antes a
+      // listagem era aberta e devolvia posts privados e só-para-seguidores a qualquer pessoa, até sem login.
+      allow list: if resource.data.visibility == 'public'
+        || isOwner(resource.data.userId)
+        || (resource.data.visibility == 'followers' && isAuthenticated()
+            && doesProfileFollow(resource.data.userId, request.auth.uid))
+        || isAdminUser();
+
+      // Todo número público (likes, reposts, quotesCount, commentsCount, views) nasce 0 e só é gravado pelas Functions.
+      // A data é a do servidor (sem posts "retroativos") e o cartão do autor embutido precisa ser o do próprio autor
+      // (antes dava para publicar com o nome e o @ de outra pessoa).
+      function isValidPostLocation(d) {
+        let location = d.get('location', null);
+        return location == null || (
+          location is map
+          && location.keys().hasOnly(['name', 'state', 'ibgeId'])
+          && location.name is string
+          && location.name.size() >= 2
+          && location.name.size() <= 80
+          && location.state is string
+          && location.state.matches('^[A-Z]{2}$')
+          && location.ibgeId is int
+          && location.ibgeId > 0
+        );
+      }
+
+      function isValidPollOption(option, expectedId) {
+        return option is map
+          && option.keys().hasOnly(['id', 'text'])
+          && option.id == expectedId
+          && option.text is string
+          && option.text.size() >= 1
+          && option.text.size() <= 25;
+      }
+
+      function hasValidPollOptions(options) {
+        return options is list
+          && options.size() >= 2
+          && options.size() <= 4
+          && isValidPollOption(options[0], 'a')
+          && isValidPollOption(options[1], 'b')
+          && options[0].text.lower() != options[1].text.lower()
+          && (options.size() < 3 || (
+            isValidPollOption(options[2], 'c')
+            && options[2].text.lower() != options[0].text.lower()
+            && options[2].text.lower() != options[1].text.lower()
+          ))
+          && (options.size() < 4 || (
+            isValidPollOption(options[3], 'd')
+            && options[3].text.lower() != options[0].text.lower()
+            && options[3].text.lower() != options[1].text.lower()
+            && options[3].text.lower() != options[2].text.lower()
+          ));
+      }
+
+      function isValidNewPoll(d) {
+        let poll = d.get('poll', null);
+        let ids = d.get('pollOptionIds', null);
+        let counts = d.get('pollCounts', null);
+        return poll == null
+          ? ids == null && counts == null && d.get('pollTotal', 0) == 0
+          : poll is map
+            && poll.keys().hasOnly(['options', 'endsAt'])
+            && hasValidPollOptions(poll.options)
+            && poll.endsAt is timestamp
+            && poll.endsAt >= request.time + duration.value(5, 'm')
+            && poll.endsAt <= request.time + duration.value(7, 'd')
+            && ids is list
+            && ids.size() == poll.options.size()
+            && ids[0] == 'a' && ids[1] == 'b'
+            && (ids.size() < 3 || ids[2] == 'c')
+            && (ids.size() < 4 || ids[3] == 'd')
+            && counts is map
+            && counts.keys().hasOnly(ids)
+            && counts.keys().hasAll(ids)
+            && counts[ids[0]] == 0 && counts[ids[1]] == 0
+            && (ids.size() < 3 || counts[ids[2]] == 0)
+            && (ids.size() < 4 || counts[ids[3]] == 0)
+            && d.get('pollTotal', -1) == 0
+            && d.get('media', null) == null
+            && d.get('youtubeVideoId', null) == null;
+      }
+
+      function hasValidContentOptions(d) {
+        return isValidPostLocation(d)
+          && d.get('sensitive', false) is bool
+          && (d.get('sensitive', false) == false
+              || (d.get('media', null) is list && d.media.size() > 0))
+          && isValidNewPoll(d);
+      }
+
+      // FEDERAÇÃO, nível PUBLICAÇÃO (docs/arquitetura-activitypub.md §2). Um post só pode nascer com alcance externo
+      // se a PESSOA optou (nível CONTA) e não está em pausa. Os outros dois níveis não cabem aqui: a plataforma (nível
+      // 1) e o instante do envio são conferidos pelo servidor quando o conteúdo de fato sai. Estas regras impedem que um
+      // cliente grave um alcance incoerente ou sem opt-in; não substituem os demais portões.
+      //
+      // O alcance fica FIXO depois de criado: 'federation' não está na lista de campos editáveis de um post, então um
+      // post local não vira público por uma edição. Retirar um post do Fediverso é uma ação do servidor.
+      function federationOptIn(uid) {
+        let conta = /databases/$(database)/documents/users/$(uid)/private/federation;
+        return exists(conta)
+          && get(conta).data.get('enabled', false) == true
+          && get(conta).data.get('paused', false) == false;
+      }
+
+      // O alcance de fora nunca é maior que a visibilidade de dentro: público e não listado exigem perfil público;
+      // só-seguidores serve aos dois. Aceita eco original ou citação, sem enquete.
+      function hasValidFederation(d, author) {
+        let alcance = d.get('federation', 'local');
+        return alcance == 'local'
+          || (alcance in ['public', 'unlisted', 'followers']
+              && d.get('type', 'original') in ['original', 'quote']
+              && d.get('category', 'echo') == 'echo'
+              && d.get('poll', null) == null
+              && (alcance == 'followers' || visibilityForAuthor(author) == 'public')
+              && federationOptIn(request.auth.uid));
+      }
+
+      function isValidNewPost() {
+        let d = request.resource.data;
+        let me = request.auth.uid;
+        let author = get(/databases/$(database)/documents/users/$(me)).data;
+        return d.userId == me
+          && d.createdAt == request.time
+          && d.get('likes', 0) == 0
+          && d.get('reposts', 0) == 0
+          && d.get('quotesCount', 0) == 0
+          && d.get('commentsCount', 0) == 0
+          && d.get('views', 0) == 0
+          && d.get('isDeleted', false) == false
+          && d.get('type', 'original') in ['original', 'quote']
+          && d.get('visibility', 'public') == visibilityForAuthor(author)
+          && d.get('category', 'echo') in ['echo', 'news']
+          && (d.get('text', null) == null || (d.text is string && d.text.size() <= 15000))
+          && (d.get('headline', null) == null || (d.headline is string && d.headline.size() <= 150))
+          && (!('authorDetails' in d) || (
+                d.authorDetails.userId == me
+                && d.authorDetails.username == author.username
+                && d.authorDetails.name == author.name))
+          && hasValidContentOptions(d)
+          && hasValidFederation(d, author)
+          && isQuoteAllowed(d);
+      }
+
+      // Citação de post interno: o original precisa existir, não estar apagado, aceitar citações/reposts e ser PÚBLICO
+      // (citar copiaria o conteúdo de um post só para seguidores para fora do círculo dele) — a não ser que quem cita
+      // seja o PRÓPRIO autor do original: a citação dele nasce com a visibilidade do perfil dele e não sai do círculo.
+      function isPostQuoteAllowed(d) {
+        let original = /databases/$(database)/documents/posts/$(d.originalPostDetails.id);
+        return canReadPost(d.originalPostDetails.id)
+          && (get(original).data.get('visibility', 'public') == 'public'
+              || get(original).data.userId == request.auth.uid)
+          && !isBlockedBy(get(original).data.userId)
+          && (get(original).data.get('allowReposts', true) != false || get(original).data.userId == request.auth.uid);
+      }
+
+      // Citação de comentário ("postId/commentId"): o comentário existe, não foi apagado, está em post público e o autor
+      // dele não bloqueou quem cita. Antes o servidor não conferia nada.
+      function isCommentQuoteAllowed(d) {
+        let parts = d.quotedCommentId.split('/');
+        let comment = /databases/$(database)/documents/posts/$(parts[0])/comments/$(parts[1]);
+        return parts.size() == 2
+          && exists(comment)
+          && get(comment).data.get('isDeleted', false) == false
+          && get(comment).data.get('postVisibility', 'public') == 'public'
+          && !isBlockedBy(get(comment).data.userId);
+      }
+
+      function isQuoteAllowed(d) {
+        let isQuote = d.get('type', 'original') == 'quote';
+        let quotesComment = d.get('quotedCommentId', null) != null;
+        let quotesInternalPost = !quotesComment
+          && d.get('originalPostDetails', null) != null
+          && !d.originalPostDetails.id.matches('^https?://.*');
+        return !isQuote
+          || (quotesComment && d.quotedCommentId is string && isCommentQuoteAllowed(d))
+          || (quotesInternalPost && isPostQuoteAllowed(d))
+          || (!quotesComment && !quotesInternalPost);
+      }
+
+      allow create: if isVerifiedMember() && isValidNewPost();
+
+      // A visibilidade não é editável pelo cliente: acompanha o perfil do autor (a Function onUserUpdated a ajusta quando
+      // o perfil muda entre público e privado).
+      function isEditingPost() {
+        let allowed = ['text','headline','imageUrl','data-ai-hint','imageAlt','sourceUrl','newsCategory','allowReposts','replyPermission','isEdited','editCount','updatedAt','youtubeVideoId','postFormat','hashtags','hasMedia','media','location','sensitive'];
+        return isOwner(resource.data.userId)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowed)
+          && isValidPostLocation(request.resource.data)
+          && request.resource.data.get('sensitive', false) is bool
+          && (request.resource.data.get('sensitive', false) == false
+              || (request.resource.data.get('media', null) is list
+                  && request.resource.data.media.size() > 0));
+      }
+
+      function isTombstoningPost() {
+        let allowed = ['isDeleted','text','headline','imageUrl','videoUrl','media','hasMedia','youtubeVideoId','data-ai-hint','originalPostDetails','quotedComment','quotedCommentId'];
+        return isOwner(resource.data.userId)
+               && request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowed)
+               && request.resource.data.get('isDeleted', false) == true
+               && resource.data.get('isDeleted', false) == false;
+      }
+
+      // Contadores: só as Functions (Admin SDK) gravam; o cliente edita o próprio post ou o "tomba" ao apagar.
+      allow update: if (isVerifiedMember() && isEditingPost()) || isTombstoningPost();
+
+      allow delete: if isOwner(resource.data.userId);
+
+      // Subcollections
+      match /likes/{userId} {
+        allow read: if canSeePostThread(postId);
+        allow create: if isVerifiedMember() && isValidMarker(userId) && canReadPost(postId) && !isBlockedBy(getPostOwnerId(postId));
+        allow delete: if isOwner(userId);
+      }
+
+      // Repost só de post público, não apagado, cujo autor aceita reposts (ou é o próprio autor).
+      match /reposts/{userId} {
+        allow read: if canSeePostThread(postId);
+        // Repostar leva o post para outro público: só o que é público, OU o próprio autor repostando o que é dele
+        // (o repost dele nasce com a visibilidade do perfil dele, então não sai do círculo). Antes a conta privada não
+        // conseguia repostar o PRÓPRIO post.
+        allow create: if isVerifiedMember() && isValidMarker(userId)
+          && canReadPost(postId)
+          && (get(/databases/$(database)/documents/posts/$(postId)).data.get('visibility', 'public') == 'public'
+              || getPostOwnerId(postId) == request.auth.uid)
+          && !isBlockedBy(getPostOwnerId(postId))
+          && (get(/databases/$(database)/documents/posts/$(postId)).data.get('allowReposts', true) != false
+              || getPostOwnerId(postId) == request.auth.uid);
+        allow delete: if isOwner(userId);
+      }
+
+      // Uma visualização e um clique no perfil por pessoa; ninguém lê nem apaga (o número é da Function).
+      // O marcador individual expira em 90 dias (isExpiringMarker): sobra só o agregado em analytics/summary.
+      match /views/{userId} {
+        allow create: if isExpiringMarker(userId, 89, 91) && canReadPost(postId);
+      }
+      match /profileClicks/{userId} {
+        allow create: if isExpiringMarker(userId, 89, 91) && canReadPost(postId);
+      }
+
+      // Análises do post: só o autor lê; só as Functions gravam.
+      match /analytics/{docId} {
+        allow read: if isOwner(getPostOwnerId(postId));
+        allow write: if false;
+      }
+
+      // O cliente lê somente o próprio voto; criação e contadores passam pela
+      // Function voteOnPoll, numa transação atômica.
+      match /pollVotes/{userId} {
+        allow get: if isOwner(userId) && canSeePostThread(postId);
+        allow list, create, update, delete: if false;
+      }
+
+      match /comments/{commentId} {
+        allow get: if canReadComment(resource.data);
+        // As respostas seguem a visibilidade do post (antes qualquer um listava as respostas de um post só para seguidores).
+        allow list: if canSeePostThread(postId);
+
+        // Quem pode responder, como o autor do post escolheu: todos, pessoas que ele segue, mencionados ou ninguém.
+        function canReplyTo(post) {
+          let me = request.auth.uid;
+          let permission = post.get('replyPermission', 'everyone');
+          return post.userId == me
+            || permission == 'everyone'
+            || (permission == 'followed' && exists(/databases/$(database)/documents/users/$(post.userId)/following/$(me)))
+            || (permission == 'mentioned' && post.get('text', '') is string
+                && post.get('text', '').lower().matches('(?s)(.*[^a-z0-9_])?@' + get(/databases/$(database)/documents/users/$(me)).data.username.lower() + '([^a-z0-9_].*)?'));
+        }
+
+        // Post citado dentro de um comentário: só link externo ou post público, existente e não apagado (a cópia
+        // guardada no comentário não pode levar conteúdo só para seguidores para fora; a tela relê o original).
+        function isQuotedPostInCommentAllowed(d) {
+          let quoted = d.get('quotedPostObject', null);
+          return quoted == null
+            || (quoted.id is string && quoted.id.matches('^https?://.*'))
+            || (quoted.id is string
+                && exists(/databases/$(database)/documents/posts/$(quoted.id))
+                && get(/databases/$(database)/documents/posts/$(quoted.id)).data.get('visibility', 'public') == 'public'
+                && get(/databases/$(database)/documents/posts/$(quoted.id)).data.get('isDeleted', false) == false);
+        }
+
+        function isValidNewComment() {
+          let d = request.resource.data;
+          let post = get(/databases/$(database)/documents/posts/$(postId)).data;
+          return d.userId == request.auth.uid
+            && isQuotedPostInCommentAllowed(d)
+            && d.createdAt == request.time
+            && d.get('parentPostId', postId) == postId
+            && d.postAuthorId == post.userId
+            && d.postVisibility == post.get('visibility', 'public')
+            && d.get('likes', 0) == 0
+            && d.get('repliesCount', 0) == 0
+            && d.get('repostsCount', 0) == 0
+            && d.get('isDeleted', false) == false
+            && (d.get('text', '') is string && d.get('text', '').size() <= 300)
+            && post.get('isDeleted', false) == false
+            && !isBlockedBy(post.userId)
+            && canReplyTo(post);
+        }
+
+        allow create: if isVerifiedMember() && canReadPost(postId) && isValidNewComment();
+
+        // O autor edita o próprio comentário (sem tocar em números); o autor do comentário ou do post o "tomba".
+        function isEditingComment() {
+          return isDataOwner(resource)
+            && request.resource.data.diff(resource.data).affectedKeys()
+                 .hasOnly(['text', 'media', 'youtubeVideoId', 'hasMedia', 'hashtags', 'isEdited', 'editCount', 'updatedAt']);
+        }
+        function isTombstoningComment() {
+          return (isDataOwner(resource) || isOwner(getPostOwnerId(postId)))
+            && request.resource.data.diff(resource.data).affectedKeys()
+                 .hasOnly(['text', 'media', 'youtubeVideoId', 'isDeleted', 'hasMedia', 'quotedPostObject'])
+            && request.resource.data.isDeleted == true;
+        }
+        allow update: if (isVerifiedMember() && isEditingComment()) || isTombstoningComment();
+        allow delete: if isDataOwner(resource) || isOwner(getPostOwnerId(postId));
+
+        match /likes/{userId} {
+          allow read: if canSeePostThread(postId);
+          allow create: if isVerifiedMember() && isValidMarker(userId) && canReadPost(postId) && !isBlockedBy(getPostOwnerId(postId));
+          allow delete: if isOwner(userId);
+        }
+
+        match /reposts/{userId} {
+          allow read: if canSeePostThread(postId);
+          // Mesma regra do post: comentário de post público, ou de um post do próprio autor (a conta privada precisa
+          // conseguir repostar os comentários da própria publicação).
+          allow create: if isVerifiedMember() && isValidMarker(userId)
+            && canReadPost(postId)
+            && (get(/databases/$(database)/documents/posts/$(postId)).data.get('visibility', 'public') == 'public'
+                || getPostOwnerId(postId) == request.auth.uid)
+            && get(/databases/$(database)/documents/posts/$(postId)/comments/$(commentId)).data.get('isDeleted', false) == false;
+          allow delete: if isOwner(userId);
+        }
+      }
+    }
+
+    match /trending_topics/{topicId} {
+      function isAdmin() {
+        return isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+      }
+      allow read: if isAdmin();
+      allow write: if false; // Only allow writes from backend Cloud Function
+    }
+
+    match /notifications/{notificationId} {
+      allow get: if isOwner(resource.data.recipientId);
+
+      // Só se lista o que é do próprio usuário: a consulta precisa filtrar por recipientId == uid (o app já faz).
+      allow list: if isAuthenticated()
+                  && resource.data.recipientId == request.auth.uid
+                  && (request.query.limit == null || request.query.limit <= 50);
+
+      allow create: if false;
+      allow update: if isOwner(resource.data.recipientId)
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readAt'])
+                    && resource.data.readAt == null
+                    && request.resource.data.readAt is timestamp;
+
+      allow delete: if isOwner(resource.data.recipientId);
+    }
+
+    match /reports/{reportId} {
+      allow create: if isVerifiedMember() && request.resource.data.reporterId == request.auth.uid;
+      allow read, update: if 
+        isAuthenticated() && 
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true ||
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isModerator == true);
+      allow delete: if false;
+    }
+
+    // Canal de atendimento ao titular (LGPD, art. 18 e 19). O pedido é um REGISTRO: quem abre não edita depois, para
+    // a trilha não poder ser reescrita. Leem apenas o próprio titular e o administrador — o texto do pedido pode
+    // conter dado pessoal, inclusive de terceiro.
+    //
+    // O que NÃO é pedido aqui: nenhum documento, CPF, selfie ou prova de identidade civil. Estar logado já prova
+    // controle da conta, que é o proporcional ao risco; para exclusão e correção o app pede a senha de novo no
+    // momento da ação. `assurance` registra em que nível o pedido foi aceito, para auditoria.
+    match /dataRequests/{requestId} {
+      allow create: if isOwner(request.resource.data.userId)
+        && request.resource.data.keys().hasOnly(['userId', 'kind', 'message', 'status', 'assurance', 'createdAt'])
+        && request.resource.data.status == 'recebido'
+        && request.resource.data.kind is string
+        && request.resource.data.kind.size() <= 40
+        && request.resource.data.message is string
+        && request.resource.data.message.size() <= 2000
+        && request.resource.data.assurance is string
+        && request.resource.data.assurance.size() <= 40
+        && request.resource.data.createdAt == request.time;
+
+      allow get, list: if isDataOwner(resource) || isAdminUser();
+
+      // Só o administrador move o estado e escreve a resposta; nunca reescreve o que a pessoa pediu.
+      allow update: if isAdminUser()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'response', 'respondedAt']);
+
+      allow delete: if false;
+    }
+
+    // Registro de midia: traduz um id opaco para o caminho real no Storage, para a URL publica /m/{id} nao conter
+    // caminho, UID nem token de download. Ver docs/arquitetura-midia.md.
+    //
+    // `visibility` NAO e escolha do cliente: a regra a amarra ao `kind`. Anexo de mensagem direta e arquivo pessoal
+    // nunca podem nascer publicos — e e exatamente esse o defeito que esta camada corrige, porque hoje os dois
+    // recebem getDownloadURL() e viram URL publica portadora de token.
+    match /media/{mediaId} {
+      function publicKind(kind) {
+        return kind == 'postMedia' || kind == 'avatar' || kind == 'cover';
+      }
+      function isValidMedia() {
+        return request.resource.data.keys().hasOnly(
+                 ['storagePath', 'contentType', 'size', 'ownerUid', 'visibility', 'kind', 'createdAt'])
+          && request.resource.data.ownerUid == request.auth.uid
+          && request.resource.data.storagePath is string
+          && request.resource.data.storagePath.size() <= 500
+          // O caminho tem de estar na pasta da propria pessoa: sem isto alguem registraria o objeto de outro
+          // e ganharia uma URL publica para ele.
+          && request.resource.data.storagePath.matches('user_uploads/' + request.auth.uid + '/.*')
+          && request.resource.data.contentType is string
+          && request.resource.data.contentType.size() <= 120
+          && request.resource.data.size is number
+          && request.resource.data.size >= 0
+          && request.resource.data.kind is string
+          && request.resource.data.visibility ==
+               (publicKind(request.resource.data.kind) ? 'public' : 'private')
+          && request.resource.data.createdAt == request.time;
+      }
+      allow get: if isOwner(resource.data.ownerUid) || isAdminUser();
+      // Ninguem lista: listar daria um mapa de todas as midias.
+      allow list: if false;
+      allow create: if isVerifiedMember() && isValidMedia();
+      // Depois de criado so o tombstone muda, e so o dono o marca.
+      allow update: if isOwner(resource.data.ownerUid)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deletedAt']);
+      // Nunca apagar o registro: sem ele a rota responderia 404 em vez de 410, e o tombstone se perderia.
+      allow delete: if false;
+    }
+
+    match /userFiles/{fileId} {
+      allow get: if isDataOwner(resource);
+
+      allow list: if isAuthenticated()
+                  && (request.query.limit == null || request.query.limit <= 100)
+                  && resource.data.userId == request.auth.uid;
+
+      allow create: if isVerifiedMember() && request.resource.data.userId == request.auth.uid;
+
+      allow update: if isVerifiedMember()
+                    && resource.data.userId == request.auth.uid
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'updatedAt']);
+
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+    
+    match /access_events/{eventId} {
+      allow read: if isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+      // Só a rota /api/log-access grava, pelo Admin SDK (com limite de ritmo e sem dados pessoais). Antes era
+      // "create: if true" e qualquer pessoa, sem login, criava eventos falsos direto.
+      allow write: if false;
+    }
+
+    match /access_agg_daily/{aggId} {
+      allow read, list: if isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+      allow write, create, update, delete: if false;
+    }
+  }
+}

@@ -1,0 +1,379 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // -------------------------
+    // Helpers
+    // -------------------------
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isDataOwner(doc) {
+      return isOwner(doc.data.userId);
+    }
+    
+    function getPostOwnerId(postId) {
+      return exists(/databases/$(database)/documents/posts/$(postId))
+        ? get(/databases/$(database)/documents/posts/$(postId)).data.userId
+        : "";
+    }
+
+    function isProfilePublic(profileDoc) {
+      return profileDoc.data.get('profileVisibility', 'public') == 'public';
+    }
+
+    function doesProfileFollow(profileId, followerId) {
+      return exists(/databases/$(database)/documents/users/$(profileId)/followers/$(followerId));
+    }
+    
+    function canReadPost(postId) {
+      return exists(/databases/$(database)/documents/posts/$(postId))
+             && get(/databases/$(database)/documents/posts/$(postId)).data.get('isDeleted', false) == false
+             && (
+                get(/databases/$(database)/documents/posts/$(postId)).data.get('visibility', 'public') == 'public'
+                || (
+                  get(/databases/$(database)/documents/posts/$(postId)).data.get('visibility', 'public') == 'private' && isOwner(get(/databases/$(database)/documents/posts/$(postId)).data.userId)
+                )
+                || (
+                  get(/databases/$(database)/documents/posts/$(postId)).data.get('visibility', 'public') == 'followers' &&
+                  isAuthenticated() &&
+                  doesProfileFollow(get(/databases/$(database)/documents/posts/$(postId)).data.userId, request.auth.uid)
+                )
+             );
+    }
+    
+    function canReadComment(commentData) {
+      return commentData.get('isDeleted', false) != true && (
+        commentData.get('postVisibility', 'public') == 'public'
+        || (commentData.get('postVisibility', 'public') == 'private' && isOwner(commentData.postAuthorId))
+        || (commentData.get('postVisibility', 'public') == 'followers' && (isOwner(commentData.postAuthorId) || (isAuthenticated() && doesProfileFollow(commentData.postAuthorId, request.auth.uid))))
+      );
+    }
+    
+    function canReadProfileDoc(profileId) {
+        let profileDoc = get(/databases/$(database)/documents/users/$(profileId));
+        return !exists(/databases/$(database)/documents/users/$(profileId))
+            ? true
+            : (
+                isProfilePublic(profileDoc) ||
+                isOwner(profileId) ||
+                (isAuthenticated() && doesProfileFollow(profileId, request.auth.uid))
+              );
+    }
+    
+    // --- COLLECTION GROUP RULES ---
+    
+    match /{path=**}/comments/{commentId} {
+      allow list: if 
+        resource.data.get('postVisibility', 'public') == 'public'
+        || 
+        (isAuthenticated() && resource.data.userId == request.auth.uid);
+    }
+
+    match /{path=**}/likes/{likeId} {
+      allow list: if
+        resource.data.get('postVisibility', 'public') == 'public'
+        ||
+        (isAuthenticated() && resource.data.userId == request.auth.uid);
+    }
+
+    match /{path=**}/reposts/{repostId} {
+      allow list: if true;
+    }
+
+    // -------------------------
+    // Users (Perfis)
+    // -------------------------
+    match /users/{userId} {
+      allow read: if canReadProfileDoc(userId);
+      allow list: if true;
+
+
+      function canCreateUser() {
+        let req = [
+          'name','name_lowercase','username','email','dateOfBirth',
+          'avatarUrl','data-ai-hint','bio','followersCount','followingCount',
+          'postsCount','dmPreference','isAdmin','createdAt', 'profileVisibility',
+          'notificationPreferences', 'allowTagging', 'isModerator', 'displaySensitiveContent',
+          'pinnedPostId', 'coverImageUrl','cover-image-ai-hint'
+        ];
+        return isOwner(userId)
+          && request.resource.data.keys().hasAll(req)
+          && request.resource.data.email == request.auth.token.email
+          && request.resource.data.followersCount == 0
+          && request.resource.data.followingCount == 0
+          && request.resource.data.postsCount == 0;
+      }
+      allow create: if canCreateUser();
+
+      function canUpdateUserProfile() {
+        let diff = request.resource.data.diff(resource.data);
+        let allowedKeys = [
+          'name', 'name_lowercase', 'bio', 'avatarUrl', 'data-ai-hint', 'pinnedPostId',
+          'coverImageUrl', 'cover-image-ai-hint', 'updatedAt', 'displaySensitiveContent',
+          'dmPreference', 'profileVisibility', 'allowTagging', 'notificationPreferences', 'allowReposts', 'replyPermission',
+          'location', 'website', 'username', 'dateOfBirth', 'mutedWords', 'tabPreferences'
+        ];
+        let hasPermissions = isOwner(userId) && diff.affectedKeys().hasOnly(allowedKeys);
+        let isNameValid = !diff.affectedKeys().has('name') || (request.resource.data.name is string && request.resource.data.name.size() > 0);
+        return hasPermissions && isNameValid;
+      }
+
+      function isUpdatingFollowCounts() {
+        let diff = request.resource.data.diff(resource.data);
+        let keysAreOk = diff.affectedKeys().hasOnly(['followersCount','followingCount']);
+        return isAuthenticated() && keysAreOk &&
+          (
+            (request.resource.data.followersCount == resource.data.followersCount + 1 || request.resource.data.followersCount == resource.data.followersCount - 1) ||
+            (request.resource.data.followingCount == resource.data.followingCount + 1 || request.resource.data.followingCount == resource.data.followingCount - 1)
+          );
+      }
+
+      function isUpdatingPostCount() {
+        let diff = request.resource.data.diff(resource.data);
+        let keysAreOk = diff.affectedKeys().hasOnly(['postsCount']);
+        return isAuthenticated() && keysAreOk &&
+          (request.resource.data.postsCount == resource.data.postsCount + 1 || request.resource.data.postsCount == resource.data.postsCount - 1);
+      }
+
+      function isUpdatingMessageCount() {
+        return isOwner(userId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['totalUnreadMessages']);
+      }
+
+      allow update: if canUpdateUserProfile()
+                    || isUpdatingFollowCounts()
+                    || isUpdatingPostCount()
+                    || isUpdatingMessageCount();
+
+      allow delete: if isOwner(userId);
+
+      // Subcollections
+      match /customFeeds/{feedId} {
+        allow read, write, delete: if isOwner(userId);
+      }
+      match /followers/{followerId} {
+        allow read: if isAuthenticated();
+        allow create, delete: if isOwner(followerId) || isOwner(userId);
+      }
+
+      match /following/{followedId} {
+        allow read: if isAuthenticated();
+        allow create, delete: if isOwner(userId);
+      }
+
+      match /mutedUsers/{mutedId} { allow read, write: if isOwner(userId); }
+
+      match /blockedUsers/{blockedId} {
+        allow list: if isOwner(userId) && (request.query.limit == null || request.query.limit <= 50);
+        allow write: if isOwner(userId);
+        allow get: if isAuthenticated() && (isOwner(userId) || isOwner(blockedId));
+      }
+
+      match /subscribers/{subscriberId} { allow read, write: if isAuthenticated() && (isOwner(userId) || isOwner(subscriberId)); }
+      match /bookmarks/{postId} { allow read, write: if isOwner(userId); }
+    }
+
+    match /usernames/{username} {
+      allow get: if true;
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow update: if false;
+    }
+
+    match /conversations/{conversationId} {
+
+      function isParticipant() {
+        return isAuthenticated() && resource.data.participantIds.hasAny([request.auth.uid]);
+      }
+      
+      function isPotentialParticipant(convId) {
+        let uids = convId.split('_');
+        return uids.size() == 2 && isAuthenticated() && (request.auth.uid == uids[0] || request.auth.uid == uids[1]);
+      }
+
+      allow get: if isPotentialParticipant(conversationId);
+
+      allow list: if isAuthenticated() && (request.query.limit == null || request.query.limit <= 50);
+
+
+      allow create: if isAuthenticated()
+                    && request.auth.uid in request.resource.data.participantIds
+                    && request.resource.data.participantIds.size() == 2;
+
+      allow update: if isParticipant();
+      allow delete: if false;
+
+      match /messages/{messageId} {
+        function canReadMessages() {
+          return isAuthenticated()
+                 && get(/databases/$(database)/documents/conversations/$(conversationId))
+                    .data.participantIds.hasAny([request.auth.uid]);
+        }
+
+        allow get, list: if canReadMessages();
+
+        allow create: if canReadMessages() && isOwner(request.resource.data.senderId);
+
+        allow update: if false;
+        allow delete: if canReadMessages() && isOwner(resource.data.senderId);
+      }
+    }
+
+    match /posts/{postId} {
+      allow read: if canReadPost(postId);
+      allow list: if true; // Public listings are open, client filters based on following/privacy.
+      
+      allow create: if isAuthenticated() && isOwner(request.resource.data.userId);
+
+      function isEditingPost() {
+        let allowed = ['text','headline','imageUrl','data-ai-hint','imageAlt','sourceUrl','newsCategory','allowReposts','replyPermission','isEdited','editCount','updatedAt','youtubeVideoId','postFormat','hashtags','hasMedia','visibility'];
+        return isOwner(resource.data.userId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowed);
+      }
+
+      function isUpdatingLikesCounter() {
+        let diff = request.resource.data.diff(resource.data);
+        let keysAreOk = diff.affectedKeys().hasOnly(['likes']);
+        let countIsOk = request.resource.data.likes == resource.data.likes + 1 || request.resource.data.likes == resource.data.likes - 1;
+        return isAuthenticated() && keysAreOk && countIsOk;
+      }
+
+      function isUpdatingRepostsCounter() {
+        let diff = request.resource.data.diff(resource.data);
+        let keysAreOk = diff.affectedKeys().hasOnly(['reposts', 'updatedAt']);
+        let countIsOk = request.resource.data.reposts == resource.data.reposts + 1 || request.resource.data.reposts == resource.data.reposts - 1;
+        return isAuthenticated() && keysAreOk && countIsOk;
+      }
+
+      function isUpdatingQuotesCounter() {
+        let diff = request.resource.data.diff(resource.data);
+        let keysAreOk = diff.affectedKeys().hasOnly(['quotesCount', 'updatedAt']);
+        let countIsOk = request.resource.data.quotesCount == resource.data.quotesCount + 1 || request.resource.data.quotesCount == resource.data.quotesCount - 1;
+        return isAuthenticated() && keysAreOk && countIsOk;
+      }
+
+      function isUpdatingCommentsCounter() {
+        let diff = request.resource.data.diff(resource.data);
+        let keysAreOk = diff.affectedKeys().hasOnly(['commentsCount', 'updatedAt']);
+        let isIncrementing = request.resource.data.commentsCount == resource.data.commentsCount + 1;
+        let isDecrementing = request.resource.data.commentsCount == resource.data.commentsCount - 1;
+        return isAuthenticated() && keysAreOk && (isIncrementing || isDecrementing);
+      }
+
+      function isUpdatingViewsCounter() {
+        let diff = request.resource.data.diff(resource.data);
+        let keysAreOk = diff.affectedKeys().hasOnly(['views']);
+        let isIncrementing = request.resource.data.views == resource.data.views + 1;
+        return isAuthenticated() && keysAreOk && isIncrementing;
+      }
+
+      function isTombstoningPost() {
+        return isOwner(resource.data.userId)
+               && request.resource.data.get('isDeleted', false) == true
+               && resource.data.get('isDeleted', false) == false;
+      }
+
+      allow update: if isEditingPost()
+                    || isUpdatingLikesCounter()
+                    || isUpdatingRepostsCounter()
+                    || isUpdatingQuotesCounter()
+                    || isUpdatingCommentsCounter()
+                    || isUpdatingViewsCounter()
+                    || isTombstoningPost();
+
+      allow delete: if isOwner(resource.data.userId);
+
+      // Subcollections
+      match /likes/{userId} {
+        allow read: if true;
+        allow create, delete: if isOwner(userId);
+      }
+      
+      match /reposts/{userId} {
+        allow read: if true;
+        allow create, delete: if isOwner(userId);
+      }
+
+      match /analytics/{docId} {
+        allow write: if isAuthenticated();
+        allow read: if isOwner(getPostOwnerId(postId));
+      }
+
+      match /comments/{commentId} {
+        allow get: if canReadComment(resource.data);
+        allow list: if exists(/databases/$(database)/documents/posts/$(postId));
+
+        allow create: if isAuthenticated() && isOwner(request.resource.data.userId);
+        allow update: if (isDataOwner(resource)) || (isAuthenticated() && request.resource.data.diff(resource.data).affectedKeys().hasAny(['likes', 'repostsCount', 'repliesCount']));
+        allow delete: if isDataOwner(resource) || isOwner(getPostOwnerId(postId));
+
+        match /likes/{userId} {
+          allow read: if true;
+          allow create, delete: if isOwner(userId);
+        }
+        
+        match /reposts/{userId} {
+          allow read: if true;
+          allow create, delete: if isOwner(userId);
+        }
+      }
+    }
+
+    match /notifications/{notificationId} {
+      allow get: if isOwner(resource.data.recipientId);
+
+      allow list: if isAuthenticated() && (request.query.limit == null || request.query.limit <= 50);
+
+      allow create: if false;
+      allow update: if isOwner(resource.data.recipientId)
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readAt'])
+                    && resource.data.readAt == null
+                    && request.resource.data.readAt is timestamp;
+
+      allow delete: if false;
+    }
+
+    match /reports/{reportId} {
+      allow create: if isAuthenticated() && request.resource.data.reporterId == request.auth.uid;
+      allow read, update: if 
+        isAuthenticated() && 
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true ||
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isModerator == true);
+      allow delete: if false;
+    }
+
+    match /userFiles/{fileId} {
+      allow get: if isDataOwner(resource);
+
+      allow list: if isAuthenticated()
+                  && (request.query.limit == null || request.query.limit <= 100)
+                  && resource.data.userId == request.auth.uid;
+
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+
+      allow update: if isAuthenticated()
+                    && resource.data.userId == request.auth.uid
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'updatedAt']);
+
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+    
+    match /access_events/{eventId} {
+      allow read: if isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+      // Allow writes from our logging API route (which is unauthenticated from Firestore's perspective)
+      // The API route itself provides rate-limiting.
+      allow create: if true;
+      allow update, delete: if false;
+    }
+
+    match /access_agg_daily/{aggId} {
+      allow read, list: if isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+      allow write, create, update, delete: if false;
+    }
+  }
+}

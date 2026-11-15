@@ -1,0 +1,45 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isVerifiedMember() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.member == true;
+    }
+
+    // Originais de video ficam privados e transitorios. O upload retomavel vai direto ao Storage; somente o worker
+    // FFmpeg le a fonte, e uma regra de ciclo de vida remove restos de envio interrompido.
+    match /video_staging/{userId}/{mediaId}/source {
+      allow create, update: if isVerifiedMember()
+        && request.auth.uid == userId
+        && mediaId.matches('^[A-Za-z0-9_-]{22}$')
+        && request.resource.size > 0
+        && request.resource.contentType.matches('video/.*')
+        && request.resource.metadata.mediaId == mediaId
+        && request.resource.metadata.pipeline == 'ffmpeg-v1';
+      allow get, list: if false;
+      allow delete: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Arquivos de cada pessoa (foto de perfil, capa, mídia de posts e artigos, anexos de mensagens).
+    match /user_uploads/{userId}/{allPaths=**} {
+      // Só o dono grava, até 5 MB, e só mídia e documentos comuns: nada de HTML, SVG ou executável (que poderiam
+      // carregar script ou servir de página falsa hospedada no nosso bucket).
+      allow create, update: if request.auth != null
+                   && request.auth.uid == userId
+                   && request.auth.token.email_verified == true
+                   && request.auth.token.member == true
+                   && request.resource.size < 5 * 1024 * 1024
+                   && request.resource.contentType.matches(
+                        'image/(png|jpe?g|gif|webp|heic|heif|avif)|video/.*|audio/.*|application/pdf|text/plain'
+                        + '|application/(msword|vnd[.]openxmlformats-officedocument[.].*|vnd[.]ms-.*|vnd[.]oasis[.]opendocument[.].*)');
+      // Leitura pela API só do dono. O app mostra imagens e anexos pela URL de download (com token), que não passa por
+      // estas regras: quem tem a URL (a pessoa que recebeu a mensagem, quem vê o post) vê o arquivo. Antes "get: if
+      // true" deixava qualquer um, sem login, baixar qualquer arquivo pelo caminho, inclusive anexos de mensagens.
+      allow get: if request.auth != null && request.auth.uid == userId;
+      allow list: if request.auth != null && request.auth.uid == userId;
+      allow delete: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}

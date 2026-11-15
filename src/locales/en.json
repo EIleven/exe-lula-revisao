@@ -1,0 +1,1039 @@
+
+{
+  "AppLayout": {
+    "logoutSuccessTitle": "Logged Out",
+    "logoutSuccessDescription": "You have been successfully logged out.",
+    "logoutErrorTitle": "Logout Error",
+    "logoutErrorDescription": "Could not log out.",
+    "articlePublished": "Article Published!",
+    "postSent": "Post Sent!",
+    "viewPost": "View Post",
+    "nav": {
+      "feed": "Feed",
+      "explore": "Explore",
+      "messages": "Messages",
+      "notifications": "Notifications"
+    }
+  },
+  "AdminDashboard": {
+    "statsErrorTitle": "Error Fetching Statistics",
+    "locationErrorTitle": "Error Fetching Location Data",
+    "pageViewsTitle": "Page Views",
+    "pageViewsDescription": "Page views by authenticated users and guests.",
+    "authUsers": "Authenticated",
+    "guestUsers": "Guests",
+    "authenticatedOnline": "Authenticated Users Online",
+    "guestsOnline": "Anonymous Guests Online",
+    "accessTitle": "Access",
+    "accessDescription": "Analyze how users and guests are accessing your platform.",
+    "topRoutesTitle": "Top Accessed Routes",
+    "topRoutesDescription": "Most viewed pages on your platform.",
+    "views": "Views",
+    "accessError": "Failed to load access analytics.",
+    "topCountriesTitle": "Top Countries by Access",
+    "topCountriesDescription": "Page views originating from different countries.",
+    "topStatesTitle": "Top States by Access",
+    "topStatesDescription": "Drill-down of page views by state.",
+    "topCitiesTitle": "Top Cities by Access",
+    "topCitiesDescription": "Drill-down of page views by city.",
+    "audienceFilter": "Audience",
+    "all": "All",
+    "auth": "Authenticated",
+    "guests": "Guests",
+    "locationAnalytics": "Location Analytics",
+    "backToCountries": "Back to Countries",
+    "backToStates": "Back to States",
+    "countries": "Countries",
+    "states": "States",
+    "cities": "Cities",
+    "tableLocation": "Location",
+    "tableViews": "Views",
+    "tableShare": "Share",
+    "mostViewedPosts": "Most Viewed Posts",
+    "totalViews": "views",
+    "authGuestViews": "({authViews} auth / {guestViews} guest)",
+    "trends": {
+      "title": "Trend Hub",
+      "description": "Monitor real-time news collected from RSS feeds.",
+      "source": "Source",
+      "fetchedAt": "Fetched At",
+      "viewOriginal": "View Original",
+      "empty": "No trending topics found at the moment."
+    }
+  },
+  "CreatePostDialog": {
+    "title": "Create Post",
+    "description": "Share a new idea or update with your followers.",
+    "postSentTitle": "Post Sent!",
+    "postSentDescription": "Your new post is live.",
+    "viewPost": "View Post",
+    "authNeededTitle": "Authentication Required",
+    "authNeededDescription": "Please log in to create a post.",
+    "errorTitle": "Error Sending Post",
+    "errorDescription": "Could not send the post.",
+    "placeholder": "What's happening?",
+    "cancelButton": "Cancel",
+    "postButton": "Post",
+    "postButtonSubmitting": "Posting...",
+    "crossPostMenuLabel": "Choose other networks",
+    "crossPostMenuShort": "Other networks",
+    "crossPostSelected": "{count, plural, one {# network} other {# networks}}",
+    "crossPostMenuTitle": "Also publish to",
+    "crossPostMenuDescription": "The text and a link to this post will be sent to the selected networks.",
+    "crossPostPrivateWarning": "Restricted posts cannot leave your private circle.",
+    "crossPostConnect": "Connect Bluesky or X",
+    "crossPostSuccessTitle": "Published to other networks",
+    "crossPostSuccessDescription": "Your post was also published to {providers}.",
+    "crossPostPartialDescription": "Published to {published}. Could not send to {failed}.",
+    "crossPostErrorTitle": "Post saved; external delivery pending",
+    "crossPostErrorDescription": "Could not publish to {providers}. You can try again later.",
+    "crossPostGenericError": "The post was saved on Exe. Lula, but the external network did not respond.",
+    "federationSkippedTitle": "This post stayed here only",
+    "federationSkippedDescription": "Polls and quotes do not go to the Fediverse yet. The post was published normally in the network."
+  },
+  "DesktopSidebar": {
+    "following": "Following",
+    "followers": "Followers",
+    "settings": "Settings",
+    "logout": "Logout",
+    "post": "Post",
+    "article": "Article",
+    "login": "Login",
+    "register": "Register",
+    "terms": "Terms",
+    "privacy": "Privacy",
+    "guidelines": "Guidelines",
+    "cookies": "Cookies",
+    "drafts": "Drafts",
+    "feeds": "Feeds",
+    "bookmarks": "Bookmarks",
+    "files": "Files",
+    "adminPanel": "Admin Panel",
+    "nav": {
+      "profile": "Profile",
+      "messages": "Messages",
+      "notifications": "Notifications"
+    }
+  },
+  "MobileBottomNav": {
+    "profile": "Profile",
+    "login": "Login",
+    "promptAction": "access {action}",
+    "nav": {
+      "messages": "Messages",
+      "notifications": "Notifications",
+      "explore": "Explore"
+    }
+  },
+  "GlobalSearch": {
+    "placeholder": "Search users and topics...",
+    "recent": "Recent",
+    "clear": "Clear",
+    "users": "Users",
+    "topics": "Topics",
+    "noResults": "No results for \"{query}\""
+  },
+  "SettingsPage": {
+    "title": "Settings",
+    "description": "Manage your account, privacy, and notification settings.",
+    "logout": "Logout",
+    "logoutConfirmTitle": "Are you sure you want to log out?",
+    "logoutConfirmDescription": "You will be returned to the login page.",
+    "sections": {
+      "account": "Account",
+      "connections": "Connected accounts",
+      "privacy": "Privacy & Security",
+      "interaction": "Interaction Settings",
+      "moderation": "Muted and Blocked",
+      "notifications": "Notifications",
+      "media": "Content & Media",
+      "appearance": "Appearance",
+      "accessibility": "Accessibility",
+      "languages": "Languages",
+      "help": "Help",
+      "about": "About",
+      "fediverse": "Fediverse",
+      "p2p": "P2P Messaging (Zero DB)"
+    }
+  },
+  "SocialConnections": {
+    "title": "Connected accounts",
+    "description": "Connect your networks to publish to them directly when creating a public post.",
+    "connected": "Connected",
+    "connect": "Connect",
+    "disconnect": "Disconnect",
+    "blueskyDescription": "Publish to Bluesky without sharing your password with Exe. Lula.",
+    "blueskyHandle": "Your Bluesky handle",
+    "xDescription": "Send public posts to your X account using official authorization.",
+    "serverSetupPending": "The secure Bluesky key still needs to be enabled on the server.",
+    "xSetupPending": "X requires a developer application and API access before this connection can be enabled.",
+    "securityTitle": "Protected credentials",
+    "securityDescription": "Authorization remains on the server and is never sent to your browser. You can revoke it at any time.",
+    "connectedTitle": "{provider} connected",
+    "connectedDescription": "The account can now be selected when creating a public post.",
+    "disconnectedTitle": "{provider} disconnected",
+    "errorTitle": "Could not complete the connection",
+    "errorDescription": "The {provider} authorization was canceled, expired, or denied.",
+    "genericError": "Please try again in a moment.",
+    "loadErrorTitle": "Could not load your connections",
+    "tryAgain": "Try again"
+  },
+  "AccountSettings": {
+    "title": "Account",
+    "description": "Update your public profile information.",
+    "mainData": {
+      "title": "Credentials and Profile",
+      "email": "Email",
+      "updateEmail": "Update Email",
+      "password": "Password",
+      "updateUsername": "Username",
+      "birthday": "Birthday",
+      "edit": "Edit",
+      "notSet": "Not set",
+      "passwordTooltipGoogle": "You log in with Google and do not have a password to change."
+    },
+    "export": {
+      "title": "Export and Deactivation",
+      "exportData": "Export My Data",
+      "exportSuccessTitle": "Export Started",
+      "exportSuccessDescription": "Your data is being prepared and will download shortly.",
+      "exportErrorTitle": "Export Failed"
+    },
+    "dangerZone": {
+      "title": "Danger Zone",
+      "deleteAccountTitle": "Delete Account",
+      "deleteAccountDescription": "This action is irreversible. All your data, including posts, comments, and followers, will be permanently deleted.",
+      "deleteAccountButton": "Delete Account"
+    },
+    "deleteModal": {
+      "title": "Are you absolutely sure?",
+      "description": "This action cannot be undone. To confirm, please type your password below.",
+      "descriptionGoogle": "This action is irreversible. To confirm, you'll need to re-authenticate with your Google account.",
+      "passwordLabel": "Password",
+      "passwordPlaceholder": "Enter your password",
+      "cancel": "Cancel",
+      "confirm": "Permanently Delete My Account",
+      "reauthenticateAndConfirm": "Re-authenticate and Delete"
+    },
+    "notImplemented": {
+      "title": "Feature in Development",
+      "description": "{feature} functionality will be available soon."
+    },
+    "error": {
+      "noCurrentUser": {
+        "title": "Error",
+        "description": "Could not identify the current user."
+      },
+      "passwordRequired": {
+        "title": "Password Required",
+        "description": "Please enter your password to confirm."
+      },
+      "unexpected": {
+        "description": "An unexpected error occurred. Please try again."
+      },
+      "wrongPassword": {
+        "description": "The password you entered is incorrect."
+      },
+      "recentLogin": {
+        "description": "This is a sensitive operation. Please log out and log back in before deleting your account."
+      },
+      "deleteFailed": {
+        "title": "Deletion Failed"
+      }
+    },
+    "deleteSuccess": {
+      "title": "Account Deleted",
+      "description": "Your account and all associated data are being permanently deleted."
+    }
+  },
+  "ModerationSettings": {
+    "title": "Muted and Blocked Content",
+    "description": "Manage words, muted accounts, and blocked accounts. You won't see posts with these words in your feeds, nor posts from muted accounts.",
+    "mutedWords": {
+      "title": "Muted Words",
+      "placeholder": "Add word or #hashtag",
+      "add": "Add",
+      "updateSuccess": "Muted words list updated."
+    },
+    "mutedAccounts": {
+      "title": "Muted Accounts",
+      "unmute": "Unmute",
+      "empty": "You haven't muted any accounts."
+    },
+    "blockedAccounts": {
+      "title": "Blocked Accounts",
+      "unblock": "Unblock",
+      "empty": "You haven't blocked any accounts."
+    },
+    "unblockSuccess": "User Unblocked",
+    "unmuteSuccess": "User Unmuted",
+    "errors": {
+      "loadLists": "Could not load muted/blocked lists.",
+      "updateWords": "Failed to update words list.",
+      "updateUser": "Could not update user status."
+    }
+  },
+  "AppearanceSettings": {
+    "title": "Appearance",
+    "description": "Customize the look and feel of the application.",
+    "theme": {
+      "label": "Theme",
+      "description": "Choose how Exe. Lula looks for you. Select a theme from the options below.",
+      "light": "Light",
+      "dark": "Dark",
+      "system": "System"
+    }
+  },
+  "HelpSettings": {
+    "title": "Help",
+    "description": "Find answers to your questions or get in touch.",
+    "faq": "Help Center (FAQ)",
+    "viewPage": "View Page",
+    "contact": "Contact & Support",
+    "sendEmail": "Send Email",
+    "contactSoon": "Coming soon"
+  },
+  "AccessibilitySettings": {
+    "languageTitle": "Languages",
+    "title": "Accessibility & Languages",
+    "description": "Manage language and accessibility settings to improve your experience.",
+    "languageLabel": "Language",
+    "languageDescription": "Select your preferred language for the user interface.",
+    "selectPlaceholder": "Select a language",
+    "accessibilityTitle": "Accessibility",
+    "accessibilityDescriptionPage": "Manage settings to improve your experience.",
+    "displayTitle": "Display",
+    "fontSize": "Font Size",
+    "highContrast": "High Contrast Mode",
+    "highContrastDescription": "Increases color contrast for better readability."
+  },
+  "AboutSettings": {
+    "title": "About Exe. Lula",
+    "description": "Information and legal documents for the Exe. Lula platform.",
+    "aboutUs": "About Us",
+    "privacyPolicy": "Privacy Policy",
+    "termsOfService": "Terms of Service",
+    "communityGuidelines": "Community Guidelines",
+    "cookiePolicy": "Cookie Policy",
+    "dataRights": "Your rights over your data",
+    "open": "Open",
+    "viewPage": "View Page",
+    "version": "Exe. Lula Platform v1.0.0",
+    "copyright": "© {year} Exe. Lula. All Rights Reserved."
+  },
+  "ProfileTabs": {
+    "posts": "Posts",
+    "comments": "Comments",
+    "reposts": "Reposts",
+    "quotes": "Quotes",
+    "media": "Media",
+    "likes": "Likes",
+    "likesLoginRequired": "Log in to see likes."
+  },
+  "ProfileHeader": {
+    "following": "Following",
+    "followers": "Followers",
+    "posts": "Posts",
+    "editProfile": "Edit Profile",
+    "unblock": "Unblock",
+    "postNotifications": "Post Notifications",
+    "notifyMeAbout": "Notify me about",
+    "allPosts": "All Posts",
+    "onlyNews": "Only Articles",
+    "disableNotifications": "Disable Notifications",
+    "message": "Message",
+    "unfollow": "Unfollow",
+    "follow": "Follow",
+    "moreOptions": "More options",
+    "unmute": "Unmute",
+    "mute": "Mute",
+    "block": "Block",
+    "report": "Report",
+    "loginToInteract": "Login to Interact",
+    "interactWith": "interact with @{username}"
+  },
+  "ProfilePage": {
+    "coverAlt": "{name}'s cover image",
+    "notFoundTitle": "User Not Found",
+    "notFoundDescription": "The user profile you are looking for does not exist or could not be loaded.",
+    "backToFeed": "Go back to Feed",
+    "accessDeniedTitle": "Access Denied",
+    "accessDeniedDescription": "You do not have permission to view this profile.",
+    "blockedByTitle": "You are blocked",
+    "blockedByDescription": "@{username} has blocked you. You cannot see their posts or interact with their profile.",
+    "blockedTitle": "@{username} is Blocked",
+    "blockedDescription": "You have blocked this user. Unblock them to see their content.",
+    "privateTitle": "This profile is private",
+    "privateDescription": "Only people who follow @{username} can see this profile's posts, comments and likes.",
+    "privateGuestDescription": "Log in and follow @{username} to see this profile's posts, comments and likes."
+  },
+  "EmbeddedPostCard": {
+    "unavailable": "This post is unavailable.",
+    "continueReading": "Continue reading..."
+  },
+  "PaginatedLists": {
+    "errorTitle": "Failed to load",
+    "errorMessage": "An unexpected error occurred.",
+    "retry": "Try Again",
+    "noComments": "This user hasn't made any comments yet.",
+    "endOfComments": "You've reached the end of the comments.",
+    "commentLoadError": "Comment could not be loaded. It might have been deleted or the author's account is unavailable.",
+    "noLikes": "No liked items yet.",
+    "noBookmarks": "No saved items yet.",
+    "endOfFeed": "You've reached the end."
+  },
+  "UserListClientPageDefaults": {
+    "likedByTitle": "Liked by",
+    "likedByDescription": "People who liked the post from @{username}",
+    "backToPost": "Back to post",
+    "noLikes": "No one has liked this post yet.",
+    "quotesTitle": "Quotes",
+    "quotesDescription": "The post from @{username} has been quoted {count, plural, =0 {0 times} one {1 time} other {# times}}",
+    "noQuotes": "No one has quoted this post yet.",
+    "repostsTitle": "Reposts",
+    "repostsDescription": "People who reposted the post from @{username}",
+    "noReposts": "No one has reposted this post yet."
+  },
+  "UserListItem": {
+    "loginRequiredTitle": "Login Required",
+    "loginRequiredDescription": "You need to log in to follow users.",
+    "followSuccess": "Following @{username}",
+    "unfollowSuccess": "Unfollowed @{username}",
+    "error": "Error",
+    "updateError": "Could not update follow status.",
+    "unexpectedError": "An unexpected error occurred.",
+    "editProfile": "Edit Profile",
+    "wait": "Wait...",
+    "unfollow": "Unfollow",
+    "follow": "Follow",
+    "followersCount": "{count, plural, =0 {No followers} one {1 follower} other {# followers}}",
+    "recommendationFollowsYou": "Follows you",
+    "recommendationMutual": "{count, plural, one {1 mutual connection} other {# mutual connections}}",
+    "recommendationInterest": "Posts about {topic}",
+    "recommendationActive": "Recently active",
+    "recommendationPopular": "Popular in the network"
+  },
+  "UserProfileHoverCard": {
+    "loginRequiredTitle": "Login Required",
+    "loginRequiredDescription": "You need to be logged in to follow users.",
+    "followSuccess": "Following @{username}",
+    "unfollowSuccess": "Unfollowed @{username}",
+    "error": "Error",
+    "updateError": "Failed to update follow status.",
+    "unexpectedError": "An unexpected error occurred.",
+    "coverImageAlt": "{name}'s cover image",
+    "unfollow": "Unfollow",
+    "follow": "Follow",
+    "following": "Following",
+    "followers": "Followers"
+  },
+  "HashtagListItem": {
+    "postCount": "{count, plural, one {1 post} other {# posts}}"
+  },
+  "SearchResultsTabs": {
+    "top": "Top",
+    "latest": "Latest",
+    "people": "People",
+    "feeds": "Feeds",
+    "articles": "Articles",
+    "noResults": "No results found for this tab."
+  },
+  "SearchPage": {
+    "resultsFor": "Results for",
+    "prompt": "Please enter a search term in the header.",
+    "loading": "Loading search..."
+  },
+  "BackButton": {
+    "back": "Back"
+  },
+  "HelpCenterPage": {
+    "title": "Help Center",
+    "description": "Need help? Find answers here or get in touch.",
+    "faqTitle": "Frequently Asked Questions (FAQ)",
+    "q1": "How do I create an account?",
+    "a1": "To create an account, click the 'Register' button on the homepage or login page. You will need to provide your name, a unique username, your email, and a password.",
+    "q2": "Can I change my username?",
+    "a2": "Currently, it is not possible to change your username (@username) after registration. Choose carefully! Your display name, however, can be changed at any time in your profile settings.",
+    "q3": "How do I delete my account?",
+    "a3": "You can delete your account in the 'Account' section within Settings. Remember that this action is permanent and all your data will be removed.",
+    "contactTitle": "Contact",
+    "contactText": "If you couldn't find the answer to your question, our support team is ready to help. Contact us via email at:",
+    "contactUnavailable": "Our email contact channels are being set up and will be announced soon."
+  },
+  "TrendingPage": {
+    "title": "Trending Now",
+    "description": "Discover what's buzzing in the Exe. Lula network.",
+    "topHashtagsTitle": "Top Hashtags",
+    "topHashtagsDescription": "The most popular tags right now.",
+    "noHashtags": "No trending hashtags at the moment.",
+    "topNewsTitle": "Top News",
+    "topNewsDescription": "The most discussed news articles.",
+    "noNews": "No top news articles at the moment."
+  },
+  "RightSidebar": {
+    "sidebarLabel": "Network discoveries",
+    "trendingTopics": "Trending",
+    "trendingDescription": "Topics moving the network right now.",
+    "topArticles": "Top Articles",
+    "topArticlesDescription": "Noteworthy reads from the community.",
+    "suggestedUsers": "Suggested Accounts",
+    "suggestedUsersDescription": "New voices to discover and follow.",
+    "seeAll": "See all",
+    "mentionsCount": "{count, plural, one {# mention} other {# mentions}}",
+    "noTrendingTopics": "No trending topics right now.",
+    "noTopArticles": "No top articles currently.",
+    "downloadAppTitle": "Exe. Lula App",
+    "downloadAppDescription": "Get the best experience by installing the app on your device.",
+    "downloadNow": "Download Now"
+  },
+  "FollowersPage": {
+    "title": "Followers",
+    "description": "People who follow @{username}",
+    "backLabel": "Back to @{username}'s profile",
+    "emptyState": "@{username} doesn't have any followers yet."
+  },
+  "FollowingPage": {
+    "title": "Following",
+    "description": "People @{username} follows",
+    "backLabel": "Back to @{username}'s profile",
+    "emptyState": "@{username} isn't following anyone yet."
+  },
+  "CommentDisplaySettings": {
+    "filter": "Filter",
+    "view": "View",
+    "nested": "Nested",
+    "linear": "Linear",
+    "sortOrder": "Sort Order",
+    "popularFirst": "Popular First",
+    "oldestFirst": "Oldest First",
+    "newestFirst": "Newest First"
+  },
+  "DraftsPage": {
+    "title": "Drafts",
+    "yourDrafts": "Your Drafts",
+    "yourDraftsDescription": "Here are your unpublished posts and articles."
+  },
+  "BookmarksPage": {
+    "title": "Bookmarks",
+    "description": "Your saved posts and comments.",
+    "yourBookmarks": "Your Bookmarks",
+    "yourBookmarksDescription": "Here are the items you've saved for later.",
+    "loginPrompt": "Please log in to see your bookmarks."
+  },
+  "HashtagHoverCard": {
+    "loading": "Loading stats...",
+    "posts": "{count, plural, one {1 post} other {# posts}}"
+  },
+  "FilesPage": {
+    "title": "My Files",
+    "description": "Your personal and secure file storage.",
+    "comingSoonTitle": "Feature Under Construction",
+    "comingSoonDescription": "We are building a robust and secure file management system. The following features will be available soon:",
+    "featureFolders": "Create and manage recursive folders.",
+    "featureUpload": "Upload any type of file.",
+    "featureSecurity": "Password protection, encryption, and compression options.",
+    "featureSharing": "Internal and external file sharing.",
+    "featureOffline": "Offline access to your important files."
+  },
+  "EditProfileDialog": {
+    "title": "Edit Profile",
+    "description": "Your changes will be visible to everyone.",
+    "coverImageLabel": "Cover Image",
+    "uploadCoverImage": "Upload a cover image",
+    "remove": "Remove",
+    "nameLabel": "Name",
+    "namePlaceholder": "John Doe",
+    "bioLabel": "Bio",
+    "bioPlaceholder": "Tell us about yourself",
+    "locationLabel": "Location",
+    "locationPlaceholder": "City, Country",
+    "websiteLabel": "Website",
+    "websitePlaceholder": "https://example.com",
+    "cancel": "Cancel",
+    "save": "Save Changes",
+    "uploading": "Uploading",
+    "fileTooLargeTitle": "File Too Large",
+    "fileTooLargeDescription": "Please select an image file smaller than 5MB.",
+    "updateSuccessTitle": "Profile Updated",
+    "updateSuccessDescription": "Your profile has been successfully saved.",
+    "replacementCleanupTitle": "Profile saved with pending cleanup",
+    "replacementCleanupDescription": "{count, plural, one {The previous image could not be fully removed after an automatic retry. The new image was saved and the pending cleanup remains recorded for correction.} other {# previous images could not be fully removed after an automatic retry. The new images were saved and the pending cleanup remains recorded for correction.}}",
+    "noChangesTitle": "No Changes",
+    "noChangesDescription": "You haven't made any changes to your profile.",
+    "updateFailedTitle": "Update Failed",
+    "updateFailedDescription": "An unexpected error occurred.",
+    "cropperTitle": "Crop Image",
+    "cropperDescription": "Adjust the image to fit the designated area.",
+    "applyCrop": "Apply Crop",
+    "capture": "Capture",
+    "cameraAccessDenied": "Camera Access Denied"
+  },
+  "TagPage": {
+    "top": "Top",
+    "recent": "Recent"
+  },
+  "TopNewsItem": {
+    "by": "By",
+    "source": "Source",
+    "articleImage": "Article image",
+    "untitledArticle": "untitled article",
+    "readArticle": "Read {title}"
+  },
+  "CommentCard": {
+    "authorBadge": "Author",
+    "youReposted": "You reposted",
+    "reposted": "reposted"
+  },
+  "CommentOptionsMenu": {
+    "moreOptions": "More options for comment",
+    "delete": "Delete comment",
+    "copy": "Copy text",
+    "sendDirect": "Send via Direct",
+    "share": "Share comment",
+    "hide": "Hide comment",
+    "unmute": "Unmute @{username}",
+    "mute": "Mute @{username}",
+    "unblock": "Unblock @{username}",
+    "block": "Block @{username}",
+    "report": "Report comment"
+  },
+  "DownloadPage": {
+    "title": "Download the App",
+    "description": "Install Exe. Lula on your device for the best experience.",
+    "androidTitle": "Download for Android",
+    "androidSoonTitle": "Android app coming soon",
+    "androidSoonText": "We are preparing a new version of the Android app, which will be available here once it has been validated. In the meantime, use Exe. Lula in your browser.",
+    "iosTitle": "Install on iPhone/iPad",
+    "desktopTitle": "Install on your Computer",
+    "downloadApkButton": "Download the Exe. Lula app",
+    "apkInstallTitle": "How to Install the APK",
+    "apkStep1": "1. Download the .apk file using the button above.",
+    "apkStep2": "2. Open the downloaded file. Your device will ask for permission to 'install apps from unknown sources'. Allow it to continue.",
+    "apkStep3": "3. Follow the on-screen instructions to complete the installation.",
+    "apkSecurityWarningTitle": "Security Notice",
+    "apkSecurityWarningText": "Android may show a warning about installing apps from outside the Play Store. Our file is safe. You can verify the file's integrity using the SHA-256 checksum below.",
+    "iosInstallTitle": "How to Add to Home Screen",
+    "iosStep1": "1. Open this website in Safari.",
+    "iosStep2": "2. Tap the Share icon in the browser's toolbar.",
+    "iosStep3": "3. Scroll down and select 'Add to Home Screen'.",
+    "iosStep4": "4. Confirm to add the Exe. Lula icon to your home screen.",
+    "desktopInstallTitle": "How to Install in Your Browser",
+    "desktopInstallText": "Look for the install icon in your browser's address bar (usually on the right side) and follow the instructions to add Exe. Lula as an app on your computer.",
+    "releaseInfoTitle": "Release Information",
+    "version": "Version",
+    "releaseNotes": "Release Notes",
+    "checksum": "SHA-256 Checksum",
+    "loading": "Detecting your device..."
+  },
+  "ExploreView": {
+    "title": "Explore",
+    "description": "Discover the topics, people, and conversations moving the network.",
+    "forYou": "For You",
+    "suggestedAccountsTitle": "Suggested Accounts",
+    "suggestedAccountsDescription": "Find new voices by affinity or topic.",
+    "categoryFiltersLabel": "Filter suggestions by topic",
+    "showMoreSuggestions": "Show {count, plural, one {# more suggestion} other {# more suggestions}}",
+    "showFewerSuggestions": "Show fewer",
+    "noSuggestions": "No suggestions found for this category.",
+    "suggestedPostsTitle": "Suggested Posts",
+    "suggestedPostsDescription": "Selected conversations to keep your discovery going.",
+    "noSuggestedPosts": "No suggested posts at the moment.",
+    "trending": "Trending",
+    "pulseTitle": "Network pulse",
+    "pulseDescription": "An organic snapshot of the topics appearing most in recent posts and comments.",
+    "activeTopics": "Active topics",
+    "recentMentions": "Recent mentions",
+    "leadingConversation": "Leading topic",
+    "topicMentions": "{count, plural, one {# mention} other {# mentions}}",
+    "openTopic": "Open {topic}, {count, plural, one {# mention} other {# mentions}}",
+    "noTrending": "No trending topics at the moment.",
+    "trendingBadge": "Trending"
+  },
+  "PostCardHeader": {
+    "edited": "(Edited)"
+  },
+  "SendViaDirectDialog": {
+    "shareMessage": "Check out this post!"
+  },
+  "Composer": {
+    "emojiButton": "Add emoji",
+    "emojiSheetDescription": "Choose an emoji to insert into the text.",
+    "emojiSearch": "Search emoji",
+    "emojiRecent": "Recent",
+    "emojiSmileys": "Smileys and people",
+    "emojiAnimals": "Animals and nature",
+    "emojiFood": "Food and drink",
+    "emojiTravel": "Travel and places",
+    "emojiActivities": "Activities",
+    "emojiObjects": "Objects",
+    "emojiSymbols": "Symbols",
+    "emojiFlags": "Flags",
+    "locationButton": "Add location",
+    "locationSearch": "Search municipality",
+    "locationHint": "Choose only the city and state. The app does not access GPS.",
+    "locationLoading": "Loading municipalities...",
+    "locationNone": "No municipality found.",
+    "locationRemove": "Remove location",
+    "pollButton": "Add poll",
+    "pollTitle": "Poll",
+    "pollRemove": "Remove poll",
+    "pollOptionPlaceholder": "Option {number}",
+    "pollOptionRemove": "Remove option {number}",
+    "pollAddOption": "Add option",
+    "pollDuration": "Duration",
+    "pollDuration_hours": "{count, plural, one {# hour} other {# hours}}",
+    "pollDuration_days": "{count, plural, one {# day} other {# days}}",
+    "pollInvalidTitle": "Review the poll",
+    "pollError_tooFew": "Fill in at least two options.",
+    "pollError_tooMany": "A poll can have at most four options.",
+    "pollError_tooLong": "Each option can contain up to 25 characters.",
+    "pollError_duplicate": "Poll options must be different.",
+    "pollError_duration": "Choose a valid duration.",
+    "pollMediaConflictTitle": "Poll or media",
+    "pollMediaConflictDescription": "Remove the poll to attach an image or video.",
+    "sensitiveButton": "Mark media as sensitive content"
+  },
+  "Poll": {
+    "title": "Poll",
+    "votes": "{count, plural, =0 {No votes} one {# vote} other {# votes}}",
+    "vote": "Vote for {option}",
+    "ended": "Poll ended",
+    "remainingDays": "{days}d {hours}h left",
+    "remainingHours": "{hours}h {minutes}m left",
+    "remainingMinutes": "{minutes}m left",
+    "loginRequired": "Sign in to vote.",
+    "voteError": "Your vote could not be recorded. Try again.",
+    "alreadyVoted": "Your vote has already been recorded."
+  },
+  "PostContent": {
+    "sensitiveWarning": "Sensitive content",
+    "sensitiveHint": "The media was hidden because the author marked it as sensitive.",
+    "showSensitive": "Show media"
+  },
+  "Signup": {
+    "closedTitle": "Sign-ups are closed for now",
+    "closedMessage": "The first {limit} spots on Exe. Lula have been filled.",
+    "closedHint": "If you already have an account, you can keep signing in as usual, with your email or with Google.",
+    "goToLogin": "Go to login",
+    "unavailable": "Sign-up is temporarily unavailable. Please try again in a few minutes.",
+    "usernameInvalid": "Use 3 to 15 letters, numbers or _ (no spaces or accents).",
+    "humanCheckFailed": "We could not confirm you are a person. Reload the page and try again. If you use an ad or tracker blocker, allow Exe. Lula and Google reCAPTCHA.",
+    "recaptchaNotice": "This site is protected by Google reCAPTCHA Enterprise, and the Google Privacy Policy and Terms of Service apply."
+  },
+  "ImageViewer": {
+    "title": "Image viewer",
+    "description": "A zoomed view of the image, with pinch or double-tap zoom and options to save or share.",
+    "back": "Back",
+    "save": "Save",
+    "share": "Share",
+    "imageAlt": "Full screen image",
+    "shareTitle": "Exe. Lula image",
+    "shareText": "Check out this image on Exe. Lula!",
+    "linkCopiedTitle": "Link copied!",
+    "linkCopiedBody": "The link to the post was copied to your clipboard.",
+    "shareFailedTitle": "Could not share",
+    "shareFailedBody": "Try again in a moment.",
+    "downloadingTitle": "Downloading...",
+    "downloadingBody": "The image \"{fileName}\" should start downloading.",
+    "downloadFailedTitle": "Could not download",
+    "downloadFailedBody": "Opening the image in a new tab so you can save it manually."
+  },
+  "NotificationItem": {
+    "fallback": "You have a new notification.",
+    "welcome": "Welcome to Exe. Lula!",
+    "someone": "Someone",
+    "andOthers": "and {count} others",
+    "andOne": "and 1 other",
+    "unread": "Unread",
+    "aria": "Notification: {text}",
+    "ariaFallback": "new interaction",
+    "actions": {
+      "like_post": "liked your post",
+      "like_repost": "liked your repost",
+      "like_comment": "liked your comment:",
+      "repost": "reposted your post",
+      "repost_repost": "reposted your repost",
+      "repostComment": "reposted your comment",
+      "quote": "quoted your post:",
+      "quoteComment": "quoted your comment:",
+      "comment_on_post": "commented on your post:",
+      "reply_to_comment": "replied to your comment:",
+      "new_follower": "started following you",
+      "follow_back": "followed you back!",
+      "mention_in_post": "mentioned you in a post:",
+      "mention_in_comment": "mentioned you in a comment:",
+      "new_post_from_user": "published a new post:",
+      "new_message": "sent you a new message:",
+      "new_conversation": "started a conversation with you",
+      "default": "interacted with you"
+    }
+  },
+  "Push": {
+    "promptTitle": "Get alerts on your device",
+    "promptBody": "Know right away when someone likes, replies to, mentions or follows you, even with the app closed.",
+    "enable": "Turn on notifications",
+    "later": "Not now",
+    "close": "Close",
+    "blockedTitle": "Notifications are blocked",
+    "blockedBody": "Allow Exe. Lula notifications in your browser or device settings to receive alerts.",
+    "enabledTitle": "Notifications turned on",
+    "enabledBody": "You will receive alerts on this device.",
+    "errorTitle": "Could not turn on notifications",
+    "errorBody": "Try again in a moment."
+  },
+  "Consent": {
+    "title": "Cookies and usage measurement",
+    "description": "Some cookies are necessary so you can sign in, keep your language and theme and block abuse — those are not a choice. Measurement and advertising cookies are only used if you accept, and you can change your mind at any time.",
+    "cookiePolicy": "Cookie Policy",
+    "privacyPolicy": "Privacy Policy",
+    "acceptAll": "Accept all",
+    "rejectAll": "Reject all",
+    "customize": "Customize",
+    "openPreferences": "Privacy preferences",
+    "manage": "Manage",
+    "preferences": {
+      "title": "Privacy preferences",
+      "description": "Choose category by category. Your decision applies from now on and can be withdrawn on this same screen, whenever you want.",
+      "save": "Save choices",
+      "alwaysOn": "Always on"
+    },
+    "categories": {
+      "necessary": {
+        "title": "Strictly necessary",
+        "description": "They keep your session open, store your language and theme and protect the network against fraud and abuse. The platform does not work without them, so there is nothing to switch off here."
+      },
+      "analytics": {
+        "title": "Usage measurement",
+        "description": "They help us understand which pages are used and where the network fails. Off until you accept."
+      },
+      "marketing": {
+        "title": "Advertising",
+        "description": "They would allow ads and campaign measurement. The network shows no ads today; the category stays here so nothing can be turned on without your consent. Off until you accept."
+      }
+    }
+  },
+  "AuthAction": {
+    "title": "Account confirmation",
+    "subtitle": "We are checking the link you opened.",
+    "checking": "Checking the link…",
+    "continue": "Continue",
+    "goHome": "Go to home",
+    "goLogin": "Go to sign in",
+    "goAccount": "Go to account",
+    "alreadyConfirmed": "I already confirmed, check again",
+    "identityNote": "Confirming your email proves you control that inbox. It is not identity verification: we do not check your real name, documents or age.",
+    "success": {
+      "verifyEmail": {
+        "title": "Email confirmed",
+        "body": "All set. Your account can now post, comment and interact."
+      },
+      "resetPassword": {
+        "title": "Password changed",
+        "body": "Your new password is active. Sign in with it."
+      },
+      "recoverEmail": {
+        "title": "Change reverted",
+        "body": "Your account email is back to the previous one. If you did not request the change, change your password now."
+      },
+      "verifyAndChangeEmail": {
+        "title": "Email changed and confirmed",
+        "body": "Your account now uses the new address. Sign in again with it."
+      }
+    },
+    "error": {
+      "expirado": {
+        "title": "This link has expired",
+        "body": "Confirmation links are valid for a limited time. Request a new one from your account screen."
+      },
+      "invalido-ou-usado": {
+        "title": "This link is no longer valid",
+        "body": "Either it was already used — including in another browser or device — or it is incomplete. If you already confirmed elsewhere, use the button below."
+      },
+      "usuario-desativado": {
+        "title": "Account disabled",
+        "body": "This account is not active. Contact support."
+      },
+      "senha-fraca": {
+        "title": "Password rejected",
+        "body": "Choose a stronger password and try again."
+      },
+      "desconhecido": {
+        "title": "Could not complete",
+        "body": "Something went wrong while checking the link. Try again or request a new link."
+      }
+    },
+    "password": {
+      "intro": "Choose a new password.",
+      "forEmail": "Choose a new password for {email}.",
+      "new": "New password",
+      "repeat": "Repeat the new password",
+      "save": "Save new password",
+      "rule": "At least 8 characters. Avoid digits only, obvious passwords and anything resembling your email.",
+      "mismatch": "The two passwords do not match.",
+      "problem": {
+        "curta": "The password needs at least 8 characters.",
+        "longa": "The password is too long.",
+        "so-numeros": "Do not use a password made only of digits.",
+        "obvia": "That password is too common. Choose another.",
+        "parece-email": "The password cannot contain your email.",
+        "repetida": "Do not use the same character repeated."
+      }
+    }
+  },
+  "Fediverse": {
+    "title": "Fediverse",
+    "description": "The Fediverse is a set of independent servers that talk to each other (Mastodon, Pleroma and others). When you turn it on, people there can follow you and receive the posts you choose to send.",
+    "platformOff": "The Fediverse is not turned on in this network yet. When it is, you will be able to turn it on here, on your own.",
+    "errorTitle": "Could not complete",
+    "loadErrorTitle": "Could not load your Fediverse settings",
+    "tryAgain": "Try again",
+    "beforeTitle": "Before you turn it on, know what changes",
+    "before": {
+      "scope": "Only what you mark, post by post, as public, unlisted or followers-only is sent. Private messages, personal files and your account data are never sent.",
+      "past": "Posts from before you turned it on are never sent, not even if you pause and resume later.",
+      "copies": "Other servers keep a copy. If you edit or delete, we notify the servers, but we cannot guarantee that all of them comply.",
+      "control": "You can pause or turn it off at any time, remove followers and block people or entire servers.",
+      "identity": "Your Fediverse address becomes public and stays reserved for you: nobody else can use it, even if you turn it off."
+    },
+    "policyPrefix": "See the details in the",
+    "policyLink": "Privacy Policy",
+    "verifyEmailTitle": "Confirm your email first",
+    "verifyEmailDescription": "To turn on the Fediverse, we need you to have confirmed that you own your email address.",
+    "enable": "Turn on the Fediverse",
+    "confirmEnableTitle": "Turn on the Fediverse for your account?",
+    "confirmEnableDescription": "Your profile can be found and followed by people on other servers. Nothing of yours is sent until you choose the reach of a post. Copies that other servers keep are outside our control.",
+    "confirmEnable": "Turn on",
+    "cancel": "Cancel",
+    "platformPausedTitle": "The Fediverse is temporarily offline in this network",
+    "platformPausedDescription": "Your posts keep working as usual. Nothing comes in or goes out until the administration turns it back on. Your choice is saved.",
+    "yourAddress": "Your Fediverse address",
+    "paused": "Paused",
+    "active": "Active",
+    "copy": "Copy",
+    "copied": "Copied",
+    "followersCount": "{count, plural, =0 {No Fediverse followers yet.} one {# Fediverse follower.} other {# Fediverse followers.}}",
+    "pausedExplain": "Paused: nothing new is sent or received. What you publish during the pause will not be sent later.",
+    "activeExplain": "Active: posts you mark with a Fediverse reach are sent to the servers of the people who follow you.",
+    "resume": "Resume",
+    "pause": "Pause",
+    "disable": "Turn off",
+    "confirmDisableTitle": "Turn off the Fediverse?",
+    "confirmDisableDescription": "We notify the servers of the people who followed you that your account left the Fediverse, and we remove those followers. Copies already kept by other servers may continue to exist: we cannot guarantee that all of them delete. Your address stays reserved for you.",
+    "confirmDisable": "Turn off",
+    "done": {
+      "enable": "Fediverse turned on",
+      "pause": "Fediverse paused",
+      "resume": "Fediverse resumed",
+      "disable": "Fediverse turned off"
+    },
+    "errors": {
+      "erro-desconhecido": "Something went wrong. Try again in a moment.",
+      "nao-autenticado": "Sign in again to continue.",
+      "plataforma-desligada": "The Fediverse is currently turned off in this network.",
+      "email-nao-confirmado": "Confirm your email to turn on the Fediverse.",
+      "perfil-inexistente": "Your profile was not found.",
+      "handle-invalido": "Your username cannot be used as a Fediverse address. Change it in your account settings.",
+      "handle-indisponivel": "That address is already reserved by another account.",
+      "conta-removida": "This account was removed.",
+      "nao-ativada": "The Fediverse is not active on your account.",
+      "muitas-requisicoes": "Too many actions in a short time. Wait a moment.",
+      "nao-pode-repetir": "This delivery is still in progress.",
+      "nao-encontrada": "This delivery no longer exists.",
+      "nao-encontrado": "This item could not be found.",
+      "valor-invalido": "That value is not valid.",
+      "proprio-dominio": "You cannot block your own network.",
+      "limite": "You reached the block limit."
+    },
+    "tabs": {
+      "deliveries": "Deliveries",
+      "moderation": "Followers and blocks"
+    },
+    "deliveries": {
+      "explain": "What was sent to other servers and what happened to each delivery.",
+      "empty": "Nothing has been sent yet.",
+      "refresh": "Refresh",
+      "tryAgain": "Try again",
+      "retry": "Try again",
+      "retried": "Retry scheduled",
+      "retryError": "Could not schedule a retry",
+      "attempts": "{count, plural, one {# attempt} other {# attempts}}",
+      "deadExplain": "The server did not answer after several attempts. You can try again.",
+      "ops": {
+        "create": "Post",
+        "update": "Edit",
+        "delete": "Deletion",
+        "accept": "Follower accepted",
+        "reject": "Follower removed",
+        "delete-actor": "Leaving the Fediverse"
+      },
+      "status": {
+        "pending": "Queued",
+        "sent": "Delivered",
+        "failed": "Failed",
+        "dead": "No answer",
+        "cancelled": "Cancelled"
+      }
+    },
+    "moderation": {
+      "followersTitle": "Fediverse followers",
+      "followersExplain": "People who follow you from other servers. Removing notifies the server of that person; blocking also stops them from following again.",
+      "followersEmpty": "Nobody from the Fediverse follows you yet.",
+      "remove": "Remove",
+      "removed": "Follower removed",
+      "block": "Block",
+      "blockedActor": "Person blocked",
+      "loadMore": "Load more",
+      "blocksTitle": "Blocks",
+      "blocksExplain": "Blocking a server removes its followers and discards everything that comes from there, without notifying it. It applies only to you.",
+      "blockServer": "Block an entire server",
+      "blockAction": "Block",
+      "blockedServer": "Server blocked",
+      "blocksEmpty": "You have not blocked anyone.",
+      "scopeDomain": "Entire server",
+      "scopeActor": "Person",
+      "unblock": "Unblock",
+      "unblocked": "Block removed"
+    },
+    "reach": {
+      "menuLabel": "Who can receive this post on the Fediverse",
+      "menuTitle": "Fediverse reach",
+      "menuDescription": "By default the post stays here only. You choose, post by post. After publishing, the reach does not change.",
+      "short": {
+        "local": "Here only",
+        "public": "Fediverse",
+        "unlisted": "Unlisted",
+        "followers": "Followers"
+      },
+      "option": {
+        "local": {
+          "title": "Here only",
+          "description": "Stays on Exe. Lula. Nothing is sent to other servers."
+        },
+        "public": {
+          "title": "Fediverse: public",
+          "description": "Any server can receive and show it, including in public timelines there."
+        },
+        "unlisted": {
+          "title": "Fediverse: unlisted",
+          "description": "People who follow you there receive it, but it does not appear in public timelines."
+        },
+        "followers": {
+          "title": "Fediverse: followers only",
+          "description": "Only your Fediverse followers receive it. Servers that do not respect the protocol may show more than they should."
+        }
+      },
+      "blocked": {
+        "poll": "Polls do not go to the Fediverse yet: this post stays here only.",
+        "quote": "Quotes do not go to the Fediverse yet: this post stays here only."
+      },
+      "privateProfile": "Your profile is private: only the followers reach is available.",
+      "copiesWarning": "Other servers keep a copy. If you edit or delete, we notify the servers, but we cannot guarantee that all of them comply.",
+      "manage": "Manage the Fediverse",
+      "badge": {
+        "public": "Sent to the Fediverse (public)",
+        "unlisted": "Sent to the Fediverse (unlisted)",
+        "followers": "Sent to the Fediverse (followers only)"
+      }
+    }
+  }
+}

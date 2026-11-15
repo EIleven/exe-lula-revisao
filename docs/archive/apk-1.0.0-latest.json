@@ -1,0 +1,12 @@
+{
+  "versionName": "1.0.0",
+  "versionCode": 100,
+  "minSupportedVersionCode": 100,
+  "apkUrl": "https://soberan.app/downloads/Soberan-1.0.0.apk",
+  "sha256": "83b4ab5b105edaf9c23f28037ec853761984fffece542baac263519c261a2079",
+  "releaseNotes": [
+    "Lançamento inicial do aplicativo Soberan.",
+    "Funcionalidades de feed, postagens e perfis.",
+    "Suporte para PWA."
+  ]
+}

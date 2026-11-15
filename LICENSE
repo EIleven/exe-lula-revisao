@@ -1,0 +1,46 @@
+LICENÇA PROPRIETÁRIA DE ACESSO RESTRITO PARA ANÁLISE E CONTRIBUIÇÃO
+(PROPRIETARY SOURCE-AVAILABLE REVIEW & CONTRIBUTION LICENSE — NÃO É CÓDIGO ABERTO)
+
+Copyright (c) 2026 Projeto Exe. Lula / Echo (Proprietário: Breno César).
+Todos os direitos reservados.
+
+AVISO IMPORTANTE:
+ESTE SOFTWARE NÃO É SOFTWARE LIVRE (OPEN SOURCE). NÃO SE APLICAM LICENÇAS MIT,
+APACHE, GPL, BSD OU SIMILARES. O ACESSO A ESTE REPOSITÓRIO É CONCEDIDO DE FORMA
+ESTRITAMENTE PRIVADA, NOMINAL E REVOGÁVEL.
+
+1. CONCESSÃO LIMITADA DE ACESSO
+O Proprietário concede exclusivamente aos Colaboradores e Revisores Convidados
+autorizados formalmente neste repositório privado (incluindo o Revisor nominal
+identificado em ACORDO_REVISAO_JUAN.md) uma licença limitada, pessoal,
+intransferível, não exclusiva e revogável a qualquer tempo para:
+  (a) visualizar, ler e analisar o código-fonte exclusivamente para fins de
+      auditoria técnica, revisão de segurança, diagnóstico e melhoria do projeto;
+  (b) executar o código localmente em ambiente de desenvolvimento/emuladores
+      exclusivamente para validar correções e análises;
+  (c) propor correções, melhorias e Pull Requests (PRs) diretamente neste
+      repositório autorizado.
+
+2. PROIBIÇÕES EXPRESSAS
+É terminantemente proibido ao Revisor/Colaborador, no todo ou em parte:
+  (a) copiar, clonar para uso externo, reproduzir, publicar, vazar, exibir ou
+      compartilhar o código-fonte, arquitetura proprietária, fluxos ou documentos
+      com terceiros não autorizados;
+  (b) distribuir, sublicenciar, vender, alugar ou disponibilizar este software
+      ou qualquer obra derivada, seja gratuita ou comercialmente;
+  (c) utilizar trechos do código, lógica de negócio ou interface para criar
+      produto concorrente, clone ou serviço em produção próprio ou de terceiros;
+  (d) manter cópias locais após o encerramento ou revogação do acesso.
+
+3. PROPRIEDADE INTELECTUAL E CONTRIBUIÇÕES (PRs)
+Todo o código existente e futuro do projeto permanece propriedade exclusiva do
+Proprietário. Ao submeter qualquer Issue, Patch, Commit ou Pull Request neste
+repositório, o Colaborador cede e transfere irrevogavelmente ao Proprietário todos
+os direitos patrimoniais sobre a contribuição enviada, para incorporação no
+repositório principal privado e distribuição exclusiva pelo Proprietário.
+
+4. CONFIDENCIALIDADE E REVOGAÇÃO
+Todo o conteúdo deste repositório é Informação Confidencial. O descumprimento de
+qualquer cláusula revoga imediatamente a autorização de acesso, sem prejuízo das
+medidas cíveis e penais cabíveis (Lei nº 9.609/1998 - Lei de Software e Lei nº
+9.610/1998 - Direitos Autorais).

@@ -1,0 +1,88 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# Dependencies
+/node_modules
+/.pnp
+.pnp.js
+
+# Testing
+/coverage
+
+# Next.js build output
+/.next/
+/out/
+
+# Production
+/build
+
+# Local Environment Variables
+.env*.local
+.env
+
+# Misc
+.DS_Store
+*.pem
+
+# Log files
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Editor directories and files
+.vscode
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Android / Capacitor
+# =====================
+# Ignore Gradle build files
+/android/.gradle
+/android/build/
+/android/app/build/
+
+# Ignore generated APKs and bundles
+*.apk
+*.aab
+# Excecao: o APK publicado no site (npm run apk:publicar) precisa ir no deploy e no Git
+!public/downloads/*.apk
+
+# Ignore local configuration files
+/android/local.properties
+# Config do app Android no Firebase (gerada por: Firebase console > Configurações > app Android, ou REST androidApps/{id}/config)
+/android/app/google-services.json
+
+# Ignore the signing key
+*.jks
+
+# TypeScript: cache incremental do tsc
+*.tsbuildinfo
+
+# PWA: sw.js, workbox e fallback sao GERADOS pelo next-pwa no "next build" (public/) e nao sao versionados
+/public/sw.js
+/public/sw.js.map
+/public/workbox-*.js
+/public/workbox-*.js.map
+/public/fallback-*.js
+
+# Firebase Emulator Suite: logs e estado local do iniciador seguro (npm run emulators)
+*-debug.log
+.emulator-state/
+
+# Testes E2E contra os emuladores: capturas de tela, resumos e perfis do navegador (e2e/*.mjs)
+/e2e-output/
+
+# Backups da migração de mídia: contêm URLs antigas com token de download.
+# Nunca versionar. O padrão do script já salva fora do repositório (~/soberan-backups).
+.backup-midia/
+
+# Arquivos locais e logs temporarios (nunca versionar)
+*.jsonl
+.agent/
+brain/
+scratch/
+memory/
+backup-midia-*.jsonl

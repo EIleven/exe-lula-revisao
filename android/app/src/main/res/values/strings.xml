@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Exe. Lula</string>
+    <string name="title_activity_main">Exe. Lula</string>
+    <string name="package_name">com.soberan.app</string>
+    <string name="custom_url_scheme">com.soberan.app</string>
+</resources>

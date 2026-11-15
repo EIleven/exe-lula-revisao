@@ -1,0 +1,1039 @@
+
+{
+  "AppLayout": {
+    "logoutSuccessTitle": "Sessão Encerrada",
+    "logoutSuccessDescription": "Você foi desconectado com sucesso.",
+    "logoutErrorTitle": "Erro ao Sair",
+    "logoutErrorDescription": "Não foi possível encerrar a sessão.",
+    "articlePublished": "Artigo Publicado!",
+    "postSent": "Post Enviado!",
+    "viewPost": "Ver Post",
+    "nav": {
+      "feed": "Feed",
+      "explore": "Explorar",
+      "messages": "Mensagens",
+      "notifications": "Notificações"
+    }
+  },
+  "AdminDashboard": {
+    "statsErrorTitle": "Não foi possível carregar as estatísticas.",
+    "locationErrorTitle": "Não foi possível carregar os dados de localização.",
+    "pageViewsTitle": "Visualizações de Página",
+    "pageViewsDescription": "Visualizações de página por usuários autenticados e visitantes.",
+    "authUsers": "Autenticados",
+    "guestUsers": "Visitantes",
+    "authenticatedOnline": "Usuários Autenticados Online",
+    "guestsOnline": "Visitantes Anônimos Online",
+    "accessTitle": "Acessos",
+    "accessDescription": "Analise como usuários e visitantes estão acessando sua plataforma.",
+    "topRoutesTitle": "Rotas Mais Acessadas",
+    "topRoutesDescription": "Páginas mais visualizadas na sua plataforma.",
+    "views": "Visualizações",
+    "accessError": "Falha ao carregar as análises de acesso.",
+    "topCountriesTitle": "Principais Países por Acesso",
+    "topCountriesDescription": "Visualizações de página originadas de diferentes países.",
+    "topStatesTitle": "Principais Estados por Acesso",
+    "topStatesDescription": "Detalhamento de visualizações de página por estado.",
+    "topCitiesTitle": "Principais Cidades por Acesso",
+    "topCitiesDescription": "Detalhamento de visualizações de página por cidade.",
+    "audienceFilter": "Audiência",
+    "all": "Todos",
+    "auth": "Autenticados",
+    "guests": "Visitantes",
+    "locationAnalytics": "Análise de Localização",
+    "backToCountries": "Voltar para Países",
+    "backToStates": "Voltar para Estados",
+    "countries": "Países",
+    "states": "Estados",
+    "cities": "Cidades",
+    "tableLocation": "Localização",
+    "tableViews": "Visualizações",
+    "tableShare": "Participação",
+    "mostViewedPosts": "Posts Mais Visualizados",
+    "totalViews": "visualizações",
+    "authGuestViews": "({authViews} auth / {guestViews} guest)",
+    "trends": {
+      "title": "Centro de Tendências",
+      "description": "Monitore notícias em tempo real coletadas de feeds RSS.",
+      "source": "Fonte",
+      "fetchedAt": "Coletado em",
+      "viewOriginal": "Ver Original",
+      "empty": "Nenhum tópico de tendência encontrado no momento."
+    }
+  },
+  "CreatePostDialog": {
+    "title": "Criar Post",
+    "description": "Compartilhe uma nova ideia ou atualização com seus seguidores.",
+    "postSentTitle": "Post Enviado!",
+    "postSentDescription": "Seu novo post está no ar.",
+    "viewPost": "Ver Post",
+    "authNeededTitle": "Autenticação Necessária",
+    "authNeededDescription": "Por favor, faça login para criar um post.",
+    "errorTitle": "Erro ao Enviar Post",
+    "errorDescription": "Não foi possível enviar o post.",
+    "placeholder": "E aí?",
+    "cancelButton": "Cancelar",
+    "postButton": "Postar",
+    "postButtonSubmitting": "Postando...",
+    "crossPostMenuLabel": "Escolher outras redes",
+    "crossPostMenuShort": "Outras redes",
+    "crossPostSelected": "{count, plural, one {# rede} other {# redes}}",
+    "crossPostMenuTitle": "Publicar também em",
+    "crossPostMenuDescription": "O texto e um link para este post serão enviados às redes selecionadas.",
+    "crossPostPrivateWarning": "Posts restritos não podem sair do seu círculo privado.",
+    "crossPostConnect": "Conectar Bluesky ou X",
+    "crossPostSuccessTitle": "Publicado nas outras redes",
+    "crossPostSuccessDescription": "Seu post também foi publicado em {providers}.",
+    "crossPostPartialDescription": "Publicado em {published}. Não foi possível enviar para {failed}.",
+    "crossPostErrorTitle": "Post salvo; envio externo pendente",
+    "crossPostErrorDescription": "Não foi possível publicar em {providers}. Você pode tentar novamente depois.",
+    "crossPostGenericError": "O post foi salvo no Exe. Lula, mas a rede externa não respondeu.",
+    "federationSkippedTitle": "Este post ficou só aqui",
+    "federationSkippedDescription": "Enquetes e citações ainda não vão ao Fediverso. O post foi publicado normalmente na rede."
+  },
+  "DesktopSidebar": {
+    "following": "Seguindo",
+    "followers": "Seguidores",
+    "settings": "Configurações",
+    "logout": "Sair",
+    "post": "Postar",
+    "article": "Artigo",
+    "login": "Entrar",
+    "register": "Registrar",
+    "terms": "Termos",
+    "privacy": "Privacidade",
+    "guidelines": "Diretrizes",
+    "cookies": "Cookies",
+    "drafts": "Rascunhos",
+    "feeds": "Feeds",
+    "bookmarks": "Marcadores",
+    "files": "Arquivos",
+    "adminPanel": "Painel Admin",
+    "nav": {
+      "profile": "Perfil",
+      "messages": "Mensagens",
+      "notifications": "Notificações"
+    }
+  },
+  "MobileBottomNav": {
+    "profile": "Perfil",
+    "login": "Login",
+    "promptAction": "acessar {action}",
+    "nav": {
+      "messages": "Mensagens",
+      "notifications": "Notificações",
+      "explore": "Explorar"
+    }
+  },
+  "GlobalSearch": {
+    "placeholder": "Buscar usuários e tópicos...",
+    "recent": "Recentes",
+    "clear": "Limpar",
+    "users": "Usuários",
+    "topics": "Tópicos",
+    "noResults": "Nenhum resultado para \"{query}\""
+  },
+  "SettingsPage": {
+    "title": "Configurações",
+    "description": "Gerencie suas configurações de conta, privacidade e notificações.",
+    "logout": "Sair",
+    "logoutConfirmTitle": "Tem certeza que deseja sair?",
+    "logoutConfirmDescription": "Você será redirecionado para a página de login.",
+    "sections": {
+      "account": "Conta",
+      "connections": "Contas conectadas",
+      "privacy": "Privacidade e Segurança",
+      "interaction": "Ajustes de Interação",
+      "moderation": "Conteúdo Silenciado",
+      "notifications": "Notificações",
+      "media": "Conteúdo e Mídia",
+      "appearance": "Aparência",
+      "accessibility": "Acessibilidade",
+      "languages": "Idiomas",
+      "help": "Ajuda",
+      "about": "Sobre",
+      "fediverse": "Fediverso",
+      "p2p": "Comunicação P2P (Zero DB)"
+    }
+  },
+  "SocialConnections": {
+    "title": "Contas conectadas",
+    "description": "Conecte suas redes para publicar nelas diretamente ao criar um post público.",
+    "connected": "Conectada",
+    "connect": "Conectar",
+    "disconnect": "Desconectar",
+    "blueskyDescription": "Publique no Bluesky sem compartilhar sua senha com o Exe. Lula.",
+    "blueskyHandle": "Seu endereço no Bluesky",
+    "xDescription": "Envie posts públicos para sua conta do X usando a autorização oficial.",
+    "serverSetupPending": "A chave segura do Bluesky ainda precisa ser ativada no servidor.",
+    "xSetupPending": "O X exige um aplicativo de desenvolvedor e acesso de API antes desta conexão ser ativada.",
+    "securityTitle": "Credenciais protegidas",
+    "securityDescription": "A autorização fica somente no servidor e nunca é enviada ao navegador. Você pode revogá-la a qualquer momento.",
+    "connectedTitle": "{provider} conectado",
+    "connectedDescription": "A conta já pode ser escolhida ao criar um post público.",
+    "disconnectedTitle": "{provider} desconectado",
+    "errorTitle": "Não foi possível concluir a conexão",
+    "errorDescription": "A autorização do {provider} foi cancelada, expirou ou foi recusada.",
+    "genericError": "Tente novamente em alguns instantes.",
+    "loadErrorTitle": "Não foi possível carregar suas conexões",
+    "tryAgain": "Tentar novamente"
+  },
+  "AccountSettings": {
+    "title": "Conta",
+    "description": "Atualize suas informações de perfil público.",
+    "mainData": {
+      "title": "Credenciais e Perfil",
+      "email": "E-mail",
+      "updateEmail": "Atualizar e-mail",
+      "password": "Senha",
+      "updateUsername": "Nome de usuário",
+      "birthday": "Aniversário",
+      "edit": "Editar",
+      "notSet": "Não definido",
+      "passwordTooltipGoogle": "Você entra com o Google, portanto não tem uma senha para alterar."
+    },
+    "export": {
+      "title": "Exportação e Desativação",
+      "exportData": "Exportar Meus Dados",
+      "exportSuccessTitle": "Exportação Iniciada",
+      "exportSuccessDescription": "Seus dados estão sendo preparados e o download começará em breve.",
+      "exportErrorTitle": "Falha na Exportação"
+    },
+    "dangerZone": {
+      "title": "Zona de Perigo",
+      "deleteAccountTitle": "Deletar Conta",
+      "deleteAccountDescription": "Esta ação é irreversível. Todos os seus dados, incluindo posts, comentários e seguidores, serão permanentemente deletados.",
+      "deleteAccountButton": "Deletar Conta"
+    },
+    "deleteModal": {
+      "title": "Você tem certeza absoluta?",
+      "description": "Esta ação não pode ser desfeita. Para confirmar, por favor, digite sua senha abaixo.",
+      "descriptionGoogle": "Esta ação é irreversível. Para confirmar, você precisará se reautenticar com sua conta do Google.",
+      "passwordLabel": "Senha",
+      "passwordPlaceholder": "Digite sua senha",
+      "cancel": "Cancelar",
+      "confirm": "Deletar minha conta permanentemente",
+      "reauthenticateAndConfirm": "Reautenticar e Deletar"
+    },
+    "notImplemented": {
+      "title": "Funcionalidade em Desenvolvimento",
+      "description": "A funcionalidade de {feature} estará disponível em breve."
+    },
+    "error": {
+      "noCurrentUser": {
+        "title": "Erro",
+        "description": "Não foi possível identificar o usuário atual."
+      },
+      "passwordRequired": {
+        "title": "Senha Obrigatória",
+        "description": "Por favor, digite sua senha para confirmar."
+      },
+      "unexpected": {
+        "description": "Ocorreu um erro inesperado. Por favor, tente novamente."
+      },
+      "wrongPassword": {
+        "description": "A senha que você digitou está incorreta."
+      },
+      "recentLogin": {
+        "description": "Esta é uma operação sensível. Por favor, faça logout e login novamente antes de deletar sua conta."
+      },
+      "deleteFailed": {
+        "title": "Falha na Exclusão"
+      }
+    },
+    "deleteSuccess": {
+      "title": "Conta Deletada",
+      "description": "Sua conta e todos os dados associados estão sendo permanentemente deletados."
+    }
+  },
+  "ModerationSettings": {
+    "title": "Conteúdo Silenciado",
+    "description": "Gerencie palavras, contas silenciadas e contas bloqueadas. Você não verá posts com essas palavras em seus feeds, nem posts de contas silenciadas.",
+    "mutedWords": {
+      "title": "Palavras Silenciadas",
+      "placeholder": "Adicionar palavra ou #hashtag",
+      "add": "Adicionar",
+      "updateSuccess": "Lista de palavras silenciadas atualizada."
+    },
+    "mutedAccounts": {
+      "title": "Contas Silenciadas",
+      "unmute": "Não Silenciar",
+      "empty": "Você não silenciou nenhuma conta."
+    },
+    "blockedAccounts": {
+      "title": "Contas Bloqueadas",
+      "unblock": "Desbloquear",
+      "empty": "Você não bloqueou nenhuma conta."
+    },
+    "unblockSuccess": "Usuário Desbloqueado",
+    "unmuteSuccess": "Usuário Não Silenciado",
+    "errors": {
+      "loadLists": "Não foi possível carregar as listas de silenciados/bloqueados.",
+      "updateWords": "Falha ao atualizar a lista de palavras.",
+      "updateUser": "Não foi possível atualizar o status do usuário."
+    }
+  },
+  "AppearanceSettings": {
+    "title": "Aparência",
+    "description": "Personalize a aparência do aplicativo.",
+    "theme": {
+      "label": "Tema",
+      "description": "Escolha como o Exe. Lula se parece para você. Selecione um tema das opções abaixo.",
+      "light": "Claro",
+      "dark": "Escuro",
+      "system": "Sistema"
+    }
+  },
+  "HelpSettings": {
+    "title": "Ajuda",
+    "description": "Encontre respostas para suas perguntas ou entre em contato.",
+    "faq": "Central de Ajuda (FAQ)",
+    "viewPage": "Ver Página",
+    "contact": "Contato e Suporte",
+    "sendEmail": "Enviar E-mail",
+    "contactSoon": "Em breve"
+  },
+  "AccessibilitySettings": {
+    "languageTitle": "Idiomas",
+    "title": "Acessibilidade e Idiomas",
+    "description": "Gerencie as configurações de idioma e acessibilidade para melhorar sua experiência.",
+    "languageLabel": "Idioma",
+    "languageDescription": "Selecione seu idioma de preferência para a interface do usuário.",
+    "selectPlaceholder": "Selecione um idioma",
+    "accessibilityTitle": "Acessibilidade",
+    "accessibilityDescriptionPage": "Gerencie as configurações para melhorar sua experiência.",
+    "displayTitle": "Exibição",
+    "fontSize": "Tamanho da Fonte",
+    "highContrast": "Modo de Alto Contraste",
+    "highContrastDescription": "Aumenta o contraste das cores para melhor legibilidade."
+  },
+  "AboutSettings": {
+    "title": "Sobre o Exe. Lula",
+    "description": "Informações e documentos legais da plataforma Exe. Lula.",
+    "aboutUs": "Sobre Nós",
+    "privacyPolicy": "Política de Privacidade",
+    "termsOfService": "Termos de Serviço",
+    "communityGuidelines": "Diretrizes da Comunidade",
+    "cookiePolicy": "Política de Cookies",
+    "dataRights": "Seus direitos sobre seus dados",
+    "open": "Abrir",
+    "viewPage": "Ver Página",
+    "version": "Exe. Lula Platform v1.0.0",
+    "copyright": "© {year} Exe. Lula. Todos os Direitos Reservados."
+  },
+  "ProfileTabs": {
+    "posts": "Posts",
+    "comments": "Comentários",
+    "reposts": "Reposts",
+    "quotes": "Citações",
+    "media": "Mídia",
+    "likes": "Curtidas",
+    "likesLoginRequired": "Entre na sua conta para ver as curtidas."
+  },
+  "ProfileHeader": {
+    "following": "Seguindo",
+    "followers": "Seguidores",
+    "posts": "Posts",
+    "editProfile": "Editar Perfil",
+    "unblock": "Desbloquear",
+    "postNotifications": "Notificações de posts",
+    "notifyMeAbout": "Notificar-me sobre",
+    "allPosts": "Todos os Posts",
+    "onlyNews": "Apenas Artigos",
+    "disableNotifications": "Desativar Notificações",
+    "message": "Mensagem",
+    "unfollow": "Deixar de seguir",
+    "follow": "Seguir",
+    "moreOptions": "Mais opções",
+    "unmute": "Não silenciar",
+    "mute": "Silenciar",
+    "block": "Bloquear",
+    "report": "Reportar",
+    "loginToInteract": "Login para Interagir",
+    "interactWith": "interagir com @{username}"
+  },
+  "ProfilePage": {
+    "coverAlt": "Capa de {name}",
+    "notFoundTitle": "Usuário não encontrado",
+    "notFoundDescription": "O perfil que você procura não existe ou não pôde ser carregado.",
+    "backToFeed": "Voltar para o feed",
+    "accessDeniedTitle": "Acesso negado",
+    "accessDeniedDescription": "Você não tem permissão para ver este perfil.",
+    "blockedByTitle": "Você foi bloqueado",
+    "blockedByDescription": "@{username} bloqueou você. Você não pode ver os posts nem interagir com este perfil.",
+    "blockedTitle": "@{username} está bloqueado",
+    "blockedDescription": "Você bloqueou este usuário. Desbloqueie para ver o conteúdo.",
+    "privateTitle": "Este perfil é privado",
+    "privateDescription": "Só quem segue @{username} vê os posts, comentários e curtidas deste perfil.",
+    "privateGuestDescription": "Entre na sua conta e siga @{username} para ver os posts, comentários e curtidas deste perfil."
+  },
+  "EmbeddedPostCard": {
+    "unavailable": "Este post não está disponível.",
+    "continueReading": "Continue lendo..."
+  },
+  "PaginatedLists": {
+    "errorTitle": "Falha ao carregar",
+    "errorMessage": "Ocorreu um erro inesperado.",
+    "retry": "Tentar Novamente",
+    "noComments": "Este usuário ainda não fez nenhum comentário.",
+    "endOfComments": "Você chegou ao fim dos comentários.",
+    "commentLoadError": "O comentário não pôde ser carregado. Ele pode ter sido excluído ou a conta do autor está indisponível.",
+    "noLikes": "Nenhum item curtido ainda.",
+    "noBookmarks": "Nenhum item salvo ainda.",
+    "endOfFeed": "Você chegou ao fim."
+  },
+  "UserListClientPageDefaults": {
+    "likedByTitle": "Curtido por",
+    "likedByDescription": "Pessoas que curtiram o post de @{username}",
+    "backToPost": "Voltar para o post",
+    "noLikes": "Ninguém curtiu este post ainda.",
+    "quotesTitle": "Citações",
+    "quotesDescription": "O post de @{username} foi citado {count, plural, =0 {0 vezes} one {1 vez} other {# vezes}}",
+    "noQuotes": "Ninguém citou este post ainda.",
+    "repostsTitle": "Reposts",
+    "repostsDescription": "Pessoas que repostaram o post de @{username}",
+    "noReposts": "Ninguém repostou este post ainda."
+  },
+  "UserListItem": {
+    "loginRequiredTitle": "Login Obrigatório",
+    "loginRequiredDescription": "Você precisa fazer login para seguir usuários.",
+    "followSuccess": "Seguindo @{username}",
+    "unfollowSuccess": "Deixou de seguir @{username}",
+    "error": "Erro",
+    "updateError": "Não foi possível atualizar o status de seguir.",
+    "unexpectedError": "Ocorreu um erro inesperado.",
+    "editProfile": "Editar Perfil",
+    "wait": "Aguarde...",
+    "unfollow": "Deixar de seguir",
+    "follow": "Seguir",
+    "followersCount": "{count, plural, =0 {Nenhum seguidor} one {1 seguidor} other {# seguidores}}",
+    "recommendationFollowsYou": "Segue você",
+    "recommendationMutual": "{count, plural, one {1 conexão em comum} other {# conexões em comum}}",
+    "recommendationInterest": "Publica sobre {topic}",
+    "recommendationActive": "Ativo recentemente",
+    "recommendationPopular": "Em destaque na rede"
+  },
+  "UserProfileHoverCard": {
+    "loginRequiredTitle": "Login Obrigatório",
+    "loginRequiredDescription": "Você precisa estar logado para seguir usuários.",
+    "followSuccess": "Seguindo @{username}",
+    "unfollowSuccess": "Deixou de seguir @{username}",
+    "error": "Erro",
+    "updateError": "Falha ao atualizar o status de seguir.",
+    "unexpectedError": "Ocorreu um erro inesperado.",
+    "coverImageAlt": "Imagem de capa de {name}",
+    "unfollow": "Deixar de seguir",
+    "follow": "Seguir",
+    "following": "Seguindo",
+    "followers": "Seguidores"
+  },
+  "HashtagListItem": {
+    "postCount": "{count, plural, one {1 post} other {# posts}}"
+  },
+  "SearchResultsTabs": {
+    "top": "Principais",
+    "latest": "Recentes",
+    "people": "Pessoas",
+    "feeds": "Feeds",
+    "articles": "Artigos",
+    "noResults": "Nenhum resultado encontrado para esta aba."
+  },
+  "SearchPage": {
+    "resultsFor": "Resultados para",
+    "prompt": "Por favor, digite um termo de busca no cabeçalho.",
+    "loading": "Carregando busca..."
+  },
+  "BackButton": {
+    "back": "Voltar"
+  },
+  "HelpCenterPage": {
+    "title": "Central de Ajuda",
+    "description": "Precisa de ajuda? Encontre respostas aqui ou entre em contato.",
+    "faqTitle": "Perguntas Frequentes (FAQ)",
+    "q1": "Como eu crio uma conta?",
+    "a1": "Para criar uma conta, clique no botão 'Registrar' na página inicial ou de login. Você precisará fornecer seu nome, um nome de usuário único, seu e-mail e uma senha.",
+    "q2": "Posso mudar meu nome de usuário?",
+    "a2": "Atualmente, não é possível alterar seu nome de usuário (@username) após o registro. Escolha com cuidado! Seu nome de exibição, no entanto, pode ser alterado a qualquer momento nas configurações do seu perfil.",
+    "q3": "Como eu deleto minha conta?",
+    "a3": "Você pode deletar sua conta na seção 'Conta' dentro das Configurações. Lembre-se que esta ação é permanente e todos os seus dados serão removidos.",
+    "contactTitle": "Contato",
+    "contactText": "Se você não encontrou a resposta para sua pergunta, nossa equipe de suporte está pronta para ajudar. Entre em contato conosco através do e-mail:",
+    "contactUnavailable": "Os canais de contato por e-mail estão sendo configurados e serão divulgados em breve."
+  },
+  "TrendingPage": {
+    "title": "Tendências do Momento",
+    "description": "Descubra o que está bombando na rede Exe. Lula.",
+    "topHashtagsTitle": "Principais Hashtags",
+    "topHashtagsDescription": "As tags mais populares no momento.",
+    "noHashtags": "Nenhuma hashtag em alta no momento.",
+    "topNewsTitle": "Principais Notícias",
+    "topNewsDescription": "Os artigos de notícias mais discutidos.",
+    "noNews": "Nenhum artigo de notícia em destaque no momento."
+  },
+  "RightSidebar": {
+    "sidebarLabel": "Descobertas da rede",
+    "trendingTopics": "Em Alta",
+    "trendingDescription": "Assuntos que movimentam a rede agora.",
+    "topArticles": "Principais Artigos",
+    "topArticlesDescription": "Leituras em destaque na comunidade.",
+    "suggestedUsers": "Contas Sugeridas",
+    "suggestedUsersDescription": "Novas vozes para descobrir e acompanhar.",
+    "seeAll": "Ver tudo",
+    "mentionsCount": "{count, plural, one {# menção} other {# menções}}",
+    "noTrendingTopics": "Nenhum tópico em alta no momento.",
+    "noTopArticles": "Nenhum artigo em destaque no momento.",
+    "downloadAppTitle": "Exe. Lula App",
+    "downloadAppDescription": "Tenha a melhor experiência instalando o aplicativo no seu dispositivo.",
+    "downloadNow": "Baixar Agora"
+  },
+  "FollowersPage": {
+    "title": "Seguidores",
+    "description": "Pessoas que seguem @{username}",
+    "backLabel": "Voltar para o perfil de @{username}",
+    "emptyState": "@{username} ainda não tem seguidores."
+  },
+  "FollowingPage": {
+    "title": "Seguindo",
+    "description": "Pessoas que @{username} segue",
+    "backLabel": "Voltar para o perfil de @{username}",
+    "emptyState": "@{username} ainda não segue ninguém."
+  },
+  "CommentDisplaySettings": {
+    "filter": "Filtrar",
+    "view": "Visualização",
+    "nested": "Aninhado",
+    "linear": "Linear",
+    "sortOrder": "Ordenar por",
+    "popularFirst": "Mais populares",
+    "oldestFirst": "Mais antigos",
+    "newestFirst": "Mais recentes"
+  },
+  "DraftsPage": {
+    "title": "Rascunhos",
+    "yourDrafts": "Seus Rascunhos",
+    "yourDraftsDescription": "Aqui estão seus posts e artigos não publicados."
+  },
+  "BookmarksPage": {
+    "title": "Marcadores",
+    "description": "Seus posts e comentários salvos.",
+    "yourBookmarks": "Seus Marcadores",
+    "yourBookmarksDescription": "Aqui estão os itens que você salvou para depois.",
+    "loginPrompt": "Por favor, faça o login para ver seus marcadores."
+  },
+  "HashtagHoverCard": {
+    "loading": "Carregando estatísticas...",
+    "posts": "{count, plural, one {1 post} other {# posts}}"
+  },
+  "FilesPage": {
+    "title": "Meus Arquivos",
+    "description": "Your personal and secure file storage.",
+    "comingSoonTitle": "Funcionalidade em Construção",
+    "comingSoonDescription": "Estamos construindo um sistema de gerenciamento de arquivos robusto e seguro. As seguintes funcionalidades estarão disponíveis em breve:",
+    "featureFolders": "Criação e gerenciamento de pastas recursivas.",
+    "featureUpload": "Upload de qualquer tipo de arquivo.",
+    "featureSecurity": "Opções de proteção por senha, criptografia e compactação.",
+    "featureSharing": "Compartilhamento de arquivos interno e externo.",
+    "featureOffline": "Acesso offline aos seus arquivos importantes."
+  },
+  "EditProfileDialog": {
+    "title": "Editar Perfil",
+    "description": "Suas alterações serão visíveis para todos.",
+    "coverImageLabel": "Imagem de Capa",
+    "uploadCoverImage": "Carregar imagem de capa",
+    "remove": "Remover",
+    "nameLabel": "Nome",
+    "namePlaceholder": "João da Silva",
+    "bioLabel": "Bio",
+    "bioPlaceholder": "Conte-nos sobre você",
+    "locationLabel": "Localização",
+    "locationPlaceholder": "Cidade, País",
+    "websiteLabel": "Website",
+    "websitePlaceholder": "https://exemplo.com",
+    "cancel": "Cancelar",
+    "save": "Salvar Alterações",
+    "uploading": "Enviando",
+    "fileTooLargeTitle": "Arquivo Muito Grande",
+    "fileTooLargeDescription": "Por favor, selecione um arquivo de imagem menor que 5MB.",
+    "updateSuccessTitle": "Perfil Atualizado",
+    "updateSuccessDescription": "Seu perfil foi salvo com sucesso.",
+    "replacementCleanupTitle": "Perfil salvo com uma pendência",
+    "replacementCleanupDescription": "{count, plural, one {A imagem anterior não pôde ser totalmente removida após uma nova tentativa automática. A nova imagem foi salva e a pendência continua registrada para correção.} other {# imagens anteriores não puderam ser totalmente removidas após uma nova tentativa automática. As novas imagens foram salvas e as pendências continuam registradas para correção.}}",
+    "noChangesTitle": "Nenhuma Alteração",
+    "noChangesDescription": "Você não fez nenhuma alteração no seu perfil.",
+    "updateFailedTitle": "Falha na Atualização",
+    "updateFailedDescription": "Ocorreu um erro inesperado.",
+    "cropperTitle": "Recortar Imagem",
+    "cropperDescription": "Ajuste a imagem para caber na área designada.",
+    "applyCrop": "Aplicar Corte",
+    "capture": "Capturar",
+    "cameraAccessDenied": "Acesso à Câmera Negado"
+  },
+  "TagPage": {
+    "top": "Principais",
+    "recent": "Recentes"
+  },
+  "TopNewsItem": {
+    "by": "Por",
+    "source": "Fonte",
+    "articleImage": "Imagem do artigo",
+    "untitledArticle": "artigo sem título",
+    "readArticle": "Ler {title}"
+  },
+  "CommentCard": {
+    "authorBadge": "Autor",
+    "youReposted": "Você repostou",
+    "reposted": "repostou"
+  },
+  "CommentOptionsMenu": {
+    "moreOptions": "Mais opções para o comentário",
+    "delete": "Deletar comentário",
+    "copy": "Copiar texto",
+    "sendDirect": "Enviar por Mensagem Direta",
+    "share": "Compartilhar comentário",
+    "hide": "Ocultar comentário",
+    "unmute": "Não silenciar @{username}",
+    "mute": "Silenciar @{username}",
+    "unblock": "Desbloquear @{username}",
+    "block": "Bloquear @{username}",
+    "report": "Reportar comentário"
+  },
+  "DownloadPage": {
+    "title": "Baixar o Aplicativo",
+    "description": "Instale o Exe. Lula no seu dispositivo para a melhor experiência.",
+    "androidTitle": "Baixar para Android",
+    "androidSoonTitle": "Aplicativo Android em breve",
+    "androidSoonText": "Estamos preparando uma nova versão do aplicativo para Android, que será disponibilizada aqui depois de validada. Enquanto isso, use o Exe. Lula pelo navegador.",
+    "iosTitle": "Instalar no iPhone/iPad",
+    "desktopTitle": "Instalar no seu Computador",
+    "downloadApkButton": "Baixar o app Exe. Lula",
+    "apkInstallTitle": "Como Instalar o APK",
+    "apkStep1": "1. Baixe o arquivo .apk usando o botão acima.",
+    "apkStep2": "2. Abra o arquivo baixado. O seu dispositivo pedirá permissão para 'instalar apps de fontes desconhecidas'. Permita para continuar.",
+    "apkStep3": "3. Siga as instruções na tela para concluir a instalação.",
+    "apkSecurityWarningTitle": "Aviso de Segurança",
+    "apkSecurityWarningText": "O Android pode exibir um aviso sobre a instalação de aplicativos de fora da Play Store. Nosso arquivo é seguro. Você pode verificar a integridade do arquivo usando o checksum SHA-256 abaixo.",
+    "iosInstallTitle": "Como Instalar na Tela de Início",
+    "iosStep1": "1. Abra este site no Safari.",
+    "iosStep2": "2. Toque no ícone de Compartilhamento na barra de ferramentas do navegador.",
+    "iosStep3": "3. Role para baixo e selecione 'Adicionar à Tela de Início'.",
+    "iosStep4": "4. Confirme para adicionar o ícone do Exe. Lula à sua tela de início.",
+    "desktopInstallTitle": "Como Instalar no seu Navegador",
+    "desktopInstallText": "Procure pelo ícone de instalação na barra de endereço do seu navegador (geralmente à direita) e siga as instruções para adicionar o Exe. Lula como um aplicativo no seu computador.",
+    "releaseInfoTitle": "Informações da Versão",
+    "version": "Versão",
+    "releaseNotes": "Notas da Versão",
+    "checksum": "Checksum SHA-256",
+    "loading": "Detectando seu dispositivo..."
+  },
+  "ExploreView": {
+    "title": "Explorar",
+    "description": "Descubra os assuntos, as pessoas e as conversas que estão movimentando a rede.",
+    "forYou": "Para Você",
+    "suggestedAccountsTitle": "Contas Sugeridas",
+    "suggestedAccountsDescription": "Encontre novas vozes por afinidade ou por assunto.",
+    "categoryFiltersLabel": "Filtrar sugestões por assunto",
+    "showMoreSuggestions": "Ver mais {count, plural, one {# sugestão} other {# sugestões}}",
+    "showFewerSuggestions": "Mostrar menos",
+    "noSuggestions": "Nenhuma sugestão encontrada para esta categoria.",
+    "suggestedPostsTitle": "Posts Sugeridos",
+    "suggestedPostsDescription": "Conversas selecionadas para você continuar explorando.",
+    "noSuggestedPosts": "Nenhum post sugerido no momento.",
+    "trending": "Em Alta",
+    "pulseTitle": "Pulso da rede",
+    "pulseDescription": "Um retrato orgânico dos assuntos mais presentes nas publicações e comentários recentes.",
+    "activeTopics": "Assuntos ativos",
+    "recentMentions": "Menções recentes",
+    "leadingConversation": "Mais comentado",
+    "topicMentions": "{count, plural, one {# menção} other {# menções}}",
+    "openTopic": "Abrir {topic}, {count, plural, one {# menção} other {# menções}}",
+    "noTrending": "Nenhuma tendência no momento.",
+    "trendingBadge": "Em alta"
+  },
+  "PostCardHeader": {
+    "edited": "(Editado)"
+  },
+  "SendViaDirectDialog": {
+    "shareMessage": "Óia esse post, sô!"
+  },
+  "Composer": {
+    "emojiButton": "Adicionar emoji",
+    "emojiSheetDescription": "Escolha um emoji para inserir no texto.",
+    "emojiSearch": "Buscar emoji",
+    "emojiRecent": "Recentes",
+    "emojiSmileys": "Carinhas e pessoas",
+    "emojiAnimals": "Animais e natureza",
+    "emojiFood": "Comidas e bebidas",
+    "emojiTravel": "Viagens e lugares",
+    "emojiActivities": "Atividades",
+    "emojiObjects": "Objetos",
+    "emojiSymbols": "Símbolos",
+    "emojiFlags": "Bandeiras",
+    "locationButton": "Adicionar localização",
+    "locationSearch": "Buscar município",
+    "locationHint": "Escolha apenas a cidade e o estado. O app não acessa o GPS.",
+    "locationLoading": "Carregando municípios...",
+    "locationNone": "Nenhum município encontrado.",
+    "locationRemove": "Remover localização",
+    "pollButton": "Adicionar enquete",
+    "pollTitle": "Enquete",
+    "pollRemove": "Remover enquete",
+    "pollOptionPlaceholder": "Opção {number}",
+    "pollOptionRemove": "Remover opção {number}",
+    "pollAddOption": "Adicionar opção",
+    "pollDuration": "Duração",
+    "pollDuration_hours": "{count, plural, one {# hora} other {# horas}}",
+    "pollDuration_days": "{count, plural, one {# dia} other {# dias}}",
+    "pollInvalidTitle": "Revise a enquete",
+    "pollError_tooFew": "Preencha pelo menos duas opções.",
+    "pollError_tooMany": "A enquete aceita no máximo quatro opções.",
+    "pollError_tooLong": "Cada opção pode ter até 25 caracteres.",
+    "pollError_duplicate": "As opções precisam ser diferentes.",
+    "pollError_duration": "Escolha uma duração válida.",
+    "pollMediaConflictTitle": "Enquete ou mídia",
+    "pollMediaConflictDescription": "Remova a enquete para anexar imagem ou vídeo.",
+    "sensitiveButton": "Marcar mídia como conteúdo sensível"
+  },
+  "Poll": {
+    "title": "Enquete",
+    "votes": "{count, plural, =0 {Nenhum voto} one {# voto} other {# votos}}",
+    "vote": "Votar em {option}",
+    "ended": "Enquete encerrada",
+    "remainingDays": "Restam {days}d {hours}h",
+    "remainingHours": "Restam {hours}h {minutes}min",
+    "remainingMinutes": "Restam {minutes}min",
+    "loginRequired": "Entre na sua conta para votar.",
+    "voteError": "Não foi possível registrar o voto. Tente novamente.",
+    "alreadyVoted": "Seu voto já foi registrado."
+  },
+  "PostContent": {
+    "sensitiveWarning": "Conteúdo sensível",
+    "sensitiveHint": "A mídia foi ocultada porque o autor marcou este conteúdo como sensível.",
+    "showSensitive": "Mostrar mídia"
+  },
+  "Signup": {
+    "closedTitle": "Cadastros encerrados por enquanto",
+    "closedMessage": "As {limit} vagas iniciais do Exe. Lula foram preenchidas.",
+    "closedHint": "Quem já tem conta continua entrando normalmente, com o e-mail ou com o Google.",
+    "goToLogin": "Ir para o login",
+    "unavailable": "O cadastro está temporariamente indisponível. Tente novamente em alguns minutos.",
+    "usernameInvalid": "Use de 3 a 15 letras, números ou _ (sem espaços nem acentos).",
+    "humanCheckFailed": "Não foi possível confirmar que você é uma pessoa. Recarregue a página e tente de novo. Se usa bloqueador de anúncios ou de rastreadores, libere o Exe. Lula e o Google reCAPTCHA.",
+    "recaptchaNotice": "Este site é protegido pelo reCAPTCHA Enterprise do Google, e valem a Política de Privacidade e os Termos de Serviço do Google."
+  },
+  "ImageViewer": {
+    "title": "Visualizador de imagem",
+    "description": "Uma visão ampliada da imagem, com zoom por pinça ou toque duplo e opções para salvar ou compartilhar.",
+    "back": "Voltar",
+    "save": "Salvar",
+    "share": "Compartilhar",
+    "imageAlt": "Imagem em tela cheia",
+    "shareTitle": "Imagem do Exe. Lula",
+    "shareText": "Veja esta imagem no Exe. Lula!",
+    "linkCopiedTitle": "Link copiado!",
+    "linkCopiedBody": "O link do post foi copiado para a área de transferência.",
+    "shareFailedTitle": "Não foi possível compartilhar",
+    "shareFailedBody": "Tente de novo em instantes.",
+    "downloadingTitle": "Baixando...",
+    "downloadingBody": "A imagem \"{fileName}\" deve começar a baixar.",
+    "downloadFailedTitle": "Não foi possível baixar",
+    "downloadFailedBody": "Abrindo a imagem em outra aba para você salvar manualmente."
+  },
+  "NotificationItem": {
+    "fallback": "Você tem uma nova notificação.",
+    "welcome": "Bem-vindo ao Exe. Lula!",
+    "someone": "Alguém",
+    "andOthers": "e outros {count}",
+    "andOne": "e outro",
+    "unread": "Não lida",
+    "aria": "Notificação: {text}",
+    "ariaFallback": "nova interação",
+    "actions": {
+      "like_post": "curtiu sua publicação",
+      "like_repost": "curtiu sua repostagem",
+      "like_comment": "curtiu seu comentário:",
+      "repost": "repostou sua publicação",
+      "repost_repost": "repostou sua repostagem",
+      "repostComment": "repostou seu comentário",
+      "quote": "citou sua publicação:",
+      "quoteComment": "citou seu comentário:",
+      "comment_on_post": "comentou na sua publicação:",
+      "reply_to_comment": "respondeu ao seu comentário:",
+      "new_follower": "começou a seguir você",
+      "follow_back": "seguiu você de volta!",
+      "mention_in_post": "mencionou você em uma publicação:",
+      "mention_in_comment": "mencionou você em um comentário:",
+      "new_post_from_user": "publicou um novo post:",
+      "new_message": "enviou uma nova mensagem:",
+      "new_conversation": "iniciou uma conversa com você",
+      "default": "interagiu com você"
+    }
+  },
+  "Push": {
+    "promptTitle": "Receba avisos no seu aparelho",
+    "promptBody": "Saiba na hora quando alguém curtir, responder, mencionar ou seguir você, mesmo com o app fechado.",
+    "enable": "Ativar notificações",
+    "later": "Agora não",
+    "close": "Fechar",
+    "blockedTitle": "As notificações estão bloqueadas",
+    "blockedBody": "Libere as notificações do Exe. Lula nas configurações do navegador ou do aparelho para receber os avisos.",
+    "enabledTitle": "Notificações ativadas",
+    "enabledBody": "Você vai receber os avisos neste aparelho.",
+    "errorTitle": "Não foi possível ativar as notificações",
+    "errorBody": "Tente de novo em instantes."
+  },
+  "Consent": {
+    "title": "Cookies e medição de uso",
+    "description": "Alguns cookies são necessários para você entrar na conta, guardar idioma e tema e barrar abuso — esses não dependem de escolha. Os de medição e de publicidade só entram se você aceitar, e você pode mudar de ideia quando quiser.",
+    "cookiePolicy": "Política de Cookies",
+    "privacyPolicy": "Política de Privacidade",
+    "acceptAll": "Aceitar tudo",
+    "rejectAll": "Rejeitar tudo",
+    "customize": "Personalizar",
+    "openPreferences": "Preferências de privacidade",
+    "manage": "Gerenciar",
+    "preferences": {
+      "title": "Preferências de privacidade",
+      "description": "Escolha categoria por categoria. Sua decisão vale a partir de agora e pode ser revogada nesta mesma tela, quando você quiser.",
+      "save": "Salvar escolhas",
+      "alwaysOn": "Sempre ativos"
+    },
+    "categories": {
+      "necessary": {
+        "title": "Estritamente necessários",
+        "description": "Mantêm sua sessão aberta, guardam idioma e tema e protegem a rede contra fraude e abuso. Sem eles a plataforma não funciona, por isso não há o que desligar aqui."
+      },
+      "analytics": {
+        "title": "Medição de uso",
+        "description": "Ajudam a entender quais páginas são usadas e onde a rede falha. Desligados até você aceitar."
+      },
+      "marketing": {
+        "title": "Publicidade",
+        "description": "Permitiriam anúncios e medição de campanhas. A rede não exibe anúncios hoje; a categoria fica aqui para que nada seja ligado sem o seu aceite. Desligados até você aceitar."
+      }
+    }
+  },
+  "AuthAction": {
+    "title": "Confirmação da conta",
+    "subtitle": "Estamos conferindo o link que você abriu.",
+    "checking": "Conferindo o link…",
+    "continue": "Continuar",
+    "goHome": "Ir para o início",
+    "goLogin": "Ir para o login",
+    "goAccount": "Ir para a conta",
+    "alreadyConfirmed": "Já confirmei, verificar de novo",
+    "identityNote": "Confirmar o e-mail prova que você controla essa caixa de entrada. Não é verificação de identidade: não conferimos nome real, documento nem idade.",
+    "success": {
+      "verifyEmail": {
+        "title": "E-mail confirmado",
+        "body": "Tudo certo. Sua conta está liberada para publicar, comentar e interagir."
+      },
+      "resetPassword": {
+        "title": "Senha alterada",
+        "body": "Sua nova senha já vale. Entre na conta com ela."
+      },
+      "recoverEmail": {
+        "title": "Alteração desfeita",
+        "body": "O e-mail da sua conta voltou a ser o anterior. Se você não pediu a troca, troque a senha agora."
+      },
+      "verifyAndChangeEmail": {
+        "title": "E-mail alterado e confirmado",
+        "body": "Sua conta passou a usar o novo endereço. Entre de novo com ele."
+      }
+    },
+    "error": {
+      "expirado": {
+        "title": "Este link expirou",
+        "body": "Links de confirmação valem por tempo limitado. Peça um novo na tela da sua conta."
+      },
+      "invalido-ou-usado": {
+        "title": "Este link não vale mais",
+        "body": "Ou ele já foi usado — inclusive em outro navegador ou aparelho —, ou está incompleto. Se você já confirmou em outro lugar, use o botão abaixo."
+      },
+      "usuario-desativado": {
+        "title": "Conta desativada",
+        "body": "Esta conta não está ativa. Fale com o suporte."
+      },
+      "senha-fraca": {
+        "title": "Senha recusada",
+        "body": "Escolha uma senha mais forte e tente de novo."
+      },
+      "desconhecido": {
+        "title": "Não foi possível concluir",
+        "body": "Algo saiu errado ao conferir o link. Tente de novo ou peça um link novo."
+      }
+    },
+    "password": {
+      "intro": "Escolha uma nova senha.",
+      "forEmail": "Escolha uma nova senha para {email}.",
+      "new": "Nova senha",
+      "repeat": "Repita a nova senha",
+      "save": "Salvar nova senha",
+      "rule": "Pelo menos 8 caracteres. Evite só números, senhas óbvias e algo parecido com o seu e-mail.",
+      "mismatch": "As duas senhas não são iguais.",
+      "problem": {
+        "curta": "A senha precisa ter pelo menos 8 caracteres.",
+        "longa": "A senha é longa demais.",
+        "so-numeros": "Não use uma senha só com números.",
+        "obvia": "Essa senha é muito comum. Escolha outra.",
+        "parece-email": "A senha não pode conter o seu e-mail.",
+        "repetida": "Não use o mesmo caractere repetido."
+      }
+    }
+  },
+  "Fediverse": {
+    "title": "Fediverso",
+    "description": "O Fediverso é um conjunto de servidores independentes que conversam entre si (Mastodon, Pleroma e outros). Ao ativar, pessoas de lá podem seguir você e receber os posts que você escolher enviar.",
+    "platformOff": "O Fediverso ainda não está ligado nesta rede. Quando estiver, você poderá ativá-lo aqui, por conta própria.",
+    "errorTitle": "Não foi possível concluir",
+    "loadErrorTitle": "Não foi possível carregar suas configurações do Fediverso",
+    "tryAgain": "Tentar de novo",
+    "beforeTitle": "Antes de ativar, saiba o que muda",
+    "before": {
+      "scope": "Só sai o que você marcar, post a post, como público, não listado ou só para seguidores. Mensagens privadas, arquivos pessoais e dados da sua conta nunca saem.",
+      "past": "Posts de antes da ativação nunca são enviados, nem se você pausar e retomar depois.",
+      "copies": "Os outros servidores guardam uma cópia. Se você editar ou apagar, avisamos os servidores, mas não temos como garantir que todos obedeçam.",
+      "control": "Você pode pausar ou desligar quando quiser, remover seguidores e bloquear pessoas ou servidores inteiros.",
+      "identity": "Seu endereço no Fediverso passa a ser público e fica reservado para você: ninguém mais poderá usá-lo, mesmo que você desligue."
+    },
+    "policyPrefix": "Veja os detalhes na",
+    "policyLink": "Política de Privacidade",
+    "verifyEmailTitle": "Confirme seu e-mail primeiro",
+    "verifyEmailDescription": "Para ativar o Fediverso, precisamos que você tenha confirmado a posse do seu e-mail.",
+    "enable": "Ativar Fediverso",
+    "confirmEnableTitle": "Ativar o Fediverso para a sua conta?",
+    "confirmEnableDescription": "Seu perfil passa a poder ser encontrado e seguido por pessoas de outros servidores. Nada seu é enviado até você escolher o alcance de um post. Cópias que outros servidores guardarem ficam fora do nosso controle.",
+    "confirmEnable": "Ativar",
+    "cancel": "Cancelar",
+    "platformPausedTitle": "O Fediverso está temporariamente fora do ar na rede",
+    "platformPausedDescription": "Seus posts continuam normais. Nada entra nem sai até a administração religar. A sua escolha está guardada.",
+    "yourAddress": "Seu endereço no Fediverso",
+    "paused": "Pausado",
+    "active": "Ativo",
+    "copy": "Copiar",
+    "copied": "Copiado",
+    "followersCount": "{count, plural, =0 {Nenhum seguidor do Fediverso ainda.} one {# seguidor do Fediverso.} other {# seguidores do Fediverso.}}",
+    "pausedExplain": "Pausado: nada novo é enviado nem recebido. O que você publicar durante a pausa não será enviado depois.",
+    "activeExplain": "Ativo: os posts que você marcar com alcance de Fediverso são enviados aos servidores de quem segue você.",
+    "resume": "Retomar",
+    "pause": "Pausar",
+    "disable": "Desligar",
+    "confirmDisableTitle": "Desligar o Fediverso?",
+    "confirmDisableDescription": "Avisamos os servidores de quem seguia você que a sua conta deixou o Fediverso e removemos esses seguidores. Cópias já guardadas por outros servidores podem continuar existindo: não temos como garantir que todos apaguem. Seu endereço continua reservado para você.",
+    "confirmDisable": "Desligar",
+    "done": {
+      "enable": "Fediverso ativado",
+      "pause": "Fediverso pausado",
+      "resume": "Fediverso retomado",
+      "disable": "Fediverso desligado"
+    },
+    "errors": {
+      "erro-desconhecido": "Algo deu errado. Tente de novo em instantes.",
+      "nao-autenticado": "Entre na sua conta de novo para continuar.",
+      "plataforma-desligada": "O Fediverso está desligado na rede neste momento.",
+      "email-nao-confirmado": "Confirme seu e-mail para ativar o Fediverso.",
+      "perfil-inexistente": "Seu perfil não foi encontrado.",
+      "handle-invalido": "Seu nome de usuário não pode ser usado como endereço no Fediverso. Troque-o nas configurações da conta.",
+      "handle-indisponivel": "Esse endereço já está reservado por outra conta.",
+      "conta-removida": "Esta conta foi removida.",
+      "nao-ativada": "O Fediverso não está ativo na sua conta.",
+      "muitas-requisicoes": "Muitas ações em pouco tempo. Espere um instante.",
+      "nao-pode-repetir": "Este envio ainda está em andamento.",
+      "nao-encontrada": "Este envio não existe mais.",
+      "nao-encontrado": "Não foi possível encontrar este item.",
+      "valor-invalido": "Esse valor não é válido.",
+      "proprio-dominio": "Você não pode bloquear a própria rede.",
+      "limite": "Você chegou ao limite de bloqueios."
+    },
+    "tabs": {
+      "deliveries": "Envios",
+      "moderation": "Seguidores e bloqueios"
+    },
+    "deliveries": {
+      "explain": "O que foi enviado a outros servidores e o que aconteceu com cada envio.",
+      "empty": "Nada foi enviado ainda.",
+      "refresh": "Atualizar",
+      "tryAgain": "Tentar de novo",
+      "retry": "Tentar de novo",
+      "retried": "Reenvio agendado",
+      "retryError": "Não foi possível reagendar",
+      "attempts": "{count, plural, one {# tentativa} other {# tentativas}}",
+      "deadExplain": "O servidor não respondeu depois de várias tentativas. Você pode tentar de novo.",
+      "ops": {
+        "create": "Publicação",
+        "update": "Edição",
+        "delete": "Exclusão",
+        "accept": "Aceite de seguidor",
+        "reject": "Remoção de seguidor",
+        "delete-actor": "Saída do Fediverso"
+      },
+      "status": {
+        "pending": "Na fila",
+        "sent": "Entregue",
+        "failed": "Falhou",
+        "dead": "Sem resposta",
+        "cancelled": "Cancelado"
+      }
+    },
+    "moderation": {
+      "followersTitle": "Seguidores do Fediverso",
+      "followersExplain": "Quem segue você de outros servidores. Remover avisa o servidor da pessoa; bloquear também impede que ela volte a seguir.",
+      "followersEmpty": "Ninguém do Fediverso segue você ainda.",
+      "remove": "Remover",
+      "removed": "Seguidor removido",
+      "block": "Bloquear",
+      "blockedActor": "Pessoa bloqueada",
+      "loadMore": "Carregar mais",
+      "blocksTitle": "Bloqueios",
+      "blocksExplain": "Bloquear um servidor remove os seguidores dele e descarta tudo o que vier de lá, sem avisá-lo. Vale só para você.",
+      "blockServer": "Bloquear um servidor inteiro",
+      "blockAction": "Bloquear",
+      "blockedServer": "Servidor bloqueado",
+      "blocksEmpty": "Você não bloqueou ninguém.",
+      "scopeDomain": "Servidor inteiro",
+      "scopeActor": "Pessoa",
+      "unblock": "Desbloquear",
+      "unblocked": "Bloqueio removido"
+    },
+    "reach": {
+      "menuLabel": "Quem pode receber este post no Fediverso",
+      "menuTitle": "Alcance no Fediverso",
+      "menuDescription": "Por padrão o post fica só aqui. Você escolhe, post a post. Depois de publicar, o alcance não muda.",
+      "short": {
+        "local": "Só aqui",
+        "public": "Fediverso",
+        "unlisted": "Não listado",
+        "followers": "Seguidores"
+      },
+      "option": {
+        "local": {
+          "title": "Só aqui",
+          "description": "Fica no Exe. Lula. Nada sai para outros servidores."
+        },
+        "public": {
+          "title": "Fediverso: público",
+          "description": "Qualquer servidor pode receber e mostrar, inclusive em linhas do tempo públicas de lá."
+        },
+        "unlisted": {
+          "title": "Fediverso: não listado",
+          "description": "Quem segue você de lá recebe, mas o post não aparece nas linhas do tempo públicas."
+        },
+        "followers": {
+          "title": "Fediverso: só seguidores",
+          "description": "Só seus seguidores do Fediverso recebem. Servidores que não respeitam o protocolo podem exibir mais do que deviam."
+        }
+      },
+      "blocked": {
+        "poll": "Enquetes ainda não vão ao Fediverso: este post fica só aqui.",
+        "quote": "Citações ainda não vão ao Fediverso: este post fica só aqui."
+      },
+      "privateProfile": "Seu perfil é privado: só o alcance para seguidores está disponível.",
+      "copiesWarning": "Outros servidores guardam uma cópia. Se você editar ou apagar, avisamos os servidores, mas não podemos garantir que todos obedeçam.",
+      "manage": "Gerenciar o Fediverso",
+      "badge": {
+        "public": "Enviado ao Fediverso (público)",
+        "unlisted": "Enviado ao Fediverso (não listado)",
+        "followers": "Enviado ao Fediverso (só seguidores)"
+      }
+    }
+  }
+}

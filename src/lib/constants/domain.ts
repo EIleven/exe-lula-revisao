@@ -1,0 +1,3 @@
+export const ECHO_COMMENT_MAX_LENGTH = 300;
+export const NEWS_HEADLINE_MAX_LENGTH = 150;
+export const NEWS_BODY_MAX_LENGTH = 15000;

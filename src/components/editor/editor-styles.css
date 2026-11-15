@@ -1,0 +1,228 @@
+/* src/components/editor/editor-styles.css */
+.ProseMirror {
+  outline: none;
+  line-height: 1.75;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  overflow-x: hidden;
+}
+
+.ProseMirror p,
+.ProseMirror h1,
+.ProseMirror h2,
+.ProseMirror h3,
+.ProseMirror h4,
+.ProseMirror blockquote,
+.ProseMirror li,
+.ProseMirror a {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.ProseMirror pre,
+.prose pre {
+  max-width: 100%;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.ProseMirror h1,
+.prose h1 {
+  font-size: 1.75rem;
+  font-weight: 800;
+  line-height: 1.25;
+  margin-top: 1.25rem;
+  margin-bottom: 0.65rem;
+}
+
+.ProseMirror h2,
+.prose h2 {
+  font-size: 1.375rem;
+  font-weight: 700;
+  line-height: 1.3;
+  margin-top: 1.1rem;
+  margin-bottom: 0.5rem;
+}
+
+.ProseMirror h3,
+.prose h3 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.35;
+  margin-top: 0.9rem;
+  margin-bottom: 0.4rem;
+}
+
+.ProseMirror blockquote,
+.prose blockquote {
+  border-left: 3px solid hsl(var(--primary));
+  background: hsl(var(--primary) / 0.06);
+  padding: 0.65rem 1rem;
+  margin-block: 1rem;
+  border-radius: 0 0.5rem 0.5rem 0;
+  font-style: italic;
+}
+
+.ProseMirror hr,
+.prose hr {
+  border: none;
+  border-top: 1px solid hsl(var(--border));
+  margin: 1.5rem auto;
+  width: 60%;
+}
+
+.ProseMirror pre,
+.prose pre {
+  background: hsl(var(--muted));
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.5rem;
+  padding: 0.85rem 1rem;
+  overflow-x: auto;
+  font-size: 0.875rem;
+  margin-block: 0.85rem;
+}
+
+.ProseMirror a,
+.prose a {
+  color: hsl(var(--primary));
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* Placeholder for the editor */
+.ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: hsl(var(--muted-foreground));
+  pointer-events: none;
+  height: 0;
+}
+
+/* Base styling for images within the editor AND in rendered content */
+.ProseMirror img,
+.prose img { /* Target images in editor and in rendered prose */
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.5rem; /* rounded-lg */
+  border: 1px solid hsl(var(--border));
+  display: block; /* Important for margin auto to work */
+  box-sizing: border-box;
+}
+
+.ProseMirror video,
+.prose video,
+.ProseMirror iframe,
+.prose iframe {
+  max-width: 100%;
+  height: auto;
+  box-sizing: border-box;
+}
+
+.ProseMirror .youtube-embed,
+.prose .youtube-embed {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: 0.5rem;
+}
+
+.ProseMirror .youtube-embed iframe,
+.prose .youtube-embed iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+/* Styling for selected image */
+.ProseMirror .ProseMirror-selectednode > div {
+  outline: 3px solid hsl(var(--primary));
+  border-radius: 0.5rem;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+
+.is-active {
+    background-color: hsl(var(--accent));
+    color: hsl(var(--accent-foreground));
+}
+
+/* Styles for resize handles */
+.resize-handle {
+  position: absolute;
+  background-color: hsl(var(--primary));
+  border: 1px solid hsl(var(--primary-foreground));
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  z-index: 10;
+  opacity: 0; /* Hidden by default */
+  transition: opacity 0.2s;
+}
+
+/* Show handles when the node is selected */
+.ProseMirror-selectednode .resize-handle {
+    opacity: 1;
+}
+
+.resize-handle.top-left { top: -8px; left: -8px; cursor: nwse-resize; }
+.resize-handle.top-right { top: -8px; right: -8px; cursor: nesw-resize; }
+.resize-handle.bottom-left { bottom: -8px; left: -8px; cursor: nesw-resize; }
+.resize-handle.bottom-right { bottom: -8px; right: -8px; cursor: nwse-resize; }
+
+
+/* General alignment styles for content */
+[data-text-align="left"] {
+  text-align: left;
+}
+[data-text-align="center"] {
+  text-align: center;
+}
+[data-text-align="right"] {
+  text-align: right;
+}
+
+/* Float classes for text wrapping */
+.float-left {
+  float: left;
+  margin-right: 1em;
+  margin-bottom: 0.5em;
+}
+.float-right {
+  float: right;
+  margin-left: 1em;
+  margin-bottom: 0.5em;
+}
+.clear-both {
+  clear: both;
+}
+
+
+/* Styles for YouTube embed */
+.youtube-embed {
+  position: relative;
+  width: 100%;
+  padding-bottom: 56.25%; /* 16:9 aspect ratio */
+  height: 0;
+  overflow: hidden;
+  border-radius: 0.5rem;
+  border: 1px solid hsl(var(--border));
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+}
+
+.youtube-embed iframe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}

@@ -1,0 +1,13 @@
+{
+  "name": "soberan-video-worker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "22"
+  },
+  "dependencies": {
+    "@google-cloud/storage": "^7.18.0",
+    "firebase-admin": "^12.7.0"
+  }
+}

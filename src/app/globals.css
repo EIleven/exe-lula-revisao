@@ -1,0 +1,352 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif; /* Updated to use --font-sans */
+}
+
+/* Um arrasto horizontal pertence às abas do app; nunca deve escapar para o gesto de "voltar" do navegador.
+   O eixo vertical continua completamente nativo, inclusive o efeito de rolagem e o puxar para atualizar. */
+html,
+body {
+  overscroll-behavior-x: none;
+}
+
+@layer base {
+  :root {
+    /* Preto é o fallback real, inclusive antes da hidratação do next-themes ou quando o navegador bloqueia storage. */
+    color-scheme: dark;
+    --background: 0 0% 0%;
+    --foreground: 0 0% 95%; /* #F2F2F2 */
+
+    --card: 0 0% 0%;
+    --card-foreground: 0 0% 95%;
+
+    --popover: 0 0% 1%;
+    --popover-foreground: 0 0% 95%;
+
+    --primary: 228, 90%, 55%; /* Electric Blue #7DF9FF */
+    --primary-foreground: 9 21% 86%;; /* Dark color for text on primary */
+
+    --secondary: 0 0% 100%; 
+    --secondary-foreground: 0 0% 10%;
+
+    --muted: 0 0% 10%;
+    --muted-foreground: 0 0% 60%;
+
+    --accent: 228, 90%, 55%; /* Changed to Primary Blue */
+    --accent-foreground: 9 21% 86%;; /* Changed to Primary Foreground */
+
+    --destructive: 0 70% 50%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 0 0% 10%; /* Darker, more subtle border */
+    --input: 0 0% 1%;
+    --ring: 228, 90%, 55%; /* Primary color for rings */
+    --radius: 0.5rem;
+
+    --chart-1: 228, 90%, 55%; /* Electric Blue (Primary) */
+    --chart-2: 283, 39%, 67%; /* Soft Purple */
+    --chart-3: 160, 100%, 35%; /* Teal */
+    --chart-4: 336, 84%, 60%; /* Pink */
+    --chart-5: 45, 90%, 55%; /* Gold */
+    
+    --sidebar-background: 0 0% 1%; /* Even darker sidebar */
+    --sidebar-foreground: 0 0% 90%;
+    --sidebar-primary: 228, 90%, 55%;
+    --sidebar-primary-foreground: 9 21% 86%;;
+    --sidebar-accent: 228, 90%, 55%; /* Changed to Primary Blue */
+    --sidebar-accent-foreground: 9 21% 86%;; /* Changed to Primary Foreground */
+    --sidebar-border: 0 0% 8%;
+    --sidebar-ring: 228, 90%, 55%;
+    --like: 336 84% 56%; /* Added like color #EC4899 */
+    --repost: 145 63% 42%; /* Green color for repost */
+
+    /* Responsive Layout Variables */
+    --header-height: 48px; /* h-12 do cabeçalho; sobe para 3.5rem a partir de 640px (abaixo) */
+    --sidebar-left-width: 280px; /* Default expanded */
+    --sidebar-right-width: 380px; /* Default visible */
+  }
+
+  /* Breakpoints for sidebar widths */
+  @media (max-width: 1299px) {
+    :root {
+      --sidebar-left-width: 88px; /* Compact rail mode */
+    }
+  }
+  @media (max-width: 1099px) {
+    :root {
+      --sidebar-right-width: 0px; /* Hide right sidebar */
+    }
+  }
+  @media (max-width: 799px) {
+    :root {
+      --sidebar-left-width: 0px; /* Hide left sidebar for mobile */
+    }
+  }
+  @media (min-width: 640px) {
+    :root {
+      --header-height: 56px; /* sm:h-14 do cabeçalho */
+    }
+  }
+
+  .dark {
+    --background: 0 0% 0%;
+    --foreground: 0 0% 95%;
+    --card: 0 0% 0%;
+    --card-foreground: 0 0% 95%;
+    --popover: 0 0% 0%;
+    --popover-foreground: 0 0% 95%;
+    --primary: 228, 90%, 55%;
+    --primary-foreground: 9 21% 86%;;
+    --secondary: 0 0% 100%;
+    --secondary-foreground: 0 0% 10%;
+    --muted: 0 0% 22%;
+    --muted-foreground: 0 0% 60%;
+    --accent: 4 0% 16%; /* Changed to Primary Blue */
+    --accent-foreground: 9 21% 86%;; /* Changed to Primary Foreground */
+    --destructive: 0 70% 50%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 8%;
+    --input: 0 0% 1%;
+    --ring: 228, 90%, 55%;
+    
+    --chart-1: 228, 90%, 55%; /* Electric Blue (Primary) */
+    --chart-2: 283, 39%, 67%; /* Soft Purple */
+    --chart-3: 160, 100%, 35%; /* Teal */
+    --chart-4: 336, 84%, 60%; /* Pink */
+    --chart-5: 45, 90%, 55%; /* Gold */
+
+    --sidebar-background: 0 0% 0%;
+    --sidebar-foreground: 0 0% 90%;
+    --sidebar-primary: 228, 90%, 55%;
+    --sidebar-primary-foreground: 9 21% 86%;;
+    --sidebar-accent: 228, 90%, 55%; /* Changed to Primary Blue */
+    --sidebar-accent-foreground: 9 21% 86%;; /* Changed to Primary Foreground */
+    --sidebar-border: 0 0% 8%;
+    --sidebar-ring: 228, 90%, 55%;
+    --like: 336 84% 56%; /* Added like color #EC4899 */
+    --repost: 145 63% 42%; /* Green color for repost */
+  }
+
+  .high-contrast {
+    --background: 0 0% 0%;
+    --foreground: 0 0% 100%;
+    --card: 0 0% 0%;
+    --card-foreground: 0 0% 100%;
+    --popover: 0 0% 0%;
+    --popover-foreground: 0 0% 100%;
+    --primary: 60, 100%, 50%; /* High-Vis Yellow */
+    --primary-foreground: 0 0% 0%;
+    --secondary: 240 100% 50%; /* High-Vis Blue */
+    --secondary-foreground: 0 0% 100%;
+    --muted: 0 0% 10%;
+    --muted-foreground: 0 0% 80%;
+    --accent: 60, 100%, 50%;
+    --accent-foreground: 0 0% 0%;
+    --destructive: 0 100% 50%; /* High-Vis Red */
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 100%;
+    --input: 0 0% 0%;
+    --ring: 60, 100%, 50%;
+
+    --sidebar-background: 0 0% 0%;
+    --sidebar-foreground: 0 0% 100%;
+    --sidebar-border: 0 0% 100%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+.like-icon {
+  transition: color 0.2s ease-in-out, fill 0.2s ease-in-out;
+}
+
+/* Fix for HoverCard positioning when inside a transformed element (like a sticky header) */
+[data-radix-popper-content-wrapper] {
+  z-index: 50 !important;
+}
+
+/* Animated Counter Styles */
+.animated-counter {
+  position: relative;
+  height: 1em; /* Corresponds to font size */
+  overflow: hidden;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.animated-counter > div {
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.3s ease-in-out;
+}
+
+.animated-counter-number {
+  height: 1em;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.animated-counter .animate-scroll-up {
+  animation: scroll-up 0.3s ease-in-out forwards;
+}
+
+.animated-counter .animate-scroll-down {
+  animation: scroll-down 0.3s ease-in-out forwards;
+}
+
+@keyframes scroll-up {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-100%);
+  }
+}
+
+@keyframes scroll-down {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(100%);
+  }
+}
+
+/* Gestos de toque (celular e app). O navegador, por padrão, faz o "puxar para atualizar" e o efeito elástico por cima do
+   puxar do próprio app (o feed tem o seu, com resistência e vibração), e espera ~300 ms por um toque duplo (zoom) antes de
+   aceitar o toque num controle. `contain` mantém o brilho/elástico mas desliga o puxar nativo e o encadeamento de rolagem
+   (rolar dentro de um menu ou diálogo até o fim não rola a página de trás); `manipulation` tira o atraso e o zoom do toque
+   duplo dos controles, mas MANTÉM a pinça (acessibilidade). */
+@layer base {
+  html,
+  body {
+    overscroll-behavior-y: contain;
+  }
+  button,
+  [role="button"],
+  a,
+  summary,
+  label,
+  select,
+  [role="tab"],
+  [role="menuitem"],
+  [role="switch"],
+  [role="checkbox"],
+  [role="radio"],
+  input[type="checkbox"],
+  input[type="radio"] {
+    touch-action: manipulation;
+  }
+}
+
+/* Barras que se escondem ao rolar. Quem decide é o atributo `data-chrome` de <html> (src/lib/scrollChrome.ts: um único
+   ouvinte passivo, sem estado do React); aqui o CSS só move as barras com `transform`, no compositor, sem redesenhar a
+   página. As abas fixas (`chrome-sticky`) acompanham o cabeçalho: logo abaixo dele quando aparece, no topo quando some. */
+@layer components {
+  .chrome-header {
+    will-change: transform;
+    transition: transform 300ms ease-in-out;
+  }
+  .chrome-bottom,
+  .chrome-float {
+    transition: transform 300ms ease-in-out;
+  }
+  .chrome-sticky {
+    top: var(--header-height);
+    transition: top 300ms ease-in-out;
+  }
+  html[data-chrome='hidden'] .chrome-header {
+    transform: translateY(-100%);
+  }
+  html[data-chrome='hidden'] .chrome-bottom,
+  html[data-chrome='hidden'] .chrome-float {
+    transform: translateY(100%);
+  }
+  html[data-chrome='hidden'] .chrome-sticky {
+    top: 0;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .chrome-header,
+    .chrome-bottom,
+    .chrome-float,
+    .chrome-sticky {
+      transition: none;
+    }
+  }
+
+  /* Cartões do feed: os que estão longe da tela não são medidos nem pintados (o navegador pula o layout e a pintura deles)
+     até chegarem perto. `auto` guarda a altura real depois da primeira vez, então voltar a eles não muda a posição da
+     página; antes disso vale a estimativa. O post aberto sozinho (visão de um post só) não usa esta classe. */
+  .feed-card {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 400px;
+  }
+
+  /* Recuo responsivo para comentários aninhados (inspirado no teto compacto de Bluesky/X):
+     no mobile limita a 2 níveis compactos para nunca esmagar o texto nem a barra de ações;
+     a partir de sm (640px) permite até 4 níveis mantendo a hierarquia visual clara. */
+  .comment-depth-pad {
+    padding-left: calc(0.75rem + min(var(--comment-depth, 0), 2) * 0.75rem);
+  }
+  .comment-depth-margin {
+    margin-left: calc(min(var(--comment-depth, 0), 2) * 0.75rem);
+  }
+  @media (min-width: 640px) {
+    .comment-depth-pad {
+      padding-left: calc(1rem + min(var(--comment-depth, 0), 4) * 1.25rem);
+    }
+    .comment-depth-margin {
+      margin-left: calc(min(var(--comment-depth, 0), 4) * 1.25rem);
+    }
+  }
+
+  /* Fundo das barras fixas. Com mouse (computador) mantém o vidro fosco; no toque o desfoque do fundo (backdrop-filter) é
+     refeito a cada quadro de rolagem por baixo da barra, então lá o fundo é quase opaco e a rolagem não paga por isso. */
+  .chrome-surface {
+    background-color: hsl(var(--background) / 0.96);
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .chrome-surface {
+      background-color: hsl(var(--background) / 0.8);
+      -webkit-backdrop-filter: blur(4px);
+      backdrop-filter: blur(4px);
+    }
+  }
+}
+
+/* Utility to hide scrollbar */
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none; /* IE and Edge */
+    scrollbar-width: none; /* Firefox */
+  }
+  .hover-comment:hover {
+    @apply text-primary bg-primary/10 rounded-full;
+  }
+  .hover-repost:hover {
+    color: hsl(var(--repost));
+    @apply bg-[hsl(var(--repost))]/10 rounded-full;
+  }
+  .hover-like:hover {
+    color: hsl(var(--like));
+    @apply bg-[hsl(var(--like))]/10 rounded-full;
+  }
+  .hover-bookmark:hover {
+    @apply text-blue-500 bg-blue-500/10 rounded-full;
+  }
+}

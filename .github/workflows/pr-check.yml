@@ -1,0 +1,39 @@
+name: PR Validation (Review)
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v4
+
+      - name: Check for forbidden secret or env files
+        run: |
+          FORBIDDEN=$(git ls-files | grep -E '(^\.env($|\.)|functions/\.env|\.firebaserc$|service-account|firebase-adminsdk|\.jks$|\.keystore$)' | grep -v '^\.env\.example$' || true)
+          if [ -n "$FORBIDDEN" ]; then
+            echo "Forbidden files detected:"
+            echo "$FORBIDDEN"
+            exit 1
+          fi
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript check
+        run: npm run typecheck
+
+      - name: Lint check
+        run: npm run lint
