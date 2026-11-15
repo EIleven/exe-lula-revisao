@@ -1,6 +1,6 @@
 # Termo de Acordo, Confidencialidade e Licença Restrita de Análise Técnica
 
-**Projeto:** Exe. Lula / Echo (`echo-review`)  
+**Projeto:** Exe. Lula / HiperVerso (`exe-lula-revisao`)  
 **Proprietário / Titular:** Breno César (`@Breno`)  
 **Revisor Convidado Principal:** **Juan** — GitHub: [`@MrJc01`](https://github.com/MrJc01)  
 **Data de Emissão:** 14 de novembro de 2026  
@@ -9,9 +9,9 @@
 
 ## 1. Objeto do Acordo
 
-Este documento formaliza o acordo entre o **Proprietário** e o **Revisor Convidado (Juan / `@MrJc01`)**, bem como eventuais outros revisores que venham a receber acesso nominal a este repositório privado de revisão (`echo-review`).
+Este documento formaliza o acordo entre o **Proprietário** e o **Revisor Convidado (Juan / `@MrJc01`)**, bem como eventuais outros revisores que venham a receber acesso nominal a este repositório privado de revisão (`exe-lula-revisao`).
 
-O Proprietário concede ao Revisor acesso controlado a uma versão espelhada e sanitizada do sistema **Exe. Lula / Echo** — mantendo o repositório principal de produção estritamente privado — com a finalidade exclusiva de:
+O Proprietário concede ao Revisor acesso controlado a uma versão espelhada e sanitizada do sistema **Exe. Lula** — mantendo o repositório principal de produção estritamente privado — com a finalidade exclusiva de:
 
 1. **Analisar** a arquitetura, implementação, fluxos de dados, federação ActivityPub, mensageria P2P (Zero DB), criptografia E2EE e performance;
 2. **Identificar** falhas, vulnerabilidades, gargalos ou melhorias técnicas;

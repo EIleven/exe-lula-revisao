@@ -1,7 +1,7 @@
-# Exe. Lula / Echo — Repositório Privado de Revisão Técnica (`exe-lula-revisao`)
+# Exe. Lula (HiperVerso) — Repositório Privado de Revisão Técnica (`exe-lula-revisao`)
 
 > **ACESSO RESTRITO E CONFIDENCIAL — NÃO É CÓDIGO ABERTO**  
-> Este repositório contém uma versão sanitizada do sistema **Exe. Lula / Echo** disponibilizada exclusivamente sob acordo privado para análise técnica, auditoria e envio de correções via Pull Request por revisores convidados (incluindo **`@MrJc01`** e **`@nataliagranato`**).  
+> Este repositório contém uma versão sanitizada do sistema **Exe. Lula** (`HiperVerso`) disponibilizada exclusivamente sob acordo privado para análise técnica, auditoria e envio de correções via Pull Request por revisores convidados (incluindo **`@MrJc01`** e **`@nataliagranato`**).  
 > O repositório principal de produção permanece estritamente privado.  
 > Leia obrigatoriamente [`LICENSE`](./LICENSE) e [`ACORDO_REVISAO_JUAN.md`](./ACORDO_REVISAO_JUAN.md) antes de prosseguir.
 

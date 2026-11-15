@@ -1,6 +1,6 @@
 # Guia de Contribuição e Estrutura de PRs (`CONTRIBUTING.md`)
 
-Este repositório (`echo-review`) foi estruturado para que **revisores e colaboradores expressamente convidados** possam analisar o sistema, registrar diagnósticos e enviar correções (*fixes*) de forma organizada, rastreável e documentada.
+Este repositório (`exe-lula-revisao`) foi estruturado para que **revisores e colaboradores expressamente convidados** possam analisar o sistema, registrar diagnósticos e enviar correções (*fixes*) de forma organizada, rastreável e documentada.
 
 > **Importante:** Antes de contribuir, leia [`LICENSE`](./LICENSE) e [`ACORDO_REVISAO_JUAN.md`](./ACORDO_REVISAO_JUAN.md). Todo acesso e envio de PR implica concordância com os termos de confidencialidade e propriedade intelectual.
 
