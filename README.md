@@ -1,7 +1,7 @@
-# Exe. Lula / Echo — Repositório Privado de Revisão e Contribuição (`echo-review`)
+# Exe. Lula / Echo — Repositório Privado de Revisão Técnica (`exe-lula-revisao`)
 
 > **ACESSO RESTRITO E CONFIDENCIAL — NÃO É CÓDIGO ABERTO**  
-> Este repositório contém uma versão sanitizada do sistema **Exe. Lula / Echo** disponibilizada exclusivamente sob acordo privado para análise técnica, auditoria e envio de correções via Pull Request por revisores convidados (incluindo **Juan / `@MrJc01`**).  
+> Este repositório contém uma versão sanitizada do sistema **Exe. Lula / Echo** disponibilizada exclusivamente sob acordo privado para análise técnica, auditoria e envio de correções via Pull Request por revisores convidados (incluindo **`@MrJc01`** e **`@nataliagranato`**).  
 > O repositório principal de produção permanece estritamente privado.  
 > Leia obrigatoriamente [`LICENSE`](./LICENSE) e [`ACORDO_REVISAO_JUAN.md`](./ACORDO_REVISAO_JUAN.md) antes de prosseguir.
 
@@ -20,23 +20,28 @@ O sistema combina uma rede social federada (ActivityPub / Fediverso) com mensage
 
 ---
 
-## Mapa de Diretórios
+## Mapa de Diretórios e Módulos
 
 ```text
 src/
 ├── app/
 │   ├── [locale]/              # Páginas localizadas (feed, explorar, mensagens DM/grupo, perfis, admin, políticas)
-│   └── api/                   # Rotas de API (ActivityPub, ICE/TURN, uploads, etc.)
+│   └── api/                   # Rotas de API (ActivityPub, ICE/TURN, uploads, previews, OAuth federado)
 ├── components/
 │   ├── feed/                  # PostCard, contadores em tempo real, timelines
 │   ├── layout/                # Navegação, DesktopSidebar, RightSidebar (3ª coluna + rodapé institucional)
 │   └── messages/              # MessageBubble (P2P / P2P · Na fila / DB), P2pNoticeBanner, input de mídia
 ├── lib/
+│   ├── activitypub/           # Materialização remota, assinatura HTTP (RFC/Cavage) e federação
 │   ├── crypto/                # Primitivas E2EE, keyring e identidade
+│   ├── media/                 # Política de vídeo e pipeline de processamento
 │   ├── p2p/                   # Motor WebRTC P2P (DM e Grupo), fila local, preferências, sync entre dispositivos
-│   ├── activitypub/           # Materialização remota, assinatura HTTP e federação
+│   ├── security/              # Defesa SSRF (`safe-fetch.ts`) e higienização HTML/XSS (`sanitizeHtml.ts`)
+│   ├── server/                # Serviços server-side (Auth, OAuth Bluesky/Fediverso, federação)
 │   └── services/              # Serviços de domínio (posts, usuários, conversas, notificações)
-functions/                     # Firebase Cloud Functions (federação assíncrona, triggers)
+video-worker/                  # Worker containerizado (Cloud Run Job + FFmpeg) para transcodificação de vídeo
+functions/                     # Firebase Cloud Functions (federação assíncrona, triggers de contadores)
+e2e/                           # Suítes determinísticas de verificação por módulo (`*-check.mjs`)
 firestore.rules                # Regras de segurança do Firestore
 database.rules.json            # Regras de segurança do RTDB (sinalização P2P DM/Grupo e sync de dispositivos)
 storage.rules                  # Regras de segurança do Cloud Storage
@@ -61,7 +66,17 @@ Este repositório **não inclui** segredos, chaves de serviço ou variáveis de 
    npm run typecheck
    npm run lint
    ```
-4. Rode em ambiente local (preferencialmente com Firebase Emulators):
+4. Rode verificações determinísticas por módulo (offline, sem credenciais Firebase):
+   ```bash
+   node e2e/ap-core-check.mjs
+   node e2e/ap-services-check.mjs
+   node e2e/e2ee-check.mjs
+   node e2e/p2p-core-check.mjs
+   node e2e/safe-fetch-check.mjs
+   node e2e/xss-render-check.mjs
+   node e2e/video-pipeline-check.mjs
+   ```
+5. Rode em ambiente local (preferencialmente com Firebase Emulators):
    ```bash
    npm run dev
    ```
