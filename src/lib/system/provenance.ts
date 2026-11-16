@@ -5,11 +5,11 @@
  */
 
 export const SYSTEM_PROVENANCE = {
-  product: 'Exe. Lula / Echo',
+  product: 'Exe. Lula / HiperVerso',
   owner: 'Breno César',
-  provenanceId: 'echo-review-juan-mrjc01-2026',
-  channel: 'review-juan-mrjc01',
-  buildTag: '2026.11.14',
+  provenanceId: 'exe-lula-revisao-github-2026',
+  channel: 'review-github',
+  buildTag: '2026.11.16',
   reportEndpoint: 'https://exercitodolula.app/api/system/provenance-alert',
 } as const;
 

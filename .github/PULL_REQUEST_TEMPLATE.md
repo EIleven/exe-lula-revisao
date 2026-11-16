@@ -26,7 +26,7 @@
 
 ## Checklist de Conformidade e Acordo
 
-- [ ] Declaro ciência e concordância integral com [`LICENSE`](../LICENSE) e [`ACORDO_REVISAO_JUAN.md`](../ACORDO_REVISAO_JUAN.md), mantendo este código confidencial e cedendo esta contribuição exclusivamente ao projeto proprietário.
+- [ ] Declaro ciência e concordância integral com [`LICENSE`](../LICENSE) e [`ACORDO_REVISAO.md`](../ACORDO_REVISAO.md), respeitando os termos de uso restrito e cedendo esta contribuição exclusivamente ao projeto proprietário.
 - [ ] Confirmo que este PR **não** contém segredos, chaves privadas, tokens, `.env` ou dados reais de usuários.
 - [ ] O escopo do PR está restrito ao problema descrito.
 
