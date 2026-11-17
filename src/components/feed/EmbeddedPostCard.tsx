@@ -13,6 +13,9 @@ import { cn } from '@/lib/utils';
 import Image from 'next/image';
 import { useLocale, useTranslations } from 'next-intl';
 import { htmlToPlainText } from '@/lib/security/sanitizeHtml';
+import SensitiveMediaCover from '@/components/shared/SensitiveMediaCover';
+import TranslateActionLine from '@/components/shared/TranslateActionLine';
+import { useTextTranslation } from '@/hooks/useTextTranslation';
 
 const TEXT_PREVIEW_LENGTH = 300;
 
@@ -104,21 +107,25 @@ const EmbeddedPostCardContent: React.FC<EmbeddedCardProps> = ({ post, comment, c
   };
 
   const nestedOriginalPost = isPost ? (contentData as Post).originalPostDetails : undefined;
+  const isNewsArticle = Boolean(isPost && post?.category === 'news');
+  const rawEmbedText = isPost ? post?.text : comment?.text;
+  const headlineToRender = isPost ? post?.headline : null;
+  const plainEmbedText = isNewsArticle ? htmlToPlainText(rawEmbedText) : (rawEmbedText || '');
+  const translationInput = headlineToRender ? `${headlineToRender}\n${plainEmbedText}` : plainEmbedText;
+  const translation = useTextTranslation(translationInput);
 
   const renderContent = () => {
-    const isNewsArticle = isPost && post.category === 'news';
-    const textToRender = isPost ? post?.text : comment?.text;
-    const headlineToRender = isPost ? post?.headline : null;
-
-    // A prévia é sempre TEXTO: o HTML de um artigo só é desenhado (higienizado) na página dele. Antes qualquer texto
-    // com "<" virava HTML aqui, e um post comum citado podia rodar script no navegador de quem lia.
-    const plainText = isNewsArticle ? htmlToPlainText(textToRender) : (textToRender || '');
-    const isTruncated = truncateText && !scrollable && plainText.length > TEXT_PREVIEW_LENGTH;
-    const finalPlainText = isTruncated ? plainText.substring(0, TEXT_PREVIEW_LENGTH) + '...' : plainText;
+    const displayed = translation.isTranslated && translation.translatedText
+      ? translation.translatedText
+      : plainEmbedText;
+    const isTruncated = truncateText && !scrollable && displayed.length > TEXT_PREVIEW_LENGTH;
+    const finalPlainText = isTruncated ? displayed.substring(0, TEXT_PREVIEW_LENGTH) + '...' : displayed;
 
     const textComponent = (
       <>
-        {headlineToRender && <h3 className="text-md font-semibold text-foreground mb-1 line-clamp-2">{headlineToRender}</h3>}
+        {headlineToRender && !translation.isTranslated && (
+          <h3 className="text-md font-semibold text-foreground mb-1 line-clamp-2">{headlineToRender}</h3>
+        )}
         {finalPlainText && (
           <p className={cn("text-sm whitespace-pre-wrap", isNewsArticle ? "line-clamp-3 text-foreground/80" : "text-foreground")}>
             <TextWithMentions text={finalPlainText} />
@@ -129,6 +136,16 @@ const EmbeddedPostCardContent: React.FC<EmbeddedCardProps> = ({ post, comment, c
             )}
           </p>
         )}
+        <TranslateActionLine
+          canTranslate={translation.canTranslate}
+          isTranslating={translation.isTranslating}
+          isTranslated={translation.isTranslated}
+          targetLabel={translation.targetLabel}
+          detectedSource={translation.detectedSource}
+          hasError={translation.hasError}
+          onToggle={translation.toggleTranslation}
+          className="mb-0.5"
+        />
       </>
     );
 
@@ -167,15 +184,22 @@ const EmbeddedPostCardContent: React.FC<EmbeddedCardProps> = ({ post, comment, c
       </div>
 
       {thumbnail && (
-        <div className="mt-2 mb-2 aspect-video w-full rounded-lg overflow-hidden border relative">
-            <Image 
-                src={thumbnail.url}
-                alt={thumbnail.alt || post?.headline || 'Embedded content image'}
-                fill
-                className="object-cover"
-                sizes="(max-width: 640px) 90vw, 520px"
-            />
-        </div>
+        <SensitiveMediaCover
+          sensitive={Boolean(contentData?.sensitive)}
+          contentKey={contentData?.id}
+          compact
+          className="mt-2 mb-2"
+        >
+          <div className="aspect-video w-full rounded-lg overflow-hidden border relative">
+              <Image
+                  src={thumbnail.url}
+                  alt={thumbnail.alt || post?.headline || 'Embedded content image'}
+                  fill
+                  className="object-cover"
+                  sizes="(max-width: 640px) 90vw, 520px"
+              />
+          </div>
+        </SensitiveMediaCover>
       )}
 
       <div className={cn(thumbnail && 'mt-2')}>

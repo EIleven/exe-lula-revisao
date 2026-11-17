@@ -28,7 +28,10 @@ import { useLocale, useTranslations } from 'next-intl';
 import UserProfileHoverCard from '@/components/profile/UserProfileHoverCard';
 import ImageViewer from '../shared/ImageViewer';
 import MediaGrid from '../shared/MediaGrid';
+import TranslateActionLine from '@/components/shared/TranslateActionLine';
+import { useTextTranslation } from '@/hooks/useTextTranslation';
 import YoutubeEmbed from '@/components/shared/YoutubeEmbed';
+import SensitiveMediaCover from '@/components/shared/SensitiveMediaCover';
 
 interface CommentCardProps {
   comment: Comment & { depth?: number };
@@ -36,6 +39,7 @@ interface CommentCardProps {
   onCommentDeleted?: (commentId: string) => void; // For unbookmarking
   parentPostAuthorId?: string | null;
   repostedBy?: EmbeddedUserDetails;
+  repostedAt?: string;
   isFocused?: boolean;
   hasThreadLine?: boolean;
 }
@@ -46,6 +50,7 @@ function CommentCard({
     onCommentDeleted, // Receive prop
     parentPostAuthorId,
     repostedBy,
+    repostedAt,
     isFocused = false,
     hasThreadLine = false,
 }: CommentCardProps) {
@@ -101,6 +106,8 @@ function CommentCard({
     onPostCreated,
     onInteractionDeleted: onCommentDeleted,
   });
+
+  const translation = useTextTranslation(!comment?.isDeleted ? comment?.text : null);
 
   useEffect(() => {
     if (comment?.createdAt) {
@@ -198,7 +205,12 @@ function CommentCard({
         actionName={loginPromptActionName}
         currentPath={pathname}
       />
-      <ImageViewer isOpen={isImageViewerOpen} onOpenChange={setIsImageViewerOpen} imageUrl={selectedImageUrl} />
+      <ImageViewer
+        isOpen={isImageViewerOpen}
+        onOpenChange={setIsImageViewerOpen}
+        imageUrl={selectedImageUrl}
+        images={comment?.media?.filter((m) => m.type !== 'video' && m.url).map((m) => m.url) ?? []}
+      />
 
       <Dialog open={isQuoteDialogOpen || isReplyDialogOpen} onOpenChange={(open) => {
         if(isQuoteDialogOpen && !open) setIsQuoteDialogOpen(false);
@@ -234,6 +246,17 @@ function CommentCard({
                       </UserProfileHoverCard>
                       {' '}{t('reposted')}
                     </>
+                  )}
+                  {repostedAt && !Number.isNaN(new Date(repostedAt).getTime()) && (
+                    <span className="ml-1 text-muted-foreground/80">
+                      · {(() => {
+                        const formatted = formatDistanceToNow(new Date(repostedAt), {
+                          addSuffix: true,
+                          locale: locale === 'pt-BR' ? ptBR : enUS,
+                        });
+                        return locale === 'pt-BR' ? formatted.replace('cerca de ', '') : formatted;
+                      })()}
+                    </span>
                   )}
                 </div>
               </div>
@@ -294,14 +317,33 @@ function CommentCard({
                             )}
                         </div>
                         <div className="mt-2 space-y-2">
-                            <p className="text-sm text-foreground whitespace-pre-wrap"><TextWithMentions text={comment.text} /></p>
+                            <p className="text-sm text-foreground whitespace-pre-wrap">
+                              <TextWithMentions
+                                text={(translation.isTranslated ? translation.translatedText : comment.text) || ''}
+                              />
+                            </p>
+                            <TranslateActionLine
+                              canTranslate={translation.canTranslate}
+                              isTranslating={translation.isTranslating}
+                              isTranslated={translation.isTranslated}
+                              targetLabel={translation.targetLabel}
+                              detectedSource={translation.detectedSource}
+                              hasError={translation.hasError}
+                              onToggle={translation.toggleTranslation}
+                            />
                             {comment.media && comment.media.length > 0 && (
+                              <SensitiveMediaCover
+                                sensitive={comment.sensitive === true}
+                                contentKey={comment.id}
+                                compact
+                                className="mt-2"
+                              >
                                 <MediaGrid
                                     media={comment.media}
                                     fallbackAlt={comment.text?.substring(0, 50)}
                                     onImageClick={openImage}
-                                    className="mt-2"
                                 />
+                              </SensitiveMediaCover>
                             )}
                             {comment.youtubeVideoId && (
                               <YoutubeEmbed videoId={comment.youtubeVideoId} className="mt-2" />

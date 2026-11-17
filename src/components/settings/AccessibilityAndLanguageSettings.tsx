@@ -2,7 +2,16 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import type { User } from '@/lib/types';
+import type { TranslationPreferences, User } from '@/lib/types';
+import { useCurrentUser } from '@/contexts/CurrentUserContext';
+import { updateUserSettings } from '@/lib/services/userService';
+import { useToast } from '@/hooks/use-toast';
+import {
+  persistLocalTranslationPreferences,
+  readTranslationPreferences,
+  SUPPORTED_TRANSLATION_LANGUAGES,
+} from '@/lib/i18n/translationPreferences';
+import { cn } from '@/lib/utils';
 import {
   CardHeader,
   CardTitle,
@@ -42,6 +51,40 @@ export default function AccessibilityAndLanguageSettings({ user, pageContext }: 
   const [fontSize, setFontSize] = useState(DEFAULT_FONT_SIZE);
   const [isHighContrast, setIsHighContrast] = useState(false);
   const [clientHasMounted, setClientHasMounted] = useState(false);
+  const { refreshCurrentUser } = useCurrentUser();
+  const { toast } = useToast();
+  const [transPrefs, setTransPrefs] = useState<TranslationPreferences>(() =>
+    readTranslationPreferences(user),
+  );
+  const [isSavingTrans, setIsSavingTrans] = useState(false);
+
+  const handleSaveTranslationPrefs = async (next: TranslationPreferences) => {
+    setTransPrefs(next);
+    persistLocalTranslationPreferences(next);
+    if (!user?.id) return;
+    setIsSavingTrans(true);
+    try {
+      await updateUserSettings(user.id, { translationPreferences: next });
+      await refreshCurrentUser();
+      toast({
+        title: 'Tradução atualizada',
+        description:
+          next.mode === 'auto'
+            ? 'Posts e artigos em outros idiomas serão traduzidos automaticamente.'
+            : next.mode === 'button'
+              ? 'Um botão discreto aparecerá para traduzir textos em outros idiomas.'
+              : 'Tradução desativada.',
+      });
+    } catch {
+      toast({
+        title: 'Erro ao salvar',
+        description: 'Aplicado apenas nesta sessão.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSavingTrans(false);
+    }
+  };
   
   // Load settings from localStorage on mount
   useEffect(() => {
@@ -112,6 +155,92 @@ export default function AccessibilityAndLanguageSettings({ user, pageContext }: 
                 <SelectItem value="en">English</SelectItem>
                 </SelectContent>
             </Select>
+        </div>
+
+        <Separator />
+
+        <div className="space-y-4">
+          <div>
+            <h3 className="text-base font-semibold">Tradução de Posts, Artigos e Citações</h3>
+            <p className="text-sm text-muted-foreground">
+              Tradução integrada com software livre (LibreTranslate / Lingva). Disponível para sua conta logada.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">Modo de tradução</Label>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 max-w-lg">
+              {([
+                { value: 'button', label: 'Botão em cada post' },
+                { value: 'auto', label: 'Automática' },
+                { value: 'off', label: 'Desativada' },
+              ] as const).map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  disabled={isSavingTrans}
+                  onClick={() => void handleSaveTranslationPrefs({ ...transPrefs, mode: opt.value })}
+                  className={cn(
+                    'rounded-md border px-3 py-2 text-xs font-medium transition-colors',
+                    transPrefs.mode === opt.value
+                      ? 'border-primary bg-primary/10 text-primary'
+                      : 'border-border hover:bg-muted',
+                  )}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {transPrefs.mode !== 'off' && (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="translation-target-select">Traduzir textos para</Label>
+                <Select
+                  value={transPrefs.targetLanguage}
+                  disabled={isSavingTrans}
+                  onValueChange={(value) =>
+                    void handleSaveTranslationPrefs({ ...transPrefs, targetLanguage: value })
+                  }
+                >
+                  <SelectTrigger id="translation-target-select" className="w-[280px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="auto">Automático (idioma do navegador)</SelectItem>
+                    {SUPPORTED_TRANSLATION_LANGUAGES.map((lang) => (
+                      <SelectItem key={lang.code} value={lang.code}>
+                        {lang.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex items-center justify-between rounded-lg border p-4">
+                <div className="space-y-0.5 pr-4">
+                  <Label htmlFor="auto-detect-browser-lang" className="text-sm font-medium">
+                    Identificar meu idioma pelo navegador
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Quando o destino estiver em Automático, usa o idioma configurado no seu navegador.
+                  </p>
+                </div>
+                <Switch
+                  id="auto-detect-browser-lang"
+                  checked={transPrefs.allowAutoDetectBrowserLang}
+                  disabled={isSavingTrans}
+                  onCheckedChange={(checked) =>
+                    void handleSaveTranslationPrefs({
+                      ...transPrefs,
+                      allowAutoDetectBrowserLang: checked,
+                    })
+                  }
+                />
+              </div>
+            </>
+          )}
         </div>
 
         <Separator />

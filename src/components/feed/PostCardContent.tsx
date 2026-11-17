@@ -22,6 +22,8 @@ import PostPoll from './PostPoll';
 import YoutubeEmbed from '@/components/shared/YoutubeEmbed';
 import PlatformVideo from '@/components/shared/PlatformVideo';
 import SensitiveMediaCover from '@/components/shared/SensitiveMediaCover';
+import TranslateActionLine from '@/components/shared/TranslateActionLine';
+import { useTextTranslation } from '@/hooks/useTextTranslation';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { playbackKey } from '@/lib/media/videoPlaybackState';
@@ -277,6 +279,44 @@ export default function PostCardContent({
     };
   }, [onImageClick, post.id]);
 
+  const embeddedContent = post?.originalPostDetails || post?.quotedComment;
+  const isPostQuote = !!post?.originalPostDetails;
+  const isCommentQuote = !!post?.quotedComment;
+  const detectedYoutubeId = !post?.youtubeVideoId && post?.category !== 'news' && post?.text
+    ? extractYoutubeVideoInfo(post.text).videoId
+    : null;
+  const effectiveYoutubeId = post?.youtubeVideoId || detectedYoutubeId;
+  const previewUrl =
+    post &&
+    post.category !== 'news' &&
+    !effectiveYoutubeId &&
+    !isPostQuote &&
+    !isCommentQuote &&
+    !post.poll &&
+    (!post.media || post.media.length === 0)
+      ? extractFirstUrlFromText(post.text)
+      : null;
+
+  const rawPostText = post?.text ?? '';
+  const displayPostText = React.useMemo(() => {
+    if (!rawPostText || post?.category === 'news') return rawPostText;
+    if (previewUrl) {
+      return rawPostText.replace(previewUrl, '').replace(/\n{3,}/g, '\n\n').trim();
+    }
+    if (isPostQuote) {
+      return rawPostText.replace(/\s*https?:\/\/[^\s]+\s*$/, '').trim();
+    }
+    return rawPostText;
+  }, [rawPostText, post?.category, previewUrl, isPostQuote]);
+
+  const translatableArticleText = React.useMemo(() => {
+    if (post?.category !== 'news') return displayPostText;
+    const plainBody = rawPostText.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    return post?.headline ? `${post.headline}\n\n${plainBody}` : plainBody;
+  }, [post?.category, post?.headline, rawPostText, displayPostText]);
+
+  const translation = useTextTranslation(post && !post.isDeleted ? translatableArticleText : null);
+
   if (!post) return null;
 
   if (post.isDeleted) {
@@ -286,23 +326,6 @@ export default function PostCardContent({
       </div>
     );
   }
-
-  const embeddedContent = post.originalPostDetails || post.quotedComment;
-  const isPostQuote = !!post.originalPostDetails;
-  const isCommentQuote = !!post.quotedComment;
-  const detectedYoutubeId = !post.youtubeVideoId && post.category !== 'news' && post.text
-    ? extractYoutubeVideoInfo(post.text).videoId
-    : null;
-  const effectiveYoutubeId = post.youtubeVideoId || detectedYoutubeId;
-  const previewUrl =
-    post.category !== 'news' &&
-    !effectiveYoutubeId &&
-    !isPostQuote &&
-    !isCommentQuote &&
-    !post.poll &&
-    (!post.media || post.media.length === 0)
-      ? extractFirstUrlFromText(post.text)
-      : null;
 
   const handleImageClick = (e: React.MouseEvent, imageUrl: string) => {
     e.stopPropagation(); // Prevent card navigation
@@ -328,39 +351,46 @@ export default function PostCardContent({
     );
   };
 
-  const rawPostText = post.text ?? '';
-  // Mantém a URL no banco e no envio federado (Fediverso/Bluesky), mas oculta o link bruto duplicado no cartão
-  // quando o cartão de incorporação/prévia já está sendo exibido.
-  const displayPostText = React.useMemo(() => {
-    if (!rawPostText || post.category === 'news') return rawPostText;
-    if (previewUrl) {
-      return rawPostText.replace(previewUrl, '').replace(/\n{3,}/g, '\n\n').trim();
-    }
-    if (isPostQuote) {
-      return rawPostText.replace(/\s*https?:\/\/[^\s]+\s*$/, '').trim();
-    }
-    return rawPostText;
-  }, [rawPostText, post.category, previewUrl, isPostQuote]);
-
   return (
     <>
       {post.category === 'news' && !isSinglePostView ? (
         <TopNewsItem newsItem={post} />
       ) : (
         <>
-          {post.category === 'news' && post.headline && (
+          {post.category === 'news' && post.headline && !translation.isTranslated && (
             <h2 className={cn("text-xl font-semibold text-foreground mb-1", isSinglePostView && "text-2xl")}>
               {post.headline}
             </h2>
           )}
 
-          {post.category === 'news'
-            ? renderFullArticleBody()
-            : displayPostText && (
-                <p className="text-sm text-foreground mb-3 whitespace-pre-wrap">
-                  <TextWithMentions text={displayPostText} customEmojis={post.customEmojis} />
-                </p>
-              )}
+          {post.category === 'news' ? (
+            translation.isTranslated && translation.translatedText ? (
+              <p className="text-sm text-foreground mb-2 whitespace-pre-wrap leading-relaxed">
+                {translation.translatedText}
+              </p>
+            ) : (
+              renderFullArticleBody()
+            )
+          ) : (
+            (translation.isTranslated ? translation.translatedText : displayPostText) && (
+              <p className="text-sm text-foreground mb-1.5 whitespace-pre-wrap">
+                <TextWithMentions
+                  text={(translation.isTranslated ? translation.translatedText : displayPostText) || ''}
+                  customEmojis={post.customEmojis}
+                />
+              </p>
+            )
+          )}
+
+          <TranslateActionLine
+            canTranslate={translation.canTranslate}
+            isTranslating={translation.isTranslating}
+            isTranslated={translation.isTranslated}
+            targetLabel={translation.targetLabel}
+            detectedSource={translation.detectedSource}
+            hasError={translation.hasError}
+            onToggle={translation.toggleTranslation}
+          />
 
           {post.location && (
             <div className="mb-3 flex items-center gap-1.5 text-sm text-muted-foreground" data-testid="post-location">

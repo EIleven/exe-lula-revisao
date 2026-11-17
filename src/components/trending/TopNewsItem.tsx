@@ -12,6 +12,8 @@ import { useMemo } from 'react';
 import { extractFirstMediaFromHtml } from '@/lib/utils/textUtils';
 import { cn } from '@/lib/utils';
 import { useLocale, useTranslations } from 'next-intl';
+import TranslateActionLine from '@/components/shared/TranslateActionLine';
+import { useTextTranslation } from '@/hooks/useTextTranslation';
 
 interface TopNewsItemProps {
   newsItem: Post;
@@ -60,6 +62,10 @@ export default function TopNewsItem({ newsItem, className, density = 'default' }
   }, [newsItem.sourceUrl]);
 
   const isCompact = density === 'compact';
+  const articleTranslationSource = !isCompact
+    ? `${newsItem.headline || ''}\n${previewText || ''}`.trim()
+    : null;
+  const translation = useTextTranslation(articleTranslationSource);
   const articleAuthor = newsItem.user ?? {
     id: newsItem.authorDetails.userId,
     name: newsItem.authorDetails.name,
@@ -100,6 +106,13 @@ export default function TopNewsItem({ newsItem, className, density = 'default' }
 
   const renderArticleBody = () => {
     if (!newsItem.text) return null;
+    if (translation.isTranslated && translation.translatedText) {
+      return (
+        <p className={cn('text-muted-foreground', isCompact ? 'mb-1 line-clamp-1 text-xs' : 'mb-2 line-clamp-3 text-sm')}>
+          {translation.translatedText}
+        </p>
+      );
+    }
 
     return (
       <p className={cn('text-muted-foreground', isCompact ? 'mb-1 line-clamp-1 text-xs' : 'mb-2 line-clamp-3 text-sm')}>
@@ -140,10 +153,24 @@ export default function TopNewsItem({ newsItem, className, density = 'default' }
         </div>
       )}
       <div className="min-w-0 flex-1">
-        <h3 className={cn('mb-1 line-clamp-2 font-semibold text-foreground hover:underline', isCompact ? 'text-sm leading-snug' : 'text-md')}>
-          {newsItem.headline}
-        </h3>
+        {!translation.isTranslated && (
+          <h3 className={cn('mb-1 line-clamp-2 font-semibold text-foreground hover:underline', isCompact ? 'text-sm leading-snug' : 'text-md')}>
+            {newsItem.headline}
+          </h3>
+        )}
         {renderArticleBody()}
+        {!isCompact && (
+          <TranslateActionLine
+            canTranslate={translation.canTranslate}
+            isTranslating={translation.isTranslating}
+            isTranslated={translation.isTranslated}
+            targetLabel={translation.targetLabel}
+            detectedSource={translation.detectedSource}
+            hasError={translation.hasError}
+            onToggle={translation.toggleTranslation}
+            className="mb-1.5"
+          />
+        )}
         <div className={cn('flex min-w-0 items-center justify-between gap-2 text-xs text-muted-foreground/80', isCompact && 'leading-tight')}>
           <span className="truncate">
             {t('by')}{' '}

@@ -45,7 +45,7 @@ import {
   normalizeRecommendationPreferences,
   readRecommendationPreferences,
 } from '../recommendations/preferences';
-import type { RecommendationPreferences } from '@/lib/types';
+import type { RecommendationPreferences, TranslationPreferences } from '@/lib/types';
 import { dispatchFollowState } from '../events/followState';
 import { followedIdsCached } from './followedIdsCache';
 
@@ -263,6 +263,7 @@ export interface UserProfileUpdatePayload {
   displaySensitiveContent?: User['displaySensitiveContent']; // Added for media settings
   mutedWords?: string[];
   recommendationPreferences?: RecommendationPreferences;
+  translationPreferences?: TranslationPreferences;
   pinnedPostId?: string | null;
   isAdmin?: boolean;
   isModerator?: boolean;
@@ -303,6 +304,9 @@ export const updateUserSettings = async (userId: string, data: UserProfileUpdate
     if (data.recommendationPreferences !== undefined) {
       updateData.recommendationPreferences = normalizeRecommendationPreferences(data.recommendationPreferences);
       recommendationCache.delete(userId);
+    }
+    if (data.translationPreferences !== undefined) {
+      updateData.translationPreferences = data.translationPreferences;
     }
     if (data.isAdmin !== undefined) updateData.isAdmin = data.isAdmin;
     if (data.isModerator !== undefined) updateData.isModerator = data.isModerator;

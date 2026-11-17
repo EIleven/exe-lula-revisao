@@ -36,6 +36,12 @@ export interface RecommendationPreferences {
   optOutFromSuggestions?: boolean;
 }
 
+export interface TranslationPreferences {
+  mode: 'button' | 'auto' | 'off';
+  targetLanguage: string;
+  allowAutoDetectBrowserLang: boolean;
+}
+
 
 export type User = {
   id: string;
@@ -92,6 +98,7 @@ export type User = {
   displaySensitiveContent?: boolean; // Added for media settings
   mutedWords?: string[];
   recommendationPreferences?: RecommendationPreferences;
+  translationPreferences?: TranslationPreferences;
   notificationPreferences?: {
     likes?: boolean;
     comments?: boolean;
