@@ -1,6 +1,6 @@
 # Guia de Contribuição e Estrutura de PRs (`CONTRIBUTING.md`)
 
-Este repositório (`exe-lula-revisao`) foi estruturado em modelo **Source-Available proprietário** para que **revisores e colaboradores via GitHub** possam analisar o sistema, registrar diagnósticos e enviar correções (*fixes*) de forma organizada, rastreável e documentada.
+Este repositório (`exe-lula-revisao`) recebe análises técnicas, diagnósticos e correções (*fixes*) de forma organizada, rastreável e documentada.
 
 > **Importante:** Antes de contribuir, leia [`LICENSE`](./LICENSE) e [`ACORDO_REVISAO.md`](./ACORDO_REVISAO.md). Todo acesso, fork, clone ou envio de Pull Request implica concordância com os termos de uso restrito e propriedade intelectual.
 

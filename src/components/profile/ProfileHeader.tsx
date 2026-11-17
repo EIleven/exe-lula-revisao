@@ -9,7 +9,9 @@ import PixSupportBadge from './PixSupportBadge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import EditProfileDialog from '@/components/profile/EditProfileDialog';
+import RemoteFollowButton, { isRemoteFediverseUser } from '@/components/profile/RemoteFollowButton';
 import type { User } from '@/lib/types';
+import { compactCount, exactCountTitle } from '@/lib/media/videoQueue';
 import {
   Edit3, MoreHorizontal, UserPlus, UserMinus, UserCheck, VolumeX, Volume2,
   ShieldOff, ShieldAlert, AlertTriangle, MessageSquare, LogIn,
@@ -167,7 +169,12 @@ export default function ProfileHeader({
       <div className="p-6 pb-4 relative">
          <div className="relative -mt-14" style={{ width: '7rem' }}> 
             <Avatar className="h-28 w-28 rounded-full border-4 border-background ring-2 ring-destructive">
-            <AvatarImage src={profileUser.avatarUrl} alt={profileUser.name} data-ai-hint={profileUser["data-ai-hint"] || "person avatar"}/>
+            <AvatarImage
+              src={profileUser.avatarUrl}
+              alt={profileUser.avatarAlt?.trim() || profileUser.name}
+              title={profileUser.avatarAlt?.trim() || undefined}
+              data-ai-hint={profileUser["data-ai-hint"] || "person avatar"}
+            />
             <AvatarFallback className="text-4xl">{profileUser.name?.substring(0, 1) || '?'}</AvatarFallback>
             </Avatar>
         </div>
@@ -182,14 +189,14 @@ export default function ProfileHeader({
             
             {/* Stats Section - Moved and restyled */}
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pt-2 text-sm text-muted-foreground">
-              <span>
-                <span className="font-bold text-foreground">{profileUser.followingCount || 0}</span> {t('following')}
+              <span title={exactCountTitle(profileUser.followingCount)}>
+                <span className="font-bold text-foreground">{compactCount(profileUser.followingCount)}</span> {t('following')}
               </span>
-              <span>
-                <span className="font-bold text-foreground">{profileUser.followersCount || 0}</span> {t('followers')}
+              <span title={exactCountTitle(profileUser.followersCount)}>
+                <span className="font-bold text-foreground">{compactCount(profileUser.followersCount)}</span> {t('followers')}
               </span>
-              <span>
-                <span className="font-bold text-foreground">{profileUser.postsCount || 0}</span> {t('posts')}
+              <span title={exactCountTitle(profileUser.postsCount)}>
+                <span className="font-bold text-foreground">{compactCount(profileUser.postsCount)}</span> {t('posts')}
               </span>
             </div>
 
@@ -205,9 +212,23 @@ export default function ProfileHeader({
       <div className="flex items-end justify-between gap-2 sm:gap-3">
         <div className="relative -mt-14 shrink-0" style={{ width: '7rem' }}>
           <Avatar className="h-28 w-28 rounded-full border-4 border-background ring-2 ring-primary">
-            <AvatarImage src={profileUser.avatarUrl} alt={profileUser.name} data-ai-hint={profileUser["data-ai-hint"] || "person avatar"} />
+            <AvatarImage
+              src={profileUser.avatarUrl}
+              alt={profileUser.avatarAlt?.trim() || profileUser.name}
+              title={profileUser.avatarAlt?.trim() || undefined}
+              data-ai-hint={profileUser["data-ai-hint"] || "person avatar"}
+            />
             <AvatarFallback className="text-4xl">{profileUser.name?.substring(0, 1) || '?'}</AvatarFallback>
           </Avatar>
+          {profileUser.avatarAlt?.trim() && (
+            <span
+              title={profileUser.avatarAlt.trim()}
+              aria-label={`Descrição da foto de perfil: ${profileUser.avatarAlt.trim()}`}
+              className="absolute bottom-1 right-1 rounded bg-black/75 px-1.5 py-0.5 text-[9px] font-bold tracking-wider text-white ring-1 ring-white/25"
+            >
+              ALT
+            </span>
+          )}
         </div>
 
         <div className="relative z-20 flex items-center justify-end flex-wrap gap-1.5 sm:gap-2 pt-11 min-w-0">
@@ -308,7 +329,13 @@ export default function ProfileHeader({
                 </Button>
               )}
 
-              {profileUser.isFollowing ? (
+              {activeUser && isRemoteFediverseUser(profileUser) ? (
+                <RemoteFollowButton
+                  targetUser={profileUser}
+                  activeUserId={activeUser.id}
+                  variant="profile"
+                />
+              ) : profileUser.isFollowing ? (
                 <div
                   ref={followContainerRef}
                   className="relative"
@@ -462,8 +489,13 @@ export default function ProfileHeader({
                userId={profileUser.id}
                isRemoteFediverse={(profileUser as User & { isRemoteFediverse?: boolean }).isRemoteFediverse}
              />
+             {profileUser.federatedLoginHandle && (
+               <Badge variant="outline" className="text-[11px] font-normal text-muted-foreground">
+                 Conectado via @{profileUser.federatedLoginHandle.replace(/^@/, '')}
+               </Badge>
+             )}
              {profileUser.pronouns && (
-               <span className="text-xs text-muted-foreground bg-secondary/70 rounded-full px-2.5 py-0.5 shrink-0">
+               <span className="text-xs font-medium text-primary border border-primary/70 bg-transparent rounded-full px-2.5 py-0.5 shrink-0">
                  {profileUser.pronouns}
                </span>
              )}
@@ -520,14 +552,14 @@ export default function ProfileHeader({
 
         {/* Stats Section - Moved here */}
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pt-2 text-sm text-muted-foreground">
-          <Link href={`/${locale}/profile/${profileUser.id}/following`} className="hover:underline" data-interactive="true">
-            <span className="font-bold text-foreground">{profileUser.followingCount || 0}</span> {t('following')}
+          <Link href={`/${locale}/profile/${profileUser.id}/following`} className="hover:underline" data-interactive="true" title={exactCountTitle(profileUser.followingCount)}>
+            <span className="font-bold text-foreground">{compactCount(profileUser.followingCount)}</span> {t('following')}
           </Link>
-          <Link href={`/${locale}/profile/${profileUser.id}/followers`} className="hover:underline" data-interactive="true">
-            <span className="font-bold text-foreground">{profileUser.followersCount || 0}</span> {t('followers')}
+          <Link href={`/${locale}/profile/${profileUser.id}/followers`} className="hover:underline" data-interactive="true" title={exactCountTitle(profileUser.followersCount)}>
+            <span className="font-bold text-foreground">{compactCount(profileUser.followersCount)}</span> {t('followers')}
           </Link>
-          <span>
-            <span className="font-bold text-foreground">{profileUser.postsCount || 0}</span> {t('posts')}
+          <span title={exactCountTitle(profileUser.postsCount)}>
+            <span className="font-bold text-foreground">{compactCount(profileUser.postsCount)}</span> {t('posts')}
           </span>
         </div>
       </div>

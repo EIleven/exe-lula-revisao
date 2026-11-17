@@ -1,4 +1,60 @@
+// src/lib/utils/themeColor.ts
+
 import type React from 'react';
+
+export interface NetworkThemeColor {
+  readonly id: string;
+  readonly name: string;
+  readonly hex: string;
+}
+
+/**
+ * Paleta oficial do Hiperverso:
+ * 12 cores cósmicas, vibrantes e de alto contraste (WCAG AA).
+ * Balanceadas para visibilidade cristalina contra fundos escuros/pretos e claros.
+ * Proibido preto, branco e cinzas opacos.
+ */
+export const OFFICIAL_NETWORK_PALETTE: readonly NetworkThemeColor[] = [
+  { id: 'cosmic-blue', name: 'Azul Cósmico', hex: '#2563eb' },
+  { id: 'scarlet-nova', name: 'Fogo Escarlate', hex: '#dc2626' },
+  { id: 'aurora-emerald', name: 'Aurora Esmeralda', hex: '#059669' },
+  { id: 'supernova-indigo', name: 'Supernova Índigo', hex: '#6366f1' },
+  { id: 'solar-amber', name: 'Solar Âmbar', hex: '#d97706' },
+  { id: 'cosmic-orchid', name: 'Orquídea Cósmica', hex: '#a855f7' },
+  { id: 'quantum-magenta', name: 'Magenta Quântico', hex: '#c026d3' },
+  { id: 'pulsar-ruby', name: 'Rubi Pulsar', hex: '#e11d48' },
+  { id: 'oceanic-teal', name: 'Turquesa Oceânica', hex: '#0d9488' },
+  { id: 'quasar-violet', name: 'Quasar Violeta', hex: '#8b5cf6' },
+  { id: 'cosmic-coral', name: 'Coral Cósmico', hex: '#ea580c' },
+  { id: 'nebula-cyan', name: 'Nebulosa Ciano', hex: '#0891b2' },
+] as const;
+
+export const OFFICIAL_ROTATION_INTERVAL_MS = 5 * 60 * 1000; // 5 minutos
+
+/**
+ * Calcula a cor oficial dinâmica da rede para o bloco de 5 minutos atual (ou especificado).
+ * Determinístico e universal: sincronizado entre abas e visitantes do mundo inteiro nos marcos :00, :05, :10...
+ */
+export function getOfficialDynamicColor(timestampMs: number = Date.now()): NetworkThemeColor {
+  const slot = Math.floor(timestampMs / OFFICIAL_ROTATION_INTERVAL_MS);
+  const day = Math.floor(timestampMs / 86_400_000);
+  // O passo 7 é coprimo de 12 (comprimento da paleta): garante salto entre matizes distintos
+  // sem repetir a cor imediatamente anterior. O offset diário traz variação orgânica contínua.
+  const index = Math.abs((slot * 7 + day) % OFFICIAL_NETWORK_PALETTE.length);
+  return OFFICIAL_NETWORK_PALETTE[index];
+}
+
+/**
+ * Retorna a cor de destaque efetiva:
+ * - Se o usuário tem cor personalizada válida (`userAccentColor`), ela é preservada intacta.
+ * - Se for visitante ou não tiver cor customizada, retorna a cor oficial de 5 min do Hiperverso.
+ */
+export function getEffectiveAccentColor(userAccentColor?: string | null, timestampMs: number = Date.now()): string {
+  if (isValidHexColor(userAccentColor)) {
+    return userAccentColor;
+  }
+  return getOfficialDynamicColor(timestampMs).hex;
+}
 
 export const PROFILE_ACCENT_PRESETS: { name: string; hex: string }[] = [
   { name: 'Azul padrão', hex: '#2563eb' },
@@ -67,23 +123,34 @@ export function getContrastForegroundHsl(hex: string): string {
   return luminance > 0.62 ? '0 0% 9%' : '0 0% 98%';
 }
 
+// Mesmo formato dos tons calculados (`H S% L%`, separados por ESPAÇO): com vírgulas, `hsl(var(--primary) / 0.25)` (usado em
+// `bg-primary/25`, `ring-primary/30`...) é CSS inválido e o realce some.
 const DEFAULT_ACCENT_STYLE: React.CSSProperties = {
-  '--primary': '228, 90%, 55%',
+  '--primary': '228 90% 55%',
   '--primary-foreground': '9 21% 86%',
-  '--accent': '228, 90%, 55%',
+  '--accent': '228 90% 55%',
   '--accent-foreground': '9 21% 86%',
-  '--ring': '228, 90%, 55%',
-  '--sidebar-primary': '228, 90%, 55%',
+  '--ring': '228 90% 55%',
+  '--sidebar-primary': '228 90% 55%',
   '--sidebar-primary-foreground': '9 21% 86%',
-  '--sidebar-accent': '228, 90%, 55%',
+  '--sidebar-accent': '228 90% 55%',
   '--sidebar-accent-foreground': '9 21% 86%',
-  '--sidebar-ring': '228, 90%, 55%',
+  '--sidebar-ring': '228 90% 55%',
 } as React.CSSProperties;
+
+/** O tema de alto contraste (next-themes): acessibilidade vem ANTES da cor de gosto. */
+export const HIGH_CONTRAST_THEME = 'high-contrast';
+
+/** O documento está no alto contraste? (leitura direta da classe do <html>: sem assinar o tema em cada cartão do feed) */
+export function isHighContrastDocument(): boolean {
+  return typeof document !== 'undefined' && document.documentElement.classList.contains(HIGH_CONTRAST_THEME);
+}
 
 export function getProfileAccentStyle(
   accentColor?: string | null,
-  options?: { fallbackToDefault?: boolean }
+  options?: { fallbackToDefault?: boolean; highContrast?: boolean }
 ): React.CSSProperties | undefined {
+  if (options?.highContrast) return undefined;
   if (!isValidHexColor(accentColor)) {
     return options?.fallbackToDefault ? DEFAULT_ACCENT_STYLE : undefined;
   }
@@ -119,16 +186,32 @@ const ACCENT_CSS_VARS = [
   '--sidebar-ring',
 ] as const;
 
-export function applyDocumentAccentColor(accentColor?: string | null): void {
+export function applyDocumentAccentColor(
+  accentColor?: string | null,
+  options?: { highContrast?: boolean; fallbackToDynamicOfficial?: boolean }
+): void {
   if (typeof document === 'undefined') return;
   const rootStyle = document.documentElement.style;
-  const vars = getProfileAccentStyle(accentColor);
+
+  if (options?.highContrast) {
+    for (const key of ACCENT_CSS_VARS) {
+      rootStyle.removeProperty(key);
+    }
+    return;
+  }
+
+  const targetColor = isValidHexColor(accentColor)
+    ? accentColor
+    : (options?.fallbackToDynamicOfficial ? getOfficialDynamicColor().hex : null);
+
+  const vars = targetColor ? getProfileAccentStyle(targetColor) : undefined;
   if (!vars) {
     for (const key of ACCENT_CSS_VARS) {
       rootStyle.removeProperty(key);
     }
     return;
   }
+
   const record = vars as Record<string, string>;
   for (const key of ACCENT_CSS_VARS) {
     if (record[key]) {
@@ -136,4 +219,3 @@ export function applyDocumentAccentColor(accentColor?: string | null): void {
     }
   }
 }
-

@@ -17,6 +17,9 @@ import { Separator } from '@/components/ui/separator';
 import { updateUserSettings } from '@/lib/services/userService';
 import { useCurrentUser } from '@/contexts/CurrentUserContext';
 import AccountSecuritySection from './AccountSecuritySection';
+import RecommendationSettingsDialog from '@/components/recommendations/RecommendationSettingsDialog';
+import { Button } from '@/components/ui/button';
+import { SlidersHorizontal } from 'lucide-react';
 
 interface SettingsProps {
   user: User;
@@ -26,6 +29,7 @@ export default function PrivacySecuritySettings({ user }: SettingsProps) {
   const { toast } = useToast();
   const { refreshCurrentUser } = useCurrentUser();
   const [isUpdating, setIsUpdating] = useState<string | null>(null);
+  const [recDialogOpen, setRecDialogOpen] = useState(false);
 
   const handleSettingChange = async (key: keyof User, value: any) => {
     setIsUpdating(key);
@@ -99,7 +103,23 @@ export default function PrivacySecuritySettings({ user }: SettingsProps) {
 
         <Separator />
 
+        <div className="flex items-center justify-between gap-4">
+          <div className="space-y-1">
+            <Label className="text-base font-medium">Algoritmo e Sugestões de Perfis</Label>
+            <p className="text-sm text-muted-foreground">
+              Escolha se quer ver sugestões/relacionados, quais dados podem ser usados ou oculte seu perfil das listas.
+            </p>
+          </div>
+          <Button type="button" variant="outline" size="sm" onClick={() => setRecDialogOpen(true)}>
+            <SlidersHorizontal className="h-4 w-4 mr-1.5" />
+            Configurar
+          </Button>
+        </div>
+
+        <Separator />
+
         <AccountSecuritySection />
+        <RecommendationSettingsDialog open={recDialogOpen} onOpenChange={setRecDialogOpen} />
       </CardContent>
     </>
   );

@@ -1,13 +1,13 @@
 // src/components/layout/DesktopSidebar.tsx
 'use client';
 
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   Home, TrendingUp, User, Settings, MessageSquare, LogOut, 
   FilePlus2, MessageSquarePlus, Bell, Search as SearchIcon,
-  LogIn, UserPlus, Newspaper, Edit, Bookmark, Folder, Shield, ListPlus // Import ListPlus
+  LogIn, UserPlus, Newspaper, Edit, Bookmark, Folder, Shield, ListPlus, ArrowUp
 } from 'lucide-react';
 import Logo from '@/components/shared/Logo';
 import {
@@ -26,11 +26,18 @@ import { Dialog, DialogTrigger } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import type { User as UserType, Post } from '@/lib/types';
+import { compactCount, exactCountTitle } from '@/lib/media/videoQueue';
 import { Badge as UiBadge } from '@/components/ui/badge';
 import { useLocale, useTranslations } from 'next-intl';
 import Image from 'next/image';
 import CreatePostDialogContent from '@/components/feed/CreatePostDialogContent';
 import CreateNewsDialogContent from '@/components/feed/CreateNewsDialogContent';
+import UniverseLensBar from '@/components/idp2p/UniverseLensBar';
+import {
+  scrollToTopSmoothly,
+  subscribeFeedScrollTarget,
+  type FeedScrollTarget,
+} from '@/lib/feedScrollTop';
 
 
 interface NavItem {
@@ -87,7 +94,7 @@ const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
     <Sidebar
       variant="sidebar"
       collapsible="icon"
-      className="hidden md:flex border-r border-sidebar-border h-screen sticky top-0 transition-[width] duration-200"
+      className="hidden md:flex relative border-r border-sidebar-border h-screen sticky top-0 transition-[width] duration-200"
       style={{ width: isCompact ? '80px' : 'var(--sidebar-left-width)' }}
     >
       <SidebarHeader className="p-4 border-b border-sidebar-border text-center">
@@ -107,19 +114,28 @@ const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
               <div className={cn("mt-2", isCompact && "hidden")}><p className="font-semibold text-md text-sidebar-foreground">{currentUser.name}</p><p className="text-sm text-sidebar-foreground/70">@{currentUser.username}</p></div>
             </Link>
             <div className={cn("flex space-x-4 text-xs text-sidebar-foreground/70 pt-1", isCompact && "hidden")}>
-              <Link href={`/${locale}/profile/${currentUser.id}/following`} className="hover:underline" onClick={(e)=> e.stopPropagation()} data-interactive="true">
-                <span className="font-bold text-sidebar-foreground">{currentUser.followingCount || 0}</span> {t('following')}
+              <Link href={`/${locale}/profile/${currentUser.id}/following`} className="hover:underline" onClick={(e)=> e.stopPropagation()} data-interactive="true" title={exactCountTitle(currentUser.followingCount)}>
+                <span className="font-bold text-sidebar-foreground">{compactCount(currentUser.followingCount)}</span> {t('following')}
               </Link>
-              <Link href={`/${locale}/profile/${currentUser.id}/followers`} className="hover:underline" onClick={(e)=> e.stopPropagation()} data-interactive="true">
-                <span className="font-bold text-sidebar-foreground">{currentUser.followersCount || 0}</span> {t('followers')}
+              <Link href={`/${locale}/profile/${currentUser.id}/followers`} className="hover:underline" onClick={(e)=> e.stopPropagation()} data-interactive="true" title={exactCountTitle(currentUser.followersCount)}>
+                <span className="font-bold text-sidebar-foreground">{compactCount(currentUser.followersCount)}</span> {t('followers')}
               </Link>
             </div>
+            <UniverseLensBar
+              userId={currentUser.id}
+              name={currentUser.name}
+              avatarUrl={currentUser.avatarUrl}
+              username={currentUser.username}
+              federatedLoginProvider={currentUser.federatedLoginProvider}
+              federatedLoginHandle={currentUser.federatedLoginHandle}
+              compact={isCompact}
+            />
           </div>
         ) : (
-          <Link href={`/${locale}`} aria-label="Exe. Lula Home" className="flex flex-col items-center justify-center py-8 group">
+          <Link href={`/${locale}`} aria-label="HiperVerso.App Home" className="flex flex-col items-center justify-center py-8 group">
             <Image
               src="/brand/lula-logo.svg"
-              alt="Exe. Lula Logo"
+              alt="HiperVerso.App Logo"
               width={isCompact ? 40 : 48}
               height={isCompact ? 40 : 48}
               className="group-hover:opacity-80 transition-all"
@@ -130,7 +146,7 @@ const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
                 isCompact && "hidden"
               )}
             >
-              Exe. Lula
+              HiperVerso.App
             </span>
           </Link>
         )}
@@ -271,20 +287,32 @@ const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
         ) : null }
       </SidebarMenu>
     </SidebarContent>
-    <SidebarFooter className="p-4 space-y-2">
+    <SidebarFooter
+      className={cn(
+        "p-4 space-y-2",
+        isCompact && "px-2 pb-16",
+        !isCompact && (!currentUser || !canCreateContent) && "pb-16",
+      )}
+    >
       {(!clientHasMounted || isLoadingCurrentUser) ? (
         <><Skeleton className="h-10 w-full rounded-md" /><Skeleton className="h-10 w-full rounded-md" /></>
       ) : currentUser && canCreateContent ? (
         <>
           <Dialog open={isCreatePostDialogOpen} onOpenChange={setIsCreatePostDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="self-center rounded-full px-8"><MessageSquarePlus className={cn("mr-2 h-5 w-5", isCompact && "mx-auto")} /><span className={cn(isCompact && "hidden")}>{t('post')}</span></Button>
+              <Button className={cn("self-center rounded-full", isCompact ? "h-10 w-10 p-0" : "px-8")} aria-label={t('post')}>
+                <MessageSquarePlus className={cn("h-5 w-5", !isCompact && "mr-2")} />
+                <span className={cn(isCompact && "hidden")}>{t('post')}</span>
+              </Button>
             </DialogTrigger>
             <CreatePostDialogContent onPostCreated={onPostCreated} dialogClose={() => setIsCreatePostDialogOpen(false)} />
           </Dialog>
           <Dialog open={isCreateNewsDialogOpen} onOpenChange={setIsCreateNewsDialogOpen}>
             <DialogTrigger asChild>
-              <Button variant="secondary" className="self-center rounded-full px-8"><FilePlus2 className={cn("mr-2 h-5 w-5", isCompact && "mx-auto")} /><span className={cn(isCompact && "hidden")}>{t('article')}</span></Button>
+              <Button variant="secondary" className={cn("self-center rounded-full", isCompact ? "h-10 w-10 p-0" : "px-8")} aria-label={t('article')}>
+                <FilePlus2 className={cn("h-5 w-5", !isCompact && "mr-2")} />
+                <span className={cn(isCompact && "hidden")}>{t('article')}</span>
+              </Button>
             </DialogTrigger>
             <CreateNewsDialogContent onPostCreated={onPostCreated} dialogClose={() => setIsCreateNewsDialogOpen(false)} />
           </Dialog>
@@ -314,8 +342,83 @@ const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
           </div>
       )}
     </SidebarFooter>
+    <DesktopScrollTopButton isCompact={isCompact} />
   </Sidebar>
   );
 };
+
+const SHOW_DESKTOP_SCROLL_TOP_AFTER = 300;
+
+function DesktopScrollTopButton({ isCompact }: { isCompact: boolean }) {
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const [feedTarget, setFeedTarget] = useState<FeedScrollTarget | null>(null);
+
+  useEffect(() => subscribeFeedScrollTarget(setFeedTarget), []);
+
+  useEffect(() => {
+    let rafId = 0;
+    const syncVisibility = () => {
+      rafId = 0;
+      const button = buttonRef.current;
+      if (!button) return;
+      const shouldShow = window.scrollY > SHOW_DESKTOP_SCROLL_TOP_AFTER;
+      if ((button.dataset.visible === 'true') === shouldShow) return;
+      button.dataset.visible = shouldShow ? 'true' : 'false';
+      button.setAttribute('aria-hidden', shouldShow ? 'false' : 'true');
+      button.tabIndex = shouldShow ? 0 : -1;
+    };
+    const onScroll = () => {
+      if (rafId !== 0) return;
+      rafId = window.requestAnimationFrame(syncVisibility);
+    };
+    syncVisibility();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      if (rafId !== 0) window.cancelAnimationFrame(rafId);
+    };
+  }, []);
+
+  const hasNewPosts = feedTarget?.hasNewPosts === true;
+  const label = hasNewPosts ? 'Voltar ao topo e ver novos posts' : 'Voltar ao topo';
+
+  return (
+    <div
+      className={cn(
+        "pointer-events-none absolute z-30",
+        isCompact ? "bottom-3 left-1/2 -translate-x-1/2" : "bottom-4 right-3.5",
+      )}
+    >
+      <Button
+        ref={buttonRef}
+        type="button"
+        variant={hasNewPosts ? "default" : "secondary"}
+        size="icon"
+        onClick={() => scrollToTopSmoothly(feedTarget)}
+        aria-label={label}
+        title={label}
+        aria-hidden="true"
+        data-visible="false"
+        tabIndex={-1}
+        className={cn(
+          "relative h-10 w-10 rounded-full shadow-lg transition-all duration-200 pointer-events-none scale-90 opacity-0",
+          "data-[visible=true]:scale-100 data-[visible=true]:opacity-100 data-[visible=true]:pointer-events-auto",
+          "hover:scale-105 active:scale-95",
+          hasNewPosts
+            ? "bg-primary text-primary-foreground hover:bg-primary/90 ring-2 ring-primary/25"
+            : "bg-card/95 text-foreground border border-border hover:border-primary/60 hover:bg-primary hover:text-primary-foreground",
+        )}
+      >
+        <ArrowUp className="h-5 w-5" aria-hidden="true" />
+        {hasNewPosts && (
+          <span
+            className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-400 ring-2 ring-background"
+            aria-hidden="true"
+          />
+        )}
+      </Button>
+    </div>
+  );
+}
 
 export default DesktopSidebar;

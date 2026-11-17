@@ -1,9 +1,6 @@
-# Exe. Lula (HiperVerso) — Repositório de Revisão Técnica (`exe-lula-revisao`)
+# Exe. Lula (HiperVerso) — Repositório Público (`exe-lula-revisao`)
 
-> **CÓDIGO PROPRIETÁRIO (SOURCE-AVAILABLE) — NÃO É CÓDIGO ABERTO**  
-> Este repositório contém uma versão sanitizada do sistema **Exe. Lula** (`HiperVerso`) disponibilizada para análise técnica, auditoria e envio de correções via Pull Request sob os termos estritos da [`LICENSE`](./LICENSE) e do [`ACORDO_REVISAO.md`](./ACORDO_REVISAO.md).  
-> O repositório principal de produção permanece estritamente privado.  
-> Leia obrigatoriamente [`LICENSE`](./LICENSE) e [`ACORDO_REVISAO.md`](./ACORDO_REVISAO.md) antes de prosseguir.
+> Repositório público do sistema **Exe. Lula** (`HiperVerso`) para análise técnica, revisão e envio de contribuições via Pull Request, regido pela [`LICENSE`](./LICENSE) e pelo [`ACORDO_REVISAO.md`](./ACORDO_REVISAO.md).
 
 ---
 

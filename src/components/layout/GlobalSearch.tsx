@@ -14,7 +14,8 @@ import {
 } from "@/components/ui/popover";
 import { performGlobalSearch, type SearchResult } from '@/lib/services/searchService';
 import { useDebounce } from '@/hooks/use-debounce';
-import { Loader2, Search, Hash, User as UserIcon, History, X } from 'lucide-react';
+import { Loader2, Search, Hash, User as UserIcon, History, X, Globe, ExternalLink } from 'lucide-react';
+import { classifySearchQuery } from '@/lib/search/searchQueryParser';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLocale } from 'next-intl';
@@ -28,10 +29,19 @@ interface GlobalSearchProps {
   setIsExpanded: (expanded: boolean) => void;
 }
 
+interface RemoteLookupPreview {
+  handle: string;
+  domain: string;
+  name: string;
+  iconUrl: string | null;
+}
+
 export default function GlobalSearch({ isExpanded, setIsExpanded }: GlobalSearchProps) {
   const t = useTranslations('GlobalSearch');
   const [searchQuery, setSearchQuery] = useState('');
   const [results, setResults] = useState<SearchResult | null>(null);
+  const [remoteLookup, setRemoteLookup] = useState<RemoteLookupPreview | null>(null);
+  const [localUrlPath, setLocalUrlPath] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isPopoverOpen, setIsPopoverOpen] = useState(false);
   const [searchHistory, setSearchHistory] = useState<string[]>([]);
@@ -78,21 +88,63 @@ export default function GlobalSearch({ isExpanded, setIsExpanded }: GlobalSearch
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
     const search = async () => {
-      if (debouncedSearchQuery.length > 1) {
+      const trimmed = debouncedSearchQuery.trim();
+      if (trimmed.length > 1) {
         setIsLoading(true);
-        const searchResults = await performGlobalSearch(debouncedSearchQuery);
-        setResults(searchResults);
-        setIsLoading(false);
-        setIsPopoverOpen(true);
+        setRemoteLookup(null);
+        setLocalUrlPath(null);
+
+        const classified = classifySearchQuery(trimmed);
+        if (classified.kind === 'local-url') {
+          if (!cancelled) {
+            setLocalUrlPath(classified.path);
+            setResults({ users: [], hashtags: [] });
+            setIsLoading(false);
+            setIsPopoverOpen(true);
+          }
+          return;
+        }
+
+        const shouldLookupRemote =
+          classified.kind === 'fediverse-handle' || classified.kind === 'fediverse-profile-url';
+
+        const [searchResults, fediRes] = await Promise.all([
+          performGlobalSearch(trimmed),
+          shouldLookupRemote
+            ? fetch(`/api/ap/lookup?q=${encodeURIComponent(trimmed)}`)
+                .then((r) => (r.ok ? r.json() : null))
+                .catch(() => null)
+            : Promise.resolve(null),
+        ]);
+
+        if (!cancelled) {
+          setResults(searchResults);
+          if (fediRes && typeof fediRes.handle === 'string') {
+            setRemoteLookup({
+              handle: fediRes.handle,
+              domain: fediRes.domain,
+              name: fediRes.name,
+              iconUrl: fediRes.iconUrl ?? null,
+            });
+          }
+          setIsLoading(false);
+          setIsPopoverOpen(true);
+        }
       } else {
         setResults(null);
+        setRemoteLookup(null);
+        setLocalUrlPath(null);
         if (searchQuery.length === 0 && searchHistory.length === 0) {
-           setIsPopoverOpen(false);
+          setIsPopoverOpen(false);
         }
       }
     };
-    search();
+    void search();
+    return () => {
+      cancelled = true;
+    };
   }, [debouncedSearchQuery, searchQuery.length, searchHistory.length]);
 
   const addToHistory = (term: string) => {
@@ -116,6 +168,11 @@ export default function GlobalSearch({ isExpanded, setIsExpanded }: GlobalSearch
       addToHistory(term);
       setIsPopoverOpen(false);
       setIsExpanded(false);
+      const classified = classifySearchQuery(term);
+      if (classified.kind === 'local-url') {
+        router.push(classified.path);
+        return;
+      }
       // Use router.push for client-side navigation without a full page reload.
       router.push(`/${locale}/search?q=${encodeURIComponent(term)}`);
     }
@@ -208,9 +265,42 @@ export default function GlobalSearch({ isExpanded, setIsExpanded }: GlobalSearch
                     </div>
                   ))}
                 </div>
-              ) : results && (results.users.length > 0 || results.hashtags.length > 0) ? (
+              ) : (localUrlPath || remoteLookup || (results && (results.users.length > 0 || results.hashtags.length > 0))) ? (
                 <div className="space-y-4">
-                  {results.users.length > 0 && (
+                  {localUrlPath && (
+                    <div
+                      onClick={() => handleSelect(localUrlPath, searchQuery.trim())}
+                      className="flex items-center gap-3 p-2.5 rounded-md border border-primary/30 bg-primary/5 hover:bg-primary/10 transition-colors cursor-pointer"
+                    >
+                      <ExternalLink className="h-4 w-4 text-primary shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium leading-none">Abrir link no HiperVerso</p>
+                        <p className="text-xs text-muted-foreground truncate mt-1 font-mono">{localUrlPath}</p>
+                      </div>
+                    </div>
+                  )}
+                  {remoteLookup && (
+                    <div className="space-y-2">
+                      <h4 className="font-semibold text-sm px-2 flex items-center">
+                        <Globe className="mr-2 h-4 w-4 text-primary" />
+                        Fediverso ({remoteLookup.domain})
+                      </h4>
+                      <div
+                        onClick={() => handleSelect(`/${locale}/fediverse/${encodeURIComponent(remoteLookup.handle)}`, `@${remoteLookup.handle}`)}
+                        className="flex items-center gap-3 p-2 rounded-md hover:bg-accent transition-colors cursor-pointer"
+                      >
+                        <Avatar className="h-8 w-8">
+                          {remoteLookup.iconUrl && <AvatarImage src={remoteLookup.iconUrl} alt={remoteLookup.name} />}
+                          <AvatarFallback>{remoteLookup.name?.[0] || '?'}</AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium leading-none truncate">{remoteLookup.name}</p>
+                          <p className="text-xs text-muted-foreground truncate">@{remoteLookup.handle}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {results && results.users.length > 0 && (
                     <div className="space-y-2">
                       <h4 className="font-semibold text-sm px-2 flex items-center"><UserIcon className="mr-2 h-4 w-4"/>{t('users')}</h4>
                       {results.users.map(user => (
@@ -227,7 +317,7 @@ export default function GlobalSearch({ isExpanded, setIsExpanded }: GlobalSearch
                       ))}
                     </div>
                   )}
-                  {results.hashtags.length > 0 && (
+                  {results && results.hashtags.length > 0 && (
                     <div className="space-y-2">
                       <h4 className="font-semibold text-sm px-2 flex items-center"><Hash className="mr-2 h-4 w-4"/>{t('topics')}</h4>
                       {results.hashtags.map((tag) => (

@@ -23,7 +23,7 @@ O Proprietário disponibiliza no GitHub uma versão espelhada e sanitizada do c�
 
 Ao visualizar, clonar, criar *fork*, executar localmente ou abrir qualquer *Issue* / *Pull Request* em `exe-lula-revisao`, você concorda integralmente com as seguintes condições:
 
-- **Código proprietário (não é open source):** este repositório é **Source-Available proprietário**, regido exclusivamente pela [`LICENSE`](./LICENSE) e por este acordo. Nenhuma licença open source (MIT, Apache, GPL, BSD etc.) se aplica.
+- **Licenciamento:** este repositório é regido exclusivamente pela [`LICENSE`](./LICENSE) e por este acordo.
 - **Uso estritamente para estudo, auditoria e contribuição:** o código pode ser lido no GitHub e executado em ambiente local de testes/emuladores apenas para fins de análise técnica, validação de correções e envio de melhorias ao projeto oficial.
 - **Proibição de uso comercial, paralelo ou concorrente:** é proibido utilizar este código, sua arquitetura, marca ou interface para subir instância concorrente, clone, fork independente em produção ou serviço comercial/público próprio ou de terceiros.
 - **Proibição de redistribuição externa:** é proibido republicar, empacotar ou redistribuir o código-fonte (no todo ou em partes) fora dos mecanismos padrão de visualização e *fork* vinculados ao fluxo de revisão neste repositório no GitHub.

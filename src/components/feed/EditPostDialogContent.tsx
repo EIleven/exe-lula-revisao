@@ -29,7 +29,7 @@ import { useToast } from '@/hooks/use-toast';
 import { editPost as serverEditPost } from '@/lib/services/posts/editPostAction';
 import type { Post, ReplyPermission, Media } from '@/lib/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, Link as LinkIcon, Users, Image as ImageIcon, XCircle, Newspaper, UploadCloud } from 'lucide-react';
+import { Loader2, Link as LinkIcon, Users, Image as ImageIcon, XCircle, Newspaper, UploadCloud, Accessibility, ShieldAlert } from 'lucide-react';
 import { NEWS_BODY_MAX_LENGTH, NEWS_HEADLINE_MAX_LENGTH, ECHO_COMMENT_MAX_LENGTH } from '@/lib/constants/domain';
 import ArticleEditor from '@/components/editor/ArticleEditor'; 
 import { uploadFileToStorage, postMediaPathFactory, isLikelyVideoFile } from '@/lib/services/mediaUploadService';
@@ -43,6 +43,7 @@ import { extractYoutubeVideoInfo } from '@/lib/utils/textUtils';
 import { useVisualViewport } from '@/hooks/useVisualViewport';
 import { useIsMobile } from '@/hooks/use-mobile';
 import PlatformVideo from '@/components/shared/PlatformVideo';
+import AltTextDialog from '@/components/shared/AltTextDialog';
 import { ScrollArea } from '../ui/scroll-area';
 import YoutubeEmbed from '@/components/shared/YoutubeEmbed';
 import { useCurrentUserId } from '@/contexts/CurrentUserContext';
@@ -100,11 +101,13 @@ export default function EditPostDialogContent({ postToEdit, onPostEdited, dialog
   const [replyPermission, setReplyPermission] = useState<ReplyPermission>(postToEdit.replyPermission);
   const [allowReposts, setAllowReposts] = useState(postToEdit.allowReposts);
   const [media, setMedia] = useState<Media[]>(postToEdit.media || []);
+  const [sensitive, setSensitive] = useState<boolean>(Boolean(postToEdit.sensitive));
   const [detectedVideoId, setDetectedVideoId] = useState<string | null>(postToEdit.youtubeVideoId || null);
   const [charCount, setCharCount] = useState(postToEdit.text?.length || 0);
   const [showCustomCategoryInput, setShowCustomCategoryInput] = useState(false);
   const [isUploadingMedia, setIsUploadingMedia] = useState(false);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const [editingAltIndex, setEditingAltIndex] = useState<number | null>(null);
   const currentUserId = useCurrentUserId();
   
   const editorRef = useRef<Editor>(null);
@@ -146,11 +149,19 @@ export default function EditPostDialogContent({ postToEdit, onPostEdited, dialog
         text: postToEdit.text || '',
       });
     }
+    setSensitive(Boolean(postToEdit.sensitive));
   }, [postToEdit, form, isNews]);
 
+  useEffect(() => {
+    if (media.length === 0 && sensitive) {
+      setSensitive(false);
+    }
+  }, [media.length, sensitive]);
+
   const hasInteractionSettingsChanged = replyPermission !== postToEdit.replyPermission || allowReposts !== postToEdit.allowReposts;
+  const hasSensitiveChanged = (media.length > 0 ? sensitive : false) !== Boolean(postToEdit.sensitive);
   const hasMediaChanged = JSON.stringify(media) !== JSON.stringify(postToEdit.media || []) || detectedVideoId !== (postToEdit.youtubeVideoId || null);
-  const canSubmit = !isSubmitting && !isUploadingMedia && (isDirty || hasMediaChanged || hasInteractionSettingsChanged);
+  const canSubmit = !isSubmitting && !isUploadingMedia && (isDirty || hasMediaChanged || hasInteractionSettingsChanged || hasSensitiveChanged);
   
   const handleEditorUpdate = (htmlContent: string) => {
     setValue('text', htmlContent, { shouldValidate: true, shouldDirty: true });
@@ -237,6 +248,7 @@ export default function EditPostDialogContent({ postToEdit, onPostEdited, dialog
         allowReposts,
         replyPermission,
         media: media,
+        sensitive: media.length > 0 ? sensitive : false,
         youtubeVideoId: detectedVideoId || null,
       };
 
@@ -375,12 +387,37 @@ export default function EditPostDialogContent({ postToEdit, onPostEdited, dialog
                           {mediaItem.type === 'video' ? (
                             <PlatformVideo src={mediaItem.url} className="h-full w-full rounded-md object-cover" preload="metadata" playsInline />
                           ) : (
-                            <Image src={mediaItem.url} alt={mediaItem.alt || `Mídia ${index + 1}`} fill className="rounded-md object-cover" />
+                            <>
+                              <Image src={mediaItem.url} alt={mediaItem.alt || `Mídia ${index + 1}`} fill className="rounded-md object-cover" />
+                              <button
+                                type="button"
+                                onClick={() => setEditingAltIndex(index)}
+                                className="absolute bottom-1.5 left-1.5 z-10 inline-flex items-center gap-1 rounded-full bg-black/75 px-2 py-0.5 text-[11px] font-semibold text-white border border-white/20 hover:bg-black"
+                                title={mediaItem.alt ? 'Editar Alt Text' : 'Adicionar Alt Text'}
+                              >
+                                <Accessibility className="h-3 w-3 text-emerald-400" />
+                                {mediaItem.alt?.trim() ? 'ALT' : '+ ALT'}
+                              </button>
+                            </>
                           )}
                           <Button type="button" variant="destructive" size="icon" className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100" onClick={() => removeImage(index)}><XCircle className="h-4 w-4" /></Button>
                       </div>
                   ))}
               </div>
+            )}
+            {editingAltIndex !== null && (
+              <AltTextDialog
+                isOpen={editingAltIndex !== null}
+                onOpenChange={(open) => {
+                  if (!open) setEditingAltIndex(null);
+                }}
+                initialAltText={media[editingAltIndex]?.alt}
+                onSave={(newAlt) => {
+                  setMedia((prev) =>
+                    prev.map((m, idx) => (idx === editingAltIndex ? { ...m, alt: newAlt.trim() || undefined } : m))
+                  );
+                }}
+              />
             )}
              {detectedVideoId && (
                 <YoutubeEmbed videoId={detectedVideoId} className="mt-2" title="Prévia do vídeo do YouTube" />
@@ -427,6 +464,20 @@ export default function EditPostDialogContent({ postToEdit, onPostEdited, dialog
                               />
                               <Button type="button" variant="ghost" size="icon" onClick={() => fileInputRef.current?.click()} className="text-primary h-8 w-8" disabled={isSubmitting || isUploadingMedia} aria-label="Adicionar imagem ou vídeo" title="Adicionar imagem ou vídeo">
                                   <ImageIcon className="h-5 w-5"/>
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => setSensitive((prev) => !prev)}
+                                className={cn('text-primary h-8 w-8', sensitive && 'bg-destructive/15 text-destructive')}
+                                disabled={isSubmitting || isUploadingMedia || media.length === 0}
+                                aria-label="Marcar mídia como conteúdo sensível"
+                                title="Marcar mídia como conteúdo sensível"
+                                aria-pressed={sensitive}
+                                data-testid="composer-sensitive-button"
+                              >
+                                <ShieldAlert className="h-5 w-5" />
                               </Button>
                           </>
                       )}

@@ -15,13 +15,17 @@ import { useTranslations } from 'next-intl';
 import { useCurrentUser } from '@/contexts/CurrentUserContext';
 import LoginOrRegisterPromptDialog from '@/components/auth/LoginOrRegisterPromptDialog';
 import BackButton from '@/components/shared/BackButton';
+import { getProfileAccentStyle, HIGH_CONTRAST_THEME } from '@/lib/utils/themeColor';
+import { useTheme } from 'next-themes';
 
 // Custom Hooks
 import { useUserProfile } from '@/hooks/features/profile/useUserProfile';
 import { useFeedActions } from '@/contexts/FeedContext';
 
 // Imported Sub-components using alias path
+import AdminDashboard from '@/components/profile/AdminDashboard';
 import ProfileHeader from '@/components/profile/ProfileHeader';
+import RelatedProfilesStrip from '@/components/profile/RelatedProfilesStrip';
 import ProfileContentTabs from '@/components/profile/ProfileContentTabs';
 import ProfilePageSkeleton from '@/components/profile/ProfilePageSkeleton';
 
@@ -41,6 +45,7 @@ export default function ProfileClientPageContent({ profileUserIdParam }: Profile
   const pathname = usePathname();
   const t = useTranslations('ProfilePage');
   const { getFeedState } = useFeedActions();
+  const { theme } = useTheme();
 
   const { currentUser: activeUser, refreshCurrentUser, isLoading: isLoadingCurrentUser } = useCurrentUser();
 
@@ -114,6 +119,8 @@ export default function ProfileClientPageContent({ profileUserIdParam }: Profile
         const data = (await res.json()) as {
           nativeUser?: Partial<User>;
           isFollowing?: boolean;
+          followRequested?: boolean;
+          manuallyApprovesFollowers?: boolean;
         };
         if (cancelled) return;
         remoteSyncCache.set(profileUser.id, Date.now());
@@ -125,6 +132,12 @@ export default function ProfileClientPageContent({ profileUserIdParam }: Profile
                   ...data.nativeUser,
                   isFollowing:
                     typeof data.isFollowing === 'boolean' ? data.isFollowing : prev.isFollowing,
+                  followRequested:
+                    typeof data.followRequested === 'boolean' ? data.followRequested : prev.followRequested,
+                  remoteManuallyApprovesFollowers:
+                    typeof data.manuallyApprovesFollowers === 'boolean'
+                      ? data.manuallyApprovesFollowers
+                      : prev.remoteManuallyApprovesFollowers,
                 }
               : prev,
           );
@@ -173,15 +186,18 @@ export default function ProfileClientPageContent({ profileUserIdParam }: Profile
   }
 
   if (isViewingAdminProfile) {
-    return (
-      <div className="container mx-auto max-w-3xl py-8 text-center">
-        <AlertTriangle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-        <h1 className="text-2xl font-bold">{t('accessDeniedTitle')}</h1>
-        <p className="text-muted-foreground">
-          O painel administrativo não faz parte deste repositório de revisão.
-        </p>
-      </div>
-    );
+    if (profileUser && isAdminViewing) {
+        return <AdminDashboard adminUser={profileUser} activeUser={activeUser} />;
+    } else if (!isAdminViewing) {
+        return (
+            <div className="container mx-auto max-w-3xl py-8 text-center">
+                <AlertTriangle className="h-12 w-12 text-destructive mx-auto mb-4" />
+                <h1 className="text-2xl font-bold text-destructive">{t('accessDeniedTitle')}</h1>
+                <p className="text-muted-foreground">{t('accessDeniedDescription')}</p>
+            </div>
+        );
+    }
+    return <ProfilePageOverallSkeleton />;
   }
 
   if (!profileUser) {
@@ -216,26 +232,40 @@ export default function ProfileClientPageContent({ profileUserIdParam }: Profile
   );
 
   return (
-    <>
+    // `display: contents`: o elemento não entra no layout, mas a cor escolhida por QUEM É DONO do perfil vale para tudo dentro dele
+    // (capa, botões, abas, links). Sem cor escolhida, não há estilo e herda a cor da rede de quem está olhando.
+    <div style={{ display: 'contents', ...getProfileAccentStyle(profileUser.accentColor, { highContrast: theme === HIGH_CONTRAST_THEME }) }}>
       <LoginOrRegisterPromptDialog
         open={showLoginPrompt}
         onOpenChange={closeLoginPrompt}
         actionName={loginPromptActionName}
         currentPath={pathname}
       />
-      
+
       <div className="relative h-48 bg-muted w-full">
          <BackButton className="absolute top-4 left-4 z-10 bg-black/50 hover:bg-black/70 text-white" />
         {profileUser.coverImageUrl ? (
-          <Image
-            src={profileUser.coverImageUrl}
-            alt={t('coverAlt', { name: profileUser.name })}
-            fill
-            sizes="100vw"
-            className="object-cover"
-            priority
-            data-ai-hint={profileUser["cover-image-ai-hint"] || "profile cover image"}
-          />
+          <>
+            <Image
+              src={profileUser.coverImageUrl}
+              alt={profileUser.coverImageAlt?.trim() || t('coverAlt', { name: profileUser.name })}
+              title={profileUser.coverImageAlt?.trim() || undefined}
+              fill
+              sizes="100vw"
+              className="object-cover"
+              priority
+              data-ai-hint={profileUser["cover-image-ai-hint"] || "profile cover image"}
+            />
+            {profileUser.coverImageAlt?.trim() && (
+              <span
+                title={profileUser.coverImageAlt.trim()}
+                aria-label={`Descrição da capa: ${profileUser.coverImageAlt.trim()}`}
+                className="absolute bottom-3 right-3 z-10 rounded bg-black/75 px-2 py-0.5 text-[10px] font-bold tracking-wider text-white ring-1 ring-white/25"
+              >
+                ALT
+              </span>
+            )}
+          </>
         ) : (
           <div className="h-full w-full bg-gradient-to-r from-primary to-accent" />
         )}
@@ -258,6 +288,10 @@ export default function ProfileClientPageContent({ profileUserIdParam }: Profile
             requireLoginOrPrompt={openLoginPrompt}
           />
         </div>
+
+        {!isOwnProfile && !isPrivateLocked && !profileUser.hasBlockedCurrentUser && !profileUser.isBlocked && (
+          <RelatedProfilesStrip profileUser={profileUser} />
+        )}
 
         {(!profileUser.hasBlockedCurrentUser || (activeUser?.isAdmin && isOwnProfile)) &&
          (!profileUser.isBlocked || (activeUser?.isAdmin && !isOwnProfile)) && isPrivateLocked && (
@@ -316,6 +350,6 @@ export default function ProfileClientPageContent({ profileUserIdParam }: Profile
           </Card>
         )}
       </div>
-    </>
+    </div>
   );
 }

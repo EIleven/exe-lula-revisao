@@ -3,24 +3,27 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
-import { ArrowUpRight, Newspaper, TrendingUp, Users } from 'lucide-react';
+import { ArrowUpRight, Newspaper, SlidersHorizontal, TrendingUp, Users } from 'lucide-react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import UserListItem from '@/components/profile/UserListItem';
 import UserProfileHoverCard from '@/components/profile/UserProfileHoverCard';
 import TopNewsItem from '@/components/trending/TopNewsItem';
+import RecommendationSettingsDialog from '@/components/recommendations/RecommendationSettingsDialog';
 import { useCurrentUserId } from '@/contexts/CurrentUserContext';
 import { useMediaQuery } from '@/hooks/use-media-query';
 import { fetchPaginatedPosts } from '@/lib/services/postReadService';
 import { getTrendingTopics } from '@/lib/services/hashtagService';
 import { getSuggestedUsers } from '@/lib/services/userService';
-import type { Post, User } from '@/lib/types';
+import type { Post, RecommendationPreferences, User } from '@/lib/types';
 import { deepCopyPost } from '@/lib/utils/dataTransformers';
 import { FOLLOW_STATE_EVENT, type FollowStateEventDetail } from '@/lib/events/followState';
+import { readRecommendationPreferences, REC_PREFS_EVENT } from '@/lib/recommendations/preferences';
 
 type SidebarTopic = { topic: string; count: number; topUsers: User[] };
 
@@ -107,6 +110,8 @@ export default function RightSidebar() {
   const [topNewsItems, setTopNewsItems] = useState<Post[]>([]);
   const [suggestedUsers, setSuggestedUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [recPrefs, setRecPrefs] = useState<RecommendationPreferences>(() => readRecommendationPreferences());
+  const [recDialogOpen, setRecDialogOpen] = useState(false);
   const locale = useLocale();
   const t = useTranslations('RightSidebar');
   // Só o id: um seguidor novo ou uma mensagem não lida não pode refazer as três leituras da barra lateral.
@@ -124,7 +129,7 @@ export default function RightSidebar() {
       const [topics, newsResponse, usersResponse] = await Promise.all([
         getTrendingTopics(8),
         fetchPaginatedPosts(null, 5, null, { feedContext: 'articles' }),
-        getSuggestedUsers(currentUserId, 3),
+        recPrefs.enabled ? getSuggestedUsers(currentUserId, 3, recPrefs) : Promise.resolve([]),
       ]);
       setTrendingTopics(topics);
       setTopNewsItems(
@@ -142,7 +147,16 @@ export default function RightSidebar() {
     } finally {
       setIsLoading(false);
     }
-  }, [currentUserId]);
+  }, [currentUserId, recPrefs]);
+
+  useEffect(() => {
+    const onPrefsChanged = (event: Event) => {
+      const detail = (event as CustomEvent<RecommendationPreferences>).detail;
+      if (detail) setRecPrefs(detail);
+    };
+    window.addEventListener(REC_PREFS_EVENT, onPrefsChanged);
+    return () => window.removeEventListener(REC_PREFS_EVENT, onPrefsChanged);
+  }, []);
 
   useEffect(() => {
     if (clientHasMounted && isVisible) void fetchSidebarContent();
@@ -238,15 +252,32 @@ export default function RightSidebar() {
           </CardContent>
         </Card>
 
-        {suggestedUsers.length > 0 && (
+        {recPrefs.enabled && suggestedUsers.length > 0 && (
           <Card className="rounded-none border-x-0 border-t-0 bg-transparent pb-5 shadow-none">
-            <SectionHeading
-              icon={Users}
-              title={t('suggestedUsers')}
-              description={t('suggestedUsersDescription')}
-              href={`/${locale}/explore#suggested-accounts-title`}
-              linkLabel={t('seeAll')}
-            />
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex-1 min-w-0">
+                <SectionHeading
+                  icon={Users}
+                  title={t('suggestedUsers')}
+                  description={t('suggestedUsersDescription')}
+                  href={`/${locale}/explore#suggested-accounts-title`}
+                  linkLabel={t('seeAll')}
+                />
+              </div>
+              {currentUserId && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 mt-0.5 text-muted-foreground hover:text-foreground shrink-0"
+                  onClick={() => setRecDialogOpen(true)}
+                  title="Configurar algoritmo de sugestões"
+                  aria-label="Configurar algoritmo de sugestões"
+                >
+                  <SlidersHorizontal className="h-3.5 w-3.5" />
+                </Button>
+              )}
+            </div>
             <CardContent className="space-y-0.5 p-0">
               {suggestedUsers.map((user) => (
                 <UserListItem
@@ -260,6 +291,7 @@ export default function RightSidebar() {
             </CardContent>
           </Card>
         )}
+        <RecommendationSettingsDialog open={recDialogOpen} onOpenChange={setRecDialogOpen} />
 
         <Card className="border-none bg-transparent shadow-none">
           <SectionHeading
@@ -292,6 +324,12 @@ export default function RightSidebar() {
           className="border-t border-border/60 pt-4 pb-6 text-xs text-muted-foreground"
         >
           <nav className="flex flex-wrap items-center gap-x-3 gap-y-1.5 leading-relaxed">
+            <Link href={`/${locale}/manifesto`} className="font-medium text-foreground/80 hover:text-foreground hover:underline">
+              Manifesto
+            </Link>
+            <Link href={`/${locale}/dev`} className="font-medium text-foreground/80 hover:text-foreground hover:underline">
+              DEV
+            </Link>
             <Link href={`/${locale}/about`} className="hover:text-foreground hover:underline">
               Sobre
             </Link>

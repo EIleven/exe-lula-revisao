@@ -17,14 +17,16 @@ import { useCurrentUser, useCurrentUserActions, useCurrentUserId } from '@/conte
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import type { User } from '@/lib/types';
+import { compactCount, exactCountTitle } from '@/lib/media/videoQueue';
 import { useLocale, useTranslations } from 'next-intl';
 import TextWithMentions from '../shared/TextWithMentions';
 import { Badge } from '@/components/ui/badge';
 import { useFollowToggle } from '@/hooks/features/profile/useFollowToggle';
+import RemoteFollowButton, { isRemoteFediverseUser } from '@/components/profile/RemoteFollowButton';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { getUser } from '@/lib/services/userService';
 import { dispatchFollowState } from '@/lib/events/followState';
-import { getProfileAccentStyle } from '@/lib/utils/themeColor';
+import { getProfileAccentStyle, isHighContrastDocument } from '@/lib/utils/themeColor';
 
 interface UserProfileHoverCardProps {
   user: User;
@@ -94,6 +96,7 @@ export default function UserProfileHoverCard({ user, children, onFollowStateChan
               activeUserId,
               targetUserId: data.nativeUser.id,
               isFollowing: data.nativeUser.isFollowing,
+              followRequested: data.nativeUser.followRequested,
               followersCount: data.nativeUser.followersCount,
             });
           }
@@ -167,7 +170,10 @@ export default function UserProfileHoverCard({ user, children, onFollowStateChan
       </HoverCardTrigger>
       <HoverCardContent
         className="w-80 p-0 rounded-2xl overflow-hidden border border-border/80 bg-popover/95 backdrop-blur-md shadow-2xl"
-        style={getProfileAccentStyle(liveUser.accentColor, { fallbackToDefault: true })}
+        // Só aplica a cor de QUEM está no balão se essa pessoa escolheu uma. Sem escolha, não há estilo nenhum e o balão HERDA a cor
+        // da rede de quem está logado (`--primary` no :root). Antes, `fallbackToDefault: true` injetava o azul padrão e o balão
+        // ficava azul mesmo para quem escolheu vermelho.
+        style={getProfileAccentStyle(liveUser.accentColor, { highContrast: isHighContrastDocument() })}
         onClick={(e) => e.stopPropagation()}
         data-interactive="true"
       >
@@ -209,7 +215,17 @@ export default function UserProfileHoverCard({ user, children, onFollowStateChan
                   >
                     <MessageSquare className="h-4 w-4" />
                   </Button>
-                  {follow.isFollowing ? (
+                  {isRemoteFediverseUser(liveUser) ? (
+                    <RemoteFollowButton
+                      targetUser={liveUser}
+                      activeUserId={activeUserId ?? null}
+                      variant="hover"
+                      onStateChange={(updated) => {
+                        setLiveUser(updated);
+                        onFollowStateChangeInCard?.(updated);
+                      }}
+                    />
+                  ) : follow.isFollowing ? (
                     <div
                       ref={followContainerRef}
                       className="relative"
@@ -297,7 +313,7 @@ export default function UserProfileHoverCard({ user, children, onFollowStateChan
                 <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
                   <p className="text-xs text-muted-foreground">@{liveUser.username}</p>
                   {liveUser.pronouns && (
-                    <span className="text-[11px] text-muted-foreground/90 bg-secondary/70 rounded-full px-2 py-0.5">
+                    <span className="text-[11px] font-medium text-primary border border-primary/70 bg-transparent rounded-full px-2 py-0.5">
                       {liveUser.pronouns}
                     </span>
                   )}
@@ -342,11 +358,11 @@ export default function UserProfileHoverCard({ user, children, onFollowStateChan
               )}
             </div>
             <div className="mt-4 flex space-x-4 text-sm text-muted-foreground">
-              <Link href={`/${locale}/profile/${profileId}/following`} className="hover:underline">
-                <span className="font-bold text-foreground">{liveUser.followingCount || 0}</span> {t('following')}
+              <Link href={`/${locale}/profile/${profileId}/following`} className="hover:underline" title={exactCountTitle(liveUser.followingCount)}>
+                <span className="font-bold text-foreground">{compactCount(liveUser.followingCount)}</span> {t('following')}
               </Link>
-              <Link href={`/${locale}/profile/${profileId}/followers`} className="hover:underline">
-                <span className="font-bold text-foreground">{follow.followersCount}</span> {t('followers')}
+              <Link href={`/${locale}/profile/${profileId}/followers`} className="hover:underline" title={exactCountTitle(follow.followersCount)}>
+                <span className="font-bold text-foreground">{compactCount(follow.followersCount)}</span> {t('followers')}
               </Link>
             </div>
           </div>

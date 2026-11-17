@@ -50,7 +50,7 @@ export default function AppearanceSettings({ user }: SettingsProps) {
         title: 'Cor do perfil atualizada',
         description: nextColor
           ? 'Quem visitar o seu perfil verá a nova cor escolhida.'
-          : 'A cor padrão do Exe. Lula foi restaurada no seu perfil.',
+          : 'A cor oficial da rede foi restaurada no seu perfil.',
       });
     } catch (error: any) {
       toast({
@@ -76,7 +76,7 @@ export default function AppearanceSettings({ user }: SettingsProps) {
             {t('theme.description')}
           </p>
           <RadioGroup
-            defaultValue={theme}
+            value={theme || 'dark'}
             onValueChange={setTheme}
             className="grid grid-cols-1 sm:grid-cols-3 gap-4"
           >
@@ -103,7 +103,7 @@ export default function AppearanceSettings({ user }: SettingsProps) {
             <div>
               <Label className="text-base font-semibold">Cor do perfil</Label>
               <p className="text-sm text-muted-foreground">
-                Substitua o azul padrão por qualquer cor. Outros usuários verão essa cor ao visitar o seu perfil.
+                Substitua a cor oficial dinâmica da rede por qualquer cor. Outros usuários verão essa cor ao visitar o seu perfil.
               </p>
             </div>
             {user.accentColor && (
@@ -115,7 +115,7 @@ export default function AppearanceSettings({ user }: SettingsProps) {
                 onClick={() => handleSaveAccentColor(null)}
               >
                 <RotateCcw className="h-4 w-4 mr-1.5" />
-                Restaurar padrão
+                Restaurar cor oficial da rede
               </Button>
             )}
           </div>

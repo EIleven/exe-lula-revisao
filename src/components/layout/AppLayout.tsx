@@ -12,12 +12,12 @@ import { cn } from '@/lib/utils';
 import { useCurrentUser } from '@/contexts/CurrentUserContext';
 import LoginOrRegisterPromptDialog from '@/components/auth/LoginOrRegisterPromptDialog';
 import { logoutUser as serverLogoutUser } from '@/lib/services/authService';
-import type { Post } from '@/lib/types';
+import type { Post, User } from '@/lib/types';
 import { useUnreadNotificationsCount } from '@/hooks/features/notifications/useUnreadNotificationsCount';
 import { ToastAction } from '@/components/ui/toast';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
-import { Home, TrendingUp, Bell, MessageSquare, Search, Newspaper } from 'lucide-react';
+import { Home, TrendingUp, Bell, MessageSquare, Search, Newspaper, KeyRound } from 'lucide-react';
 
 import DesktopSidebar from './DesktopSidebar';
 import MobileBottomNavigationBar from './MobileBottomNavigationBar';
@@ -27,8 +27,13 @@ import RightSidebar from './RightSidebar';
 import AppHeader from './AppHeader';
 import ScrollChrome from './ScrollChrome';
 import PwaInstallBanner from '@/components/pwa/PwaInstallBanner';
+import DeviceLoginApprover from '@/components/auth/DeviceLoginApprover';
+import GlobalP2pListener from '@/components/messages/GlobalP2pListener';
+import { VisitorWelcomeTour, MemberWelcomeTour } from '@/components/onboarding/QuickTourDialog';
 import ManageFeedsDialog from '@/components/feed/ManageFeedsDialog';
-import { applyDocumentAccentColor } from '@/lib/utils/themeColor';
+import { applyDocumentAccentColor, HIGH_CONTRAST_THEME } from '@/lib/utils/themeColor';
+import { useDynamicOfficialColor } from '@/hooks/useDynamicOfficialColor';
+import { useTheme } from 'next-themes';
 
 const AppLayoutContentSkeleton: React.FC = () => (
   <div className="w-full min-w-0">
@@ -54,9 +59,14 @@ const AppLayout = ({ children }: AppLayoutProps) => {
   const [isManageFeedsDialogOpen, setIsManageFeedsDialogOpen] = useState(false);
   const [clientHasMounted, setClientHasMounted] = useState(false);
 
-  useEffect(() => {
-    applyDocumentAccentColor(currentUser?.accentColor);
-  }, [currentUser?.accentColor]);
+  // Cor oficial da rede: se o usuário escolheu uma cor no perfil, respeita estritamente.
+  // Se for visitante / não logado (ou sem cor definida), alterna dinamicamente
+  // a cor oficial do Hiperverso a cada 5 minutos de forma sincronizada e profissional.
+  const { theme } = useTheme();
+  useDynamicOfficialColor({
+    userAccentColor: currentUser?.accentColor,
+    isHighContrast: theme === HIGH_CONTRAST_THEME,
+  });
 
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const [promptActionName, setPromptActionName] = useState('');
@@ -76,6 +86,7 @@ const AppLayout = ({ children }: AppLayoutProps) => {
     { href: `/${locale}/messages`, label: t('nav.messages'), icon: MessageSquare, requiresAuth: true, authHref: () => `/${locale}/messages`, showBadge: true },
     { href: `/${locale}/notifications`, label: t('nav.notifications'), icon: Bell, requiresAuth: true, authHref: () => `/${locale}/notifications`, showBadge: true },
     { href: `/${locale}/breaknews`, label: 'BreakNews', icon: Newspaper, requiresAuth: true, showBadge: false },
+    { href: `/${locale}/keys`, label: 'Identidade P2P', icon: KeyRound, requiresAuth: true, showBadge: false },
   ];
 
   const handleLogout = async () => {
@@ -123,24 +134,45 @@ const AppLayout = ({ children }: AppLayoutProps) => {
     `/${locale}/post`,
     `/${locale}/notifications`,
     `/${locale}/explore`,
+    `/${locale}/search`,
     `/${locale}/settings`,
     `/${locale}/messages`,
+    `/${locale}/keys`,
+    `/${locale}/download`,
+    `/${locale}/admin`,
+    `/${locale}/files`,
+    `/${locale}/drafts`,
+    `/${locale}/bookmarks`,
+    `/${locale}/share`,
+    `/${locale}/dev`,
     `/${locale}/about`,
     `/${locale}/privacy`,
     `/${locale}/terms`,
     `/${locale}/cookies`,
     `/${locale}/community-guidelines`,
+    `/${locale}/accessibility`,
+    `/${locale}/manifesto`,
+    `/${locale}/fediverse`,
+    `/${locale}/advertising`,
+    `/${locale}/help`,
     `/${locale}/login`,
     `/${locale}/register`,
     `/${locale}/auth`,
   ];
-  const canCreateContent = firebaseUser?.emailVerified === true;
+  const isFederatedLoginAccount = Boolean(
+    (currentUser as (User & { federatedLoginProvider?: string }) | null)?.federatedLoginProvider
+  );
+  const canCreateContent = Boolean(firebaseUser?.emailVerified === true || isFederatedLoginAccount);
   const shouldShowFab = clientHasMounted && isMobile && currentUser && canCreateContent
     && !fabHiddenPaths.some((path) => pathname.startsWith(path));
   
   const showMobileNav = clientHasMounted && isMobile;
   // Mensagens são uma tarefa focada: no desktop a conversa usa a área central inteira, sem tendências e artigos ao lado.
   const isMessagesRoute = pathname.startsWith(`/${locale}/messages`);
+  const isAuthRoute =
+    pathname.startsWith(`/${locale}/login`) ||
+    pathname.startsWith(`/${locale}/register`) ||
+    pathname.startsWith(`/${locale}/auth`);
 
   return (
     <>
@@ -151,14 +183,19 @@ const AppLayout = ({ children }: AppLayoutProps) => {
         actionName={promptActionName}
         currentPath={pathname}
       />
-       {currentUser && (
-        <ManageFeedsDialog
-          open={isManageFeedsDialogOpen}
-          onOpenChange={setIsManageFeedsDialogOpen}
-          user={currentUser}
-          onPreferencesChanged={refreshCurrentUser}
-        />
+      {currentUser && (
+        <>
+          <GlobalP2pListener currentUser={currentUser} />
+          <MemberWelcomeTour user={currentUser} />
+          <ManageFeedsDialog
+            open={isManageFeedsDialogOpen}
+            onOpenChange={setIsManageFeedsDialogOpen}
+            user={currentUser}
+            onPreferencesChanged={refreshCurrentUser}
+          />
+        </>
       )}
+      <VisitorWelcomeTour isGuest={clientHasMounted && !isLoadingCurrentUser && !currentUser} />
       <div className="min-h-screen bg-background">
         <SidebarProvider forceCollapsed={isMessagesRoute}>
           <div className="flex w-full max-w-[1400px] mx-auto justify-center px-0 min-[801px]:px-4">
@@ -182,14 +219,14 @@ const AppLayout = ({ children }: AppLayoutProps) => {
             
             <main className={cn('w-full min-w-0', isMessagesRoute ? 'flex-1 max-w-[1200px]' : 'max-w-[600px]')}>
               <AppHeader />
-              {clientHasMounted && firebaseUser && !firebaseUser.emailVerified
+              {clientHasMounted && firebaseUser && !firebaseUser.emailVerified && !isFederatedLoginAccount
                 && !pathname.startsWith(`/${locale}/auth/verify-email`) && (
                 <div className="border-b border-amber-500/30 bg-amber-500/10 p-3 text-sm">
                   Confirme seu e-mail para publicar e interagir.{' '}
                   <Link className="font-medium underline" href={`/${locale}/auth/verify-email`}>Confirmar agora</Link>
                 </div>
               )}
-              {!clientHasMounted || (isLoadingCurrentUser && !currentUser) ? (
+              {!clientHasMounted || (!isAuthRoute && isLoadingCurrentUser && !currentUser) ? (
                 <AppLayoutContentSkeleton />
               ) : (
                 childrenWithProps
@@ -229,6 +266,7 @@ const AppLayout = ({ children }: AppLayoutProps) => {
         </SidebarProvider>
       </div>
       <PwaInstallBanner />
+      <DeviceLoginApprover />
     </>
   );
 };

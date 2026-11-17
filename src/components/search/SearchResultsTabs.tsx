@@ -13,6 +13,7 @@ import Link from 'next/link';
 import { ExternalLink, Frown, Globe, UserCheck } from 'lucide-react';
 import { useCurrentUser } from '@/contexts/CurrentUserContext';
 import { useLocale, useTranslations } from 'next-intl';
+import { classifySearchQuery } from '@/lib/search/searchQueryParser';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -65,6 +66,7 @@ export default function SearchResultsTabs({ query }: SearchResultsTabsProps) {
   const [activeTab, setActiveTab] = useState<SearchTab>('top');
   const [results, setResults] = useState<Partial<SearchResultWithCounts>>({});
   const [remoteProfile, setRemoteProfile] = useState<RemoteFediverseProfile | null>(null);
+  const [localUrlPath, setLocalUrlPath] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const { currentUser } = useCurrentUser();
   
@@ -74,12 +76,18 @@ export default function SearchResultsTabs({ query }: SearchResultsTabsProps) {
         setIsLoading(true);
         setResults({}); // Clear previous results
         setRemoteProfile(null);
+        setLocalUrlPath(null);
         try {
             const trimmed = query.trim();
-            const isFediHandle = FEDIVERSE_HANDLE_RE.test(trimmed);
+            const classified = classifySearchQuery(trimmed);
+            if (classified.kind === 'local-url') {
+              setLocalUrlPath(classified.path);
+            }
+            const shouldLookupRemote =
+              classified.kind === 'fediverse-handle' || classified.kind === 'fediverse-profile-url';
             const [data, fediRes] = await Promise.all([
               getSearchResultsWithCounts(query, currentUser?.id),
-              isFediHandle
+              shouldLookupRemote
                 ? fetch(`/api/ap/lookup?q=${encodeURIComponent(trimmed)}`).then((r) => (r.ok ? r.json() : null)).catch(() => null)
                 : Promise.resolve(null),
             ]);
@@ -108,6 +116,19 @@ export default function SearchResultsTabs({ query }: SearchResultsTabsProps) {
   };
 
   const renderRemoteProfileCard = () => {
+    if (localUrlPath) {
+      return (
+        <div className="mb-4 rounded-xl border border-primary/30 bg-primary/5 p-4 shadow-sm flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-foreground">Link interno detectado</p>
+            <p className="text-xs text-muted-foreground truncate font-mono">{localUrlPath}</p>
+          </div>
+          <Button asChild size="sm">
+            <Link href={localUrlPath}>Abrir agora</Link>
+          </Button>
+        </div>
+      );
+    }
     if (!remoteProfile) return null;
     const profileHref = `/${locale}/fediverse/${encodeURIComponent(remoteProfile.handle)}`;
     return (

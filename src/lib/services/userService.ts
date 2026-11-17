@@ -34,7 +34,18 @@ import { fetchPaginatedUserComments } from './comments';
 import { postsCollection } from './postService';
 import { httpsCallable } from 'firebase/functions';
 import { getPrivateAccount, savePrivateAccount, splitUserFields, stripPrivateFields } from './userPrivate';
-import { rankUserRecommendations, type UserRecommendationSignals } from '../recommendations/userRecommendations';
+import {
+  rankUserRecommendations,
+  rankRelatedProfiles,
+  matchesNetworkScope,
+  type UserRecommendationSignals,
+} from '../recommendations/userRecommendations';
+import {
+  DEFAULT_RECOMMENDATION_PREFERENCES,
+  normalizeRecommendationPreferences,
+  readRecommendationPreferences,
+} from '../recommendations/preferences';
+import type { RecommendationPreferences } from '@/lib/types';
 import { dispatchFollowState } from '../events/followState';
 import { followedIdsCached } from './followedIdsCache';
 
@@ -146,12 +157,14 @@ const fetchUserUncached = async (userIdToFetch: string, activeUserId: string | n
         name: userData.name,
         username: userData.username,
         avatarUrl: userData.avatarUrl,
+        avatarAlt: userData.avatarAlt,
         'data-ai-hint': userData['data-ai-hint'],
         bio: userData.bio,
         followersCount: userData.followersCount,
         followingCount: userData.followingCount,
         postsCount: userData.postsCount,
         coverImageUrl: userData.coverImageUrl,
+        coverImageAlt: userData.coverImageAlt,
         'cover-image-ai-hint': userData['cover-image-ai-hint'],
         profileVisibility: 'private',
         createdAt: userData.createdAt,
@@ -236,8 +249,10 @@ export interface UserProfileUpdatePayload {
   accentColor?: string | null;
   dateOfBirth?: string | null; // Added dateOfBirth
   avatarUrl?: string | null;
+  avatarAlt?: string | null;
   "data-ai-hint"?: string | null;
   coverImageUrl?: string | null;
+  coverImageAlt?: string | null;
   "cover-image-ai-hint"?: string | null;
   oldAvatarPath?: string | null;
   oldCoverPath?: string | null;
@@ -247,6 +262,7 @@ export interface UserProfileUpdatePayload {
   allowTagging?: User['allowTagging'];
   displaySensitiveContent?: User['displaySensitiveContent']; // Added for media settings
   mutedWords?: string[];
+  recommendationPreferences?: RecommendationPreferences;
   pinnedPostId?: string | null;
   isAdmin?: boolean;
   isModerator?: boolean;
@@ -268,8 +284,8 @@ export const updateUserSettings = async (userId: string, data: UserProfileUpdate
     
     const nullableFields: (keyof UserProfileUpdatePayload)[] = [
       'bio', 'pronouns', 'location', 'website', 'links', 'pixKey', 'pixCity', 'pixDescription',
-      'accentColor', 'dateOfBirth', 'avatarUrl', 'data-ai-hint',
-      'coverImageUrl', 'cover-image-ai-hint', 'pinnedPostId'
+      'accentColor', 'dateOfBirth', 'avatarUrl', 'avatarAlt', 'data-ai-hint',
+      'coverImageUrl', 'coverImageAlt', 'cover-image-ai-hint', 'pinnedPostId'
     ];
     
     nullableFields.forEach(field => {
@@ -284,6 +300,10 @@ export const updateUserSettings = async (userId: string, data: UserProfileUpdate
     if (data.allowTagging) updateData.allowTagging = data.allowTagging;
     if (data.displaySensitiveContent !== undefined) updateData.displaySensitiveContent = data.displaySensitiveContent;
     if (data.mutedWords !== undefined) updateData.mutedWords = data.mutedWords;
+    if (data.recommendationPreferences !== undefined) {
+      updateData.recommendationPreferences = normalizeRecommendationPreferences(data.recommendationPreferences);
+      recommendationCache.delete(userId);
+    }
     if (data.isAdmin !== undefined) updateData.isAdmin = data.isAdmin;
     if (data.isModerator !== undefined) updateData.isModerator = data.isModerator;
     if (data.tabPreferences) updateData.tabPreferences = data.tabPreferences;
@@ -377,6 +397,83 @@ export const completeUserProfile = async (userId: string, data: { username: stri
 
 
 // --- User Relationships (Follow, Mute, Block) ---
+export const snapshotToPublicUser = (
+  docSnap: { id: string; data: () => Record<string, any> | undefined },
+  options?: { isFollowing?: boolean }
+): User | undefined => {
+  const raw = docSnap.data();
+  if (!raw) return undefined;
+  const firestoreData = { ...raw };
+  if (firestoreData.createdAt && firestoreData.createdAt instanceof Timestamp) {
+    firestoreData.createdAt = firestoreData.createdAt.toDate().toISOString();
+  }
+  if (firestoreData.updatedAt && firestoreData.updatedAt instanceof Timestamp) {
+    firestoreData.updatedAt = firestoreData.updatedAt.toDate().toISOString();
+  }
+  const userData = stripPrivateFields({ id: docSnap.id, ...firestoreData }) as User;
+  if (options?.isFollowing !== undefined) {
+    userData.isFollowing = options.isFollowing;
+  }
+  if (
+    userData.id.startsWith('ap_') ||
+    (userData as User & { isRemoteFediverse?: boolean }).isRemoteFediverse ||
+    userData.username?.includes('@')
+  ) {
+    userData.dmPreference =
+      userData.dmPreference && userData.dmPreference !== 'none'
+        ? userData.dmPreference
+        : 'everyone';
+  }
+  return deepCopyUser(userData);
+};
+
+export const fetchPublicUsersByIds = async (
+  userIds: string[],
+  activeUserId: string | null = getCurrentUserId()
+): Promise<User[]> => {
+  const uniqueIds = Array.from(new Set(userIds.filter(Boolean)));
+  if (uniqueIds.length === 0) return [];
+
+  const [followedIds, blockedIds] = activeUserId
+    ? await Promise.all([
+        getFollowedUserIds(activeUserId).catch(() => [] as string[]),
+        getDocs(collection(db, 'users', activeUserId, 'blockedUsers'))
+          .then((s) => s.docs.map((d) => d.id))
+          .catch(() => [] as string[]),
+      ])
+    : [[] as string[], [] as string[]];
+
+  const followedSet = new Set(followedIds);
+  const blockedSet = new Set(blockedIds);
+
+  const chunks: string[][] = [];
+  for (let i = 0; i < uniqueIds.length; i += 30) {
+    chunks.push(uniqueIds.slice(i, i + 30));
+  }
+
+  const snapshots = await Promise.all(
+    chunks.map((chunk) =>
+      getDocs(query(usersCollection, where(documentId(), 'in', chunk))).catch(() => null)
+    )
+  );
+
+  const byId = new Map<string, User>();
+  for (const snap of snapshots) {
+    if (!snap) continue;
+    for (const docSnap of snap.docs) {
+      const user = snapshotToPublicUser(docSnap, {
+        isFollowing: followedSet.has(docSnap.id),
+      });
+      if (user) {
+        user.isBlocked = blockedSet.has(docSnap.id);
+        byId.set(docSnap.id, user);
+      }
+    }
+  }
+
+  return uniqueIds.map((id) => byId.get(id)).filter((u): u is User => Boolean(u));
+};
+
 // Lida uma vez e reaproveitada por 60 s (followedIdsCache): quem segue 1.299 contas lia a coleção inteira a cada página do feed.
 export const getFollowedUserIds = async (userId: string): Promise<string[]> => {
   const followingColRef = collection(db, 'users', userId, 'following');
@@ -388,46 +485,44 @@ export const getFollowedUserIds = async (userId: string): Promise<string[]> => {
   }
 };
 
-export async function getFollowersOfUser(targetUserId: string, activeUserId: string | null): Promise<User[]> {
+export async function getFollowersOfUser(
+  targetUserId: string,
+  activeUserId: string | null,
+  maxCount?: number
+): Promise<User[]> {
   const followersColRef = collection(db, 'users', targetUserId, 'followers');
   try {
-    const snapshot = await getDocs(followersColRef);
+    const q = maxCount ? query(followersColRef, limit(maxCount)) : followersColRef;
+    const snapshot = await getDocs(q);
     if (snapshot.empty) return [];
 
     const followerIds = snapshot.docs.map(doc => doc.id);
     if (followerIds.length === 0) return [];
 
-    // Fetch user profiles for each follower ID
-    const userPromises = followerIds.map(id => getUser(id, activeUserId));
-    
-    // Wait for all promises to resolve and filter out any undefined results (e.g., deleted users)
-    const users = (await Promise.all(userPromises)).filter((u): u is User => !!u);
-    
-    return users;
-
+    return await fetchPublicUsersByIds(followerIds, activeUserId);
   } catch (error: any) {
     console.error(`Error fetching followers for ${targetUserId}:`, String(error));
     return [];
   }
 }
 
-export async function getUsersFollowedBy(targetUserId: string, activeUserId: string | null): Promise<User[]> {
+export async function getUsersFollowedBy(
+  targetUserId: string,
+  activeUserId: string | null,
+  maxCount?: number
+): Promise<User[]> {
   const followingColRef = collection(db, 'users', targetUserId, 'following');
   try {
-    const snapshot = await getDocs(followingColRef);
-    if (snapshot.empty) return [];
-
-    const followedIds = snapshot.docs.map(doc => doc.id);
+    const followedIds =
+      !maxCount && targetUserId === activeUserId
+        ? await getFollowedUserIds(targetUserId)
+        : (await getDocs(maxCount ? query(followingColRef, limit(maxCount)) : followingColRef)).docs.map(
+            (doc) => doc.id
+          );
     if (followedIds.length === 0) return [];
 
-    // Fetch user profiles for each followed ID
-    const userPromises = followedIds.map(id => getUser(id, activeUserId));
-
-    // Wait for all promises to resolve and filter out any undefined results
-    const users = (await Promise.all(userPromises)).filter((u): u is User => !!u);
-    
-    return users;
-
+    const targetIds = maxCount ? followedIds.slice(0, maxCount) : followedIds;
+    return await fetchPublicUsersByIds(targetIds, activeUserId);
   } catch (error: any) {
     console.error(`Error fetching users followed by ${targetUserId}:`, String(error));
     return [];
@@ -520,6 +615,13 @@ export const setFollowUser = async (activeUserId: string, targetUserId: string, 
   invalidateUserCache(activeUserId);
   invalidateRecommendationCache(activeUserId);
   dispatchFollowState({ activeUserId, targetUserId, isFollowing: follow });
+};
+
+/** Depois que o seguir de um perfil do Fediverso mudou (seguir, pedir, cancelar, deixar de seguir): os caches de quem vê deixam de valer. */
+export const invalidateAfterFollowChange = (activeUserId: string, targetUserId: string): void => {
+  invalidateUserCache(targetUserId);
+  invalidateUserCache(activeUserId);
+  invalidateRecommendationCache(activeUserId);
 };
 
 export const checkMutualFollow = async (userId1: string, userId2: string): Promise<boolean> => {
@@ -641,68 +743,254 @@ export const getMutedUsers = async (muterId: string): Promise<User[]> => {
 };
 
 // --- Search & Data Export ---
+const recentConvPartnersCache = new Map<string, { at: number; value: Promise<User[]> }>();
+
+export const getRecentConversationPartners = async (activeUserId: string): Promise<User[]> => {
+    if (!activeUserId) return [];
+    const hit = recentConvPartnersCache.get(activeUserId);
+    if (hit && Date.now() - hit.at < 45_000) {
+        return hit.value;
+    }
+    const promise = (async () => {
+        try {
+            const convSnap = await getDocs(
+                query(
+                    collection(db, 'conversations'),
+                    where('participantIds', 'array-contains', activeUserId),
+                    limit(35)
+                )
+            );
+            const partnerIds = new Set<string>();
+            const embeddedFallback = new Map<string, User>();
+            for (const d of convSnap.docs) {
+                const data = d.data();
+                const pids: string[] = Array.isArray(data.participantIds) ? data.participantIds : [];
+                const pInfo: any[] = Array.isArray(data.participantsInfo) ? data.participantsInfo : [];
+                // Prioritize 1-on-1 or small conversations for direct contacts
+                if (pids.length <= 12) {
+                    for (const pid of pids) {
+                        if (pid && pid !== activeUserId) {
+                            partnerIds.add(pid);
+                        }
+                    }
+                    for (const info of pInfo) {
+                        if (info && typeof info.id === 'string' && info.id !== activeUserId) {
+                            embeddedFallback.set(info.id, {
+                                id: info.id,
+                                name: info.name || info.username || 'Contato',
+                                username: info.username || info.id.replace(/^ap_/, ''),
+                                email: '',
+                                avatarUrl: info.avatarUrl || '',
+                                followersCount: 0,
+                                followingCount: 0,
+                                postsCount: 0,
+                                isAdmin: false,
+                                isModerator: false,
+                                dmPreference: 'everyone',
+                                profileVisibility: 'public',
+                                createdAt: new Date().toISOString(),
+                            });
+                        }
+                    }
+                }
+            }
+            const loaded = await fetchPublicUsersByIds(Array.from(partnerIds).slice(0, 60), activeUserId);
+            const loadedMap = new Map(loaded.map((u) => [u.id, u]));
+            for (const [id, fallback] of embeddedFallback.entries()) {
+                if (!loadedMap.has(id)) {
+                    loadedMap.set(id, fallback);
+                }
+            }
+            return Array.from(loadedMap.values());
+        } catch {
+            return [];
+        }
+    })();
+    recentConvPartnersCache.set(activeUserId, { at: Date.now(), value: promise });
+    return promise;
+};
+
 export const searchUsers = async (searchQuery: string, activeUserId: string | null = getCurrentUserId()): Promise<User[]> => {
     const trimmedQuery = searchQuery.trim();
     if (!trimmedQuery) {
         try {
-            const initialSnap = await getDocs(query(usersCollection, limit(8)));
-            const users: User[] = [];
-            for (const docSnap of initialSnap.docs) {
-                const user = await getUser(docSnap.id, activeUserId);
-                if (user && !user.isBlocked && !user.hasBlockedCurrentUser) {
-                    users.push(user);
+            const usersMap = new Map<string, User>();
+            if (activeUserId) {
+                const [recentPartners, followed] = await Promise.all([
+                    getRecentConversationPartners(activeUserId).catch(() => []),
+                    getUsersFollowedBy(activeUserId, activeUserId, 45).catch(() => []),
+                ]);
+                for (const u of [...recentPartners, ...followed]) {
+                    if (u && !u.isBlocked && !u.hasBlockedCurrentUser && !usersMap.has(u.id)) {
+                        usersMap.set(u.id, u);
+                    }
                 }
             }
-            return users;
+            const initialSnap = await getDocs(query(usersCollection, limit(24)));
+            for (const docSnap of initialSnap.docs) {
+                if (!usersMap.has(docSnap.id)) {
+                    const user = snapshotToPublicUser(docSnap);
+                    if (user && !user.isBlocked && !user.hasBlockedCurrentUser) {
+                        usersMap.set(docSnap.id, user);
+                    }
+                }
+            }
+            return Array.from(usersMap.values()).slice(0, 60);
         } catch (error) {
             console.error("Error listing initial mention users:", String(error));
             return [];
         }
     }
+
     const lowerQuery = trimmedQuery.toLowerCase();
     const isHashtagSearch = lowerQuery.startsWith('#');
+    const cleanHandle = trimmedQuery.replace(/^@+/, '').trim();
+    const lowerHandle = cleanHandle.toLowerCase();
+    const capitalizedHandle = cleanHandle
+        ? cleanHandle.charAt(0).toUpperCase() + cleanHandle.slice(1).toLowerCase()
+        : '';
+    const isFediverseHandle = /^[^@\s]+@[a-z0-9.-]+\.[a-z]{2,}$/i.test(lowerHandle);
 
-    // Firestore does not support case-insensitive `contains` queries or OR queries on different fields natively.
     const nameQuery = query(
         usersCollection,
-        where('name_lowercase', '>=', lowerQuery),
-        where('name_lowercase', '<=', lowerQuery + '\uf8ff'),
-        limit(5)
+        where('name_lowercase', '>=', lowerHandle),
+        where('name_lowercase', '<=', lowerHandle + '\uf8ff'),
+        limit(15)
     );
 
-    const usernameQuery = query(
+    const nameCapQuery =
+        capitalizedHandle
+            ? query(
+                  usersCollection,
+                  where('name', '>=', capitalizedHandle),
+                  where('name', '<=', capitalizedHandle + '\uf8ff'),
+                  limit(15)
+              )
+            : null;
+
+    const usernameLowerQuery = query(
         usersCollection,
-        where('username', '>=', lowerQuery),
-        where('username', '<=', lowerQuery + '\uf8ff'),
-        limit(5)
+        where('username', '>=', lowerHandle),
+        where('username', '<=', lowerHandle + '\uf8ff'),
+        limit(15)
     );
 
-    // New query for searching hashtags in bios
-    const bioHashtagQuery = isHashtagSearch 
+    const usernameExactCaseQuery =
+        cleanHandle && cleanHandle !== lowerHandle
+            ? query(
+                  usersCollection,
+                  where('username', '>=', cleanHandle),
+                  where('username', '<=', cleanHandle + '\uf8ff'),
+                  limit(10)
+              )
+            : null;
+
+    const usernameCapQuery =
+        capitalizedHandle && capitalizedHandle !== lowerHandle && capitalizedHandle !== cleanHandle
+            ? query(
+                  usersCollection,
+                  where('username', '>=', capitalizedHandle),
+                  where('username', '<=', capitalizedHandle + '\uf8ff'),
+                  limit(10)
+              )
+            : null;
+
+    const bioHashtagQuery = isHashtagSearch
         ? query(
-            usersCollection,
-            where('bio', '>=', lowerQuery),
-            where('bio', '<=', lowerQuery + '\uf8ff'),
-            limit(5)
+              usersCollection,
+              where('bio', '>=', lowerQuery),
+              where('bio', '<=', lowerQuery + '\uf8ff'),
+              limit(8)
           )
         : null;
 
+    const remoteFediversePromise: Promise<User | null> =
+        isFediverseHandle && typeof window !== 'undefined'
+            ? (async () => {
+                  try {
+                      const token = await auth.currentUser?.getIdToken().catch(() => null);
+                      const res = await fetch(
+                          `/api/ap/remote-profile?handle=${encodeURIComponent(lowerHandle)}&withPosts=0`,
+                          {
+                              headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+                          }
+                      );
+                      if (!res.ok) return null;
+                      const data = await res.json();
+                      if (!data?.nativeUser?.id) return null;
+                      return {
+                          ...data.nativeUser,
+                          dmPreference: data.nativeUser.dmPreference && data.nativeUser.dmPreference !== 'none'
+                              ? data.nativeUser.dmPreference
+                              : 'everyone',
+                      } as User;
+                  } catch {
+                      return null;
+                  }
+              })()
+            : Promise.resolve(null);
+
+    const exactUsernameDocPromise: Promise<string | null> =
+        lowerHandle && !lowerHandle.includes('/')
+            ? getDoc(doc(db, 'usernames', lowerHandle))
+                  .then((snap) => (snap.exists() ? (snap.data()?.userId as string) || null : null))
+                  .catch(() => null)
+            : Promise.resolve(null);
+
     try {
-        const queryPromises = [getDocs(nameQuery), getDocs(usernameQuery)];
-        if (bioHashtagQuery) {
-            queryPromises.push(getDocs(bioHashtagQuery));
-        }
+        const queryPromises = [getDocs(nameQuery), getDocs(usernameLowerQuery)];
+        if (nameCapQuery) queryPromises.push(getDocs(nameCapQuery));
+        if (usernameExactCaseQuery) queryPromises.push(getDocs(usernameExactCaseQuery));
+        if (usernameCapQuery) queryPromises.push(getDocs(usernameCapQuery));
+        if (bioHashtagQuery) queryPromises.push(getDocs(bioHashtagQuery));
 
-        const [nameSnapshot, usernameSnapshot, bioSnapshot] = await Promise.all(queryPromises);
+        const [snapshots, remoteUser, exactUserId, viewerFollowedIds, recentPartners, followedSample] = await Promise.all([
+            Promise.all(queryPromises),
+            remoteFediversePromise,
+            exactUsernameDocPromise,
+            activeUserId ? getFollowedUserIds(activeUserId).catch(() => [] as string[]) : Promise.resolve([] as string[]),
+            activeUserId ? getRecentConversationPartners(activeUserId).catch(() => [] as User[]) : Promise.resolve([] as User[]),
+            activeUserId ? getUsersFollowedBy(activeUserId, activeUserId, 60).catch(() => [] as User[]) : Promise.resolve([] as User[]),
+        ]);
 
+        const followedSet = new Set(viewerFollowedIds);
         const usersMap = new Map<string, User>();
 
-        const processSnapshot = async (snapshot: any) => {
+        if (remoteUser && !remoteUser.isBlocked && !remoteUser.hasBlockedCurrentUser) {
+            remoteUser.isFollowing = followedSet.has(remoteUser.id);
+            usersMap.set(remoteUser.id, remoteUser);
+        }
+
+        for (const contact of [...recentPartners, ...followedSample]) {
+            if (!contact || usersMap.has(contact.id) || contact.isBlocked || contact.hasBlockedCurrentUser) continue;
+            const hayName = (contact.name || '').toLowerCase();
+            const hayUser = (contact.username || '').toLowerCase();
+            if (hayName.includes(lowerHandle) || hayUser.includes(lowerHandle)) {
+                usersMap.set(contact.id, contact);
+            }
+        }
+
+        if (exactUserId && !usersMap.has(exactUserId)) {
+            const exactSnap = await getDoc(doc(usersCollection, exactUserId)).catch(() => null);
+            if (exactSnap && exactSnap.exists()) {
+                const exactUser = snapshotToPublicUser(exactSnap, {
+                    isFollowing: followedSet.has(exactSnap.id),
+                });
+                if (exactUser && !exactUser.isBlocked && !exactUser.hasBlockedCurrentUser) {
+                    usersMap.set(exactUser.id, exactUser);
+                }
+            }
+        }
+
+        const bioSnapshot = bioHashtagQuery ? snapshots[snapshots.length - 1] : null;
+
+        for (const snapshot of snapshots) {
             for (const docSnap of snapshot.docs) {
                 if (!usersMap.has(docSnap.id)) {
-                    const user = await getUser(docSnap.id, activeUserId);
-                    if (user && !user.isBlocked && !user.hasBlockedCurrentUser) { // Filter out blocked users
-                        // For bio search, do a more precise client-side check
+                    const user = snapshotToPublicUser(docSnap, {
+                        isFollowing: followedSet.has(docSnap.id),
+                    });
+                    if (user && !user.isBlocked && !user.hasBlockedCurrentUser) {
                         if (bioHashtagQuery && snapshot === bioSnapshot) {
                             if (user.bio?.toLowerCase().includes(lowerQuery)) {
                                 usersMap.set(docSnap.id, user);
@@ -713,15 +1001,9 @@ export const searchUsers = async (searchQuery: string, activeUserId: string | nu
                     }
                 }
             }
-        };
-
-        await processSnapshot(nameSnapshot);
-        await processSnapshot(usernameSnapshot);
-        if (bioSnapshot) {
-            await processSnapshot(bioSnapshot);
         }
 
-        return Array.from(usersMap.values()).slice(0, 10); // Final limit
+        return Array.from(usersMap.values()).slice(0, 25);
     } catch (error: any) {
         console.error("Error searching users:", String(error));
         return [];
@@ -771,7 +1053,12 @@ const chunksOf = <T,>(items: T[], size: number): T[][] => {
  * com assuntos publicados pela rede da pessoa, atividade recente e popularidade como desempate/fallback. Nenhum dado
  * pessoal é lido, e contas já seguidas, silenciadas ou bloqueadas em qualquer direção são removidas.
  */
-const loadSuggestedUsers = async (activeUserId: string, requested: number): Promise<User[]> => {
+const loadSuggestedUsers = async (
+  activeUserId: string,
+  requested: number,
+  prefs: RecommendationPreferences = DEFAULT_RECOMMENDATION_PREFERENCES,
+): Promise<User[]> => {
+  if (!prefs.enabled) return [];
   const profilePoolSize = Math.min(100, Math.max(40, requested * 5));
 
   try {
@@ -856,26 +1143,31 @@ const loadSuggestedUsers = async (activeUserId: string, requested: number): Prom
     candidateIds.forEach((userId) => {
       const profile = publicProfiles.get(userId);
       if (!profile || typeof profile.name !== 'string' || typeof profile.username !== 'string') return;
+      const candidateRecPrefs = profile.recommendationPreferences as RecommendationPreferences | undefined;
+      if (candidateRecPrefs?.optOutFromSuggestions) return;
+      if (!matchesNetworkScope({ id: userId, username: profile.username }, prefs.networkScope)) return;
 
       const affinityByTopic: Record<string, number> = {};
-      authorTopics.get(userId)?.forEach((publishedCount, topic) => {
-        const interest = interestWeights.get(topic) ?? 0;
-        if (interest > 0) affinityByTopic[topic] = Math.min(interest * 3, 12) * Math.min(publishedCount, 3);
-      });
+      if (prefs.useInterestSignals !== false) {
+        authorTopics.get(userId)?.forEach((publishedCount, topic) => {
+          const interest = interestWeights.get(topic) ?? 0;
+          if (interest > 0) affinityByTopic[topic] = Math.min(interest * 3, 12) * Math.min(publishedCount, 3);
+        });
+      }
 
       signals.push({
         userId,
-        followsViewer: followerIds.has(userId),
-        mutualCount: mutualCounts.get(userId) ?? 0,
+        followsViewer: prefs.useFollowingSignals !== false && followerIds.has(userId),
+        mutualCount: prefs.useFollowingSignals !== false ? (mutualCounts.get(userId) ?? 0) : 0,
         affinityByTopic,
-        recentPosts: recentPostsByAuthor.get(userId) ?? 0,
+        recentPosts: prefs.useActivitySignals !== false ? (recentPostsByAuthor.get(userId) ?? 0) : 0,
         followersCount: typeof profile.followersCount === 'number' ? profile.followersCount : 0,
         postsCount: typeof profile.postsCount === 'number' ? profile.postsCount : 0,
         profileComplete: Boolean(profile.avatarUrl && profile.bio),
       });
     });
 
-    const ranked = rankUserRecommendations(signals, signals.length);
+    const ranked = rankUserRecommendations(signals, signals.length, prefs);
     const suggestedUsers: User[] = [];
 
     // A coleção bloqueada da outra pessoa só pode ser consultada documento a documento. Fazemos isso na ordem do ranking
@@ -912,26 +1204,52 @@ const loadSuggestedUsers = async (activeUserId: string, requested: number): Prom
   }
 };
 
-export const getSuggestedUsers = async (activeUserId: string | null, limitCount: number = 10): Promise<User[]> => {
+export const getSuggestedUsers = async (
+  activeUserId: string | null,
+  limitCount: number = 10,
+  customPrefs?: RecommendationPreferences,
+): Promise<User[]> => {
   // As regras não permitem varrer perfis sem login; para visitantes, a própria tela convida a entrar quando necessário.
   if (!activeUserId) return [];
 
+  const prefs = customPrefs ?? readRecommendationPreferences();
+  if (!prefs.enabled) return [];
+
   const requested = Math.max(1, Math.min(limitCount, 30));
-  // Explorar pede 15 e a barra lateral pede 3 quase ao mesmo tempo. Ambas compartilham UMA coleta de sinais e leituras.
   const collectedCount = Math.max(15, requested);
-  const hit = recommendationCache.get(activeUserId);
+  const cacheKey = `${activeUserId}:${prefs.networkScope}:${prefs.mode}:${Number(prefs.useFollowingSignals)}:${Number(prefs.useInterestSignals)}:${Number(prefs.useActivitySignals)}`;
+  const hit = recommendationCache.get(cacheKey);
   if (hit && hit.count >= collectedCount && Date.now() - hit.at < RECOMMENDATION_CACHE_TTL_MS) {
     return (await hit.value).slice(0, requested).map((user) => deepCopyUser(user)!);
   }
 
-  const value = loadSuggestedUsers(activeUserId, collectedCount);
-  recommendationCache.set(activeUserId, { at: Date.now(), count: collectedCount, value });
+  const value = loadSuggestedUsers(activeUserId, collectedCount, prefs);
+  recommendationCache.set(cacheKey, { at: Date.now(), count: collectedCount, value });
   void value.then((users) => {
-    if (users.length === 0 && recommendationCache.get(activeUserId)?.value === value) {
-      recommendationCache.delete(activeUserId);
+    if (users.length === 0 && recommendationCache.get(cacheKey)?.value === value) {
+      recommendationCache.delete(cacheKey);
     }
   });
   return (await value).slice(0, requested).map((user) => deepCopyUser(user)!);
+};
+
+export const getRelatedProfiles = async (
+  targetUser: User,
+  activeUserId: string | null,
+  limitCount: number = 6,
+  customPrefs?: RecommendationPreferences,
+): Promise<User[]> => {
+  if (!activeUserId) return [];
+  const prefs = customPrefs ?? readRecommendationPreferences();
+  if (!prefs.enabled || !prefs.showOnProfiles) return [];
+
+  try {
+    const pool = await getSuggestedUsers(activeUserId, 24, prefs);
+    return rankRelatedProfiles(targetUser, pool, prefs, limitCount);
+  } catch (error) {
+    console.error('Error fetching related profiles:', error);
+    return [];
+  }
 };
 
 export const getUsersByNewsCategory = async (

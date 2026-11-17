@@ -29,7 +29,7 @@ interface ReplyDialogContentProps {
   onReplySubmitted: (newComment: Comment) => void;
   dialogClose: () => void;
   // `false` = não enviou (o formulário mantém o texto); lançar erro também conta como falha.
-  onSendMessage?: (data: { text?: string; media?: Media[] | null; youtubeVideoId?: string; quotedPostObject?: Post | null; replyPermission: ReplyPermission; allowReposts: boolean; }) => Promise<void | boolean>;
+  onSendMessage?: (data: { text?: string; media?: Media[] | null; youtubeVideoId?: string; quotedPostObject?: Post | null; replyPermission: ReplyPermission; allowReposts: boolean; sensitive?: boolean; }) => Promise<void | boolean>;
 }
 
 // O guard fica FORA dos hooks (regra dos hooks): sem conteúdo para responder não há o que renderizar.
@@ -83,7 +83,7 @@ function ReplyDialogContentInner({ parentPost, parentComment, onReplySubmitted, 
 
   // Devolve `false` quando o envio não deu certo: o CommentInputArea então mantém o texto e as imagens para a pessoa
   // tentar de novo (antes ele limpava tudo mesmo com o erro na tela).
-  const handleLocalSendMessage = async (data: { text?: string; media?: Media[] | null; youtubeVideoId?: string; quotedPostObject?: Post | null; replyPermission: ReplyPermission; allowReposts: boolean; }): Promise<boolean> => {
+  const handleLocalSendMessage = async (data: { text?: string; media?: Media[] | null; youtubeVideoId?: string; quotedPostObject?: Post | null; replyPermission: ReplyPermission; allowReposts: boolean; sensitive?: boolean; }): Promise<boolean> => {
     if (isTopLevelComment && onSendMessage) {
       setIsSubmitting(true);
       try {

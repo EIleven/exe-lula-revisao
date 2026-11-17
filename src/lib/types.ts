@@ -21,8 +21,20 @@ export type UserRecommendationReason =
   | { kind: 'follows-you' }
   | { kind: 'mutual'; count: number }
   | { kind: 'interest'; topic: string }
+  | { kind: 'related-profile'; label?: string }
   | { kind: 'active' }
   | { kind: 'popular' };
+
+export interface RecommendationPreferences {
+  enabled: boolean;
+  showOnProfiles: boolean;
+  useFollowingSignals: boolean;
+  useInterestSignals: boolean;
+  useActivitySignals: boolean;
+  networkScope: 'all' | 'local' | 'fediverse';
+  mode: 'balanced' | 'similar' | 'discovery';
+  optOutFromSuggestions?: boolean;
+}
 
 
 export type User = {
@@ -32,7 +44,9 @@ export type User = {
   email: string;
   dateOfBirth?: string | null;
   avatarUrl?: string;
+  avatarAlt?: string | null;
   coverImageUrl?: string | null;
+  coverImageAlt?: string | null;
   "data-ai-hint"?: string | null;
   "cover-image-ai-hint"?: string | null;
   bio?: string;
@@ -56,6 +70,12 @@ export type User = {
   pinnedPostId?: string | null; // Added for pinned post
   // Dynamic fields added on the client based on the active user
   isFollowing?: boolean;
+  /** Só para perfis do Fediverso: o pedido de seguir foi enviado e o perfil ainda não aceitou (o botão mostra "Solicitação enviada"). */
+  followRequested?: boolean;
+  /** Perfil do Fediverso que aprova seguidores manualmente (`manuallyApprovesFollowers`): seguir vira "Pedir para seguir". Ausente = não se sabe. */
+  remoteManuallyApprovesFollowers?: boolean | null;
+  federatedLoginProvider?: 'fediverse' | 'bluesky';
+  federatedLoginHandle?: string;
   isFollowedBy?: boolean;
   isBlocked?: boolean;
   hasBlockedCurrentUser?: boolean;
@@ -71,6 +91,7 @@ export type User = {
   replyPermission?: ReplyPermission; // Added for interaction settings
   displaySensitiveContent?: boolean; // Added for media settings
   mutedWords?: string[];
+  recommendationPreferences?: RecommendationPreferences;
   notificationPreferences?: {
     likes?: boolean;
     comments?: boolean;
@@ -282,6 +303,7 @@ export type NotificationType =
   | 'new_post_from_user'
   | 'new_message'
   | 'new_conversation'
+  | 'alt_text_request'
   | 'welcome';
 
 export type NotificationActor = {
@@ -337,6 +359,7 @@ export type DirectMessage = {
   p2pStatus?: 'queued' | 'sent';
   fileUrl?: string;
   fileType?: 'image' | 'video' | 'audio' | 'file';
+  mediaE2ee?: E2eeMessagePayload | null;
   sharedPostId?: string; // Added to share posts
   sharedPost?: Post | null; // For client-side rendering
   createdAt: string;

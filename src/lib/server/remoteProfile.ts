@@ -6,6 +6,7 @@ import { ACTIVITY_ACCEPT } from '@/lib/activitypub/remote';
 import { domainOfUrl, normalizeHandle, normalizeHostname } from '@/lib/activitypub/identity';
 import { isOwnHostUrl, sameHost, validateFetchedActor } from '@/lib/activitypub/remoteIdentity';
 import { safeFetchText } from '@/lib/security/safe-fetch';
+import { classifySearchQuery } from '@/lib/search/searchQueryParser';
 import { federation } from '@/lib/server/federation';
 
 const HANDLE_RE = /^@?([A-Za-z0-9_.-]{1,64})@([A-Za-z0-9.-]+\.[A-Za-z]{2,})$/;
@@ -45,6 +46,8 @@ export type RemoteProfileData = {
   followersCount: number | null;
   followingCount: number | null;
   postsCount: number | null;
+  /** O perfil aprova seguidores manualmente (`manuallyApprovesFollowers` no ator; `locked` na API Mastodon): seguir vira PEDIR para seguir. */
+  manuallyApprovesFollowers?: boolean;
   posts?: RemotePostItem[];
 };
 
@@ -97,7 +100,13 @@ export async function resolveRemoteProfile(
   rawHandle: string,
   opts: { withPosts?: boolean } = {},
 ): Promise<ResolveRemoteResult> {
-  const match = rawHandle.trim().match(HANDLE_RE);
+  const classified = classifySearchQuery(rawHandle);
+  const candidateHandle =
+    classified.kind === 'fediverse-profile-url' || classified.kind === 'fediverse-handle'
+      ? classified.handle
+      : rawHandle.trim();
+
+  const match = candidateHandle.match(HANDLE_RE);
   if (!match) return { ok: false, status: 400, error: 'formato-invalido' };
 
   const user = match[1];
@@ -222,6 +231,7 @@ export async function resolveRemoteProfile(
       url?: string;
       icon?: { url?: string } | { url?: string }[];
       image?: { url?: string } | { url?: string }[];
+      manuallyApprovesFollowers?: unknown;
     };
     profile.actorId = validado.actor.actorId;
     profile.handle = validado.actor.handle;
@@ -236,6 +246,7 @@ export async function resolveRemoteProfile(
     const imgRaw = Array.isArray(actor.image) ? actor.image[0]?.url : actor.image?.url;
     if (typeof imgRaw === 'string' && imgRaw.startsWith('https://')) profile.headerUrl = imgRaw;
     if (typeof actor.url === 'string' && actor.url.startsWith('https://')) profile.url = actor.url;
+    if (actor.manuallyApprovesFollowers === true) profile.manuallyApprovesFollowers = true;
   }
 
   // Fallback / enriquecimento via API pública Mastodon/Pleroma/Pixelfed (funciona mesmo com Authorized Fetch).
@@ -264,8 +275,10 @@ export async function resolveRemoteProfile(
           followers_count?: number;
           following_count?: number;
           statuses_count?: number;
+          locked?: boolean;
         };
         if (typeof m.id === 'string' && m.id) mastoAccountId = m.id;
+        if (m.locked === true) profile.manuallyApprovesFollowers = true;
         if (typeof m.display_name === 'string' && m.display_name.trim() && profile.name === user) {
           profile.name = m.display_name.trim();
         }

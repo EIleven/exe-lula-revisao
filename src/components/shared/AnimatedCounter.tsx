@@ -3,6 +3,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { cn } from '@/lib/utils';
+import { compactCount, exactCountTitle } from '@/lib/media/videoQueue';
 
 interface AnimatedCounterProps {
   count: number;
@@ -34,8 +35,9 @@ const AnimatedCounter: React.FC<AnimatedCounterProps> = ({ count, className }) =
     return () => clearTimeout(timer);
   }, [count]);
 
-  const prevNumberToDisplay = prevCount;
-  const currentNumberToDisplay = count;
+  const prevNumberToDisplay = compactCount(prevCount);
+  const currentNumberToDisplay = compactCount(count);
+  const exactTitle = exactCountTitle(count);
 
   let translationClass = '';
   if (direction === 'up') {
@@ -45,7 +47,7 @@ const AnimatedCounter: React.FC<AnimatedCounterProps> = ({ count, className }) =
   }
 
   return (
-    <div className={cn("animated-counter", className)}>
+    <div className={cn("animated-counter", className)} title={exactTitle}>
       <div className={translationClass}>
         <span className="animated-counter-number">
           {direction ? prevNumberToDisplay : currentNumberToDisplay}

@@ -81,6 +81,7 @@ interface CommentInputAreaProps {
   formId?: string;
   initialText?: string;
   initialMedia?: Media[] | null;
+  initialFiles?: File[] | null;
   initialReplyPermission?: ReplyPermission;
   initialAllowReposts?: boolean;
   initialQuotedPost?: Post | null;
@@ -89,6 +90,8 @@ interface CommentInputAreaProps {
   showAvatar?: boolean;
   /** Opções que pertencem ao post (localização, aviso de conteúdo e enquete), não a comentários/respostas. */
   enablePostOptions?: boolean;
+  /** Permite marcar mídia anexa como conteúdo sensível (habilitado em posts, citações e comentários). */
+  enableSensitiveOption?: boolean;
   initialLocation?: PostLocation | null;
   initialSensitive?: boolean;
   initialPoll?: PollDraft | null;
@@ -106,6 +109,7 @@ const CommentInputArea = forwardRef((
     formId,
     initialText = '',
     initialMedia = null,
+    initialFiles = null,
     initialReplyPermission = 'everyone',
     initialAllowReposts = true,
     initialQuotedPost,
@@ -113,6 +117,7 @@ const CommentInputArea = forwardRef((
     isModalLayout = false,
     showAvatar = true,
     enablePostOptions = false,
+    enableSensitiveOption = true,
     initialLocation = null,
     initialSensitive = false,
     initialPoll = null,
@@ -138,10 +143,18 @@ const CommentInputArea = forwardRef((
   const [location, setLocation] = useState<PostLocation | null>(initialLocation);
   const [sensitive, setSensitive] = useState(initialSensitive);
   const [poll, setPoll] = useState<PollDraft | null>(initialPoll);
+  const showSensitiveToggle = enablePostOptions || enableSensitiveOption;
+
+  useEffect(() => {
+    if (mediaItems.length === 0 && sensitive) {
+      setSensitive(false);
+    }
+  }, [mediaItems.length, sensitive]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const seededFilesRef = useRef<File[] | null>(null);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const isMobile = useIsMobile();
 
@@ -211,10 +224,7 @@ const CommentInputArea = forwardRef((
     isLoading: isLoadingPreview,
     error: previewError,
     removeQuotedPost,
-  } = useQuotedPostPreview(textValue, (urlToRemove) => {
-    const newText = textValue.replace(urlToRemove, '').trim();
-    setTextValue(newText);
-  });
+  } = useQuotedPostPreview(textValue);
 
   const finalQuotedPost = quotedPost || initialQuotedPost;
 
@@ -412,6 +422,15 @@ const CommentInputArea = forwardRef((
     }
   };
 
+  useEffect(() => {
+    if (!initialFiles || initialFiles.length === 0) return;
+    if (seededFilesRef.current === initialFiles) return;
+    seededFilesRef.current = initialFiles;
+    initialFiles.slice(0, MAX_MEDIA).forEach((file) => {
+      void addMediaFile(file);
+    });
+  });
+
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (files) {
@@ -497,7 +516,7 @@ const CommentInputArea = forwardRef((
         replyPermission,
         allowReposts,
         location: enablePostOptions ? location : undefined,
-        sensitive: enablePostOptions ? sensitive : undefined,
+        sensitive: showSensitiveToggle ? (sensitive && mediaPayload.length > 0) : undefined,
         poll: enablePostOptions ? poll : undefined,
       });
       // Envio recusado (erro, sem login, vazio): o texto e as imagens ficam onde estão para a pessoa tentar de novo.
@@ -547,7 +566,7 @@ const CommentInputArea = forwardRef((
       replyPermission,
       allowReposts,
       location: enablePostOptions ? location : undefined,
-      sensitive: enablePostOptions ? sensitive : undefined,
+      sensitive: showSensitiveToggle ? (sensitive && mediaPayload.length > 0) : undefined,
       pollInput: enablePostOptions ? poll : undefined,
     };
     const newDraftId = await cacheService.saveDraft(draftData);
@@ -681,6 +700,12 @@ const CommentInputArea = forwardRef((
                               <Button type="button" variant="destructive" size="icon" className="absolute top-2 right-2 h-7 w-7 rounded-full" onClick={removeQuotedPost}><XCircle className="h-5 w-5" /></Button>
                           </div>
                       )}
+                      {showSensitiveToggle && sensitive && mediaItems.length > 0 && (
+                        <div className="inline-flex items-center gap-1.5 rounded-full bg-destructive/10 px-2.5 py-1 text-xs font-medium text-destructive" data-testid="composer-sensitive-badge">
+                          <ShieldAlert className="h-3.5 w-3.5" aria-hidden="true" />
+                          <span>{composerT('sensitiveActive')}</span>
+                        </div>
+                      )}
                       {enablePostOptions && location && (
                         <div className="flex items-center gap-2 text-sm text-muted-foreground" data-testid="composer-location-selected">
                           <MapPin className="h-4 w-4 text-primary" aria-hidden="true" />
@@ -728,21 +753,23 @@ const CommentInputArea = forwardRef((
                         >
                           <BarChart3 className="h-5 w-5" />
                         </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className={cn('h-8 w-8 text-primary', sensitive && 'bg-destructive/15 text-destructive')}
-                          aria-label={composerT('sensitiveButton')}
-                          title={composerT('sensitiveButton')}
-                          aria-pressed={sensitive}
-                          data-testid="composer-sensitive-button"
-                          disabled={isEffectivelyDisabled || mediaItems.length === 0}
-                          onClick={() => setSensitive(value => !value)}
-                        >
-                          <ShieldAlert className="h-5 w-5" />
-                        </Button>
                       </>
+                    )}
+                    {showSensitiveToggle && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className={cn('h-8 w-8 text-primary', sensitive && 'bg-destructive/15 text-destructive')}
+                        aria-label={composerT('sensitiveButton')}
+                        title={composerT('sensitiveButton')}
+                        aria-pressed={sensitive}
+                        data-testid="composer-sensitive-button"
+                        disabled={isEffectivelyDisabled || mediaItems.length === 0}
+                        onClick={() => setSensitive(value => !value)}
+                      >
+                        <ShieldAlert className="h-5 w-5" />
+                      </Button>
                     )}
                     <input type="file" multiple accept="image/*,video/*" ref={fileInputRef} onChange={handleFileChange} className="hidden" id="modal-file-upload-icon"/>
                     <input type="file" accept="image/*,video/*" capture ref={cameraInputRef} onChange={handleFileChange} className="hidden" />
