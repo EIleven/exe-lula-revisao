@@ -1,6 +1,6 @@
-# Exe. Lula (HiperVerso) — Repositório Público (`exe-lula-revisao`)
+# HiperVerso (Exe. Lula) — Repositório Open Source (`exe-lula-revisao`)
 
-> Repositório público do sistema **Exe. Lula** (`HiperVerso`) para análise técnica, revisão e envio de contribuições via Pull Request, regido pela [`LICENSE`](./LICENSE) e pelo [`ACORDO_REVISAO.md`](./ACORDO_REVISAO.md).
+> Repositório público do sistema **HiperVerso** licenciado sob a **GNU Affero General Public License v3.0 ([`LICENSE`](./LICENSE) — AGPL-3.0)**. Modelos complementares de governança e licenciamento seguem em avaliação após apresentação a professores do **IFTM** e reuniões com institutos de pesquisa voltados à soberania digital do Brasil. Consulte também [`CONTRIBUTING.md`](./CONTRIBUTING.md) e [`ACORDO_REVISAO.md`](./ACORDO_REVISAO.md).
 
 ---
 

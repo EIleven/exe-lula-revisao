@@ -43,5 +43,7 @@ Utilize mensagens claras no formato Conventional Commits:
 
 ## 3. Revisão e Integração
 
-Os PRs aprovados neste repositório serão revisados pelo Proprietário e portados para o repositório principal privado do projeto.
+## Licença e Revisão
+
+Todas as contribuições enviadas para este repositório são regidas pela licença **GNU Affero General Public License v3.0 (`AGPL-3.0`)** descrita em [`LICENSE`](./LICENSE).
 
