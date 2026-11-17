@@ -19,14 +19,23 @@ import {
   setGroupParticipantAdmin,
   updateGroupName,
 } from '@/lib/services/conversationService';
+import { useMessagesHost } from '@/modules/messages';
 import { searchUsers } from '@/lib/services/userService';
 import { useDebounce } from '@/hooks/use-debounce';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Check,
+  Copy,
+  Globe,
   Loader2,
+  Mail,
+  Megaphone,
   Search,
+  Send,
+  Share2,
   Shield,
   ShieldOff,
   UserMinus,
@@ -49,7 +58,7 @@ export function GroupManagementDialog({
 }: GroupManagementDialogProps) {
   const { toast } = useToast();
   const isAdmin = Boolean(conversation.adminIds?.includes(currentUserId));
-  const [tab, setTab] = useState<'members' | 'add'>('members');
+  const [tab, setTab] = useState<'members' | 'add' | 'invite'>('members');
   const [groupNameInput, setGroupNameInput] = useState(conversation.groupName || '');
   const [isSavingName, setIsSavingName] = useState(false);
 
@@ -57,21 +66,47 @@ export function GroupManagementDialog({
   const [busyUserId, setBusyUserId] = useState<string | null>(null);
 
   const [addSearchTerm, setAddSearchTerm] = useState('');
-  const debouncedAddSearch = useDebounce(addSearchTerm, 300);
+  const debouncedAddSearch = useDebounce(addSearchTerm, 220);
+  const [initialPool, setInitialPool] = useState<User[]>([]);
   const [rawCandidates, setRawCandidates] = useState<User[]>([]);
   const [isLoadingCandidates, setIsLoadingCandidates] = useState(false);
   const [selectedToAdd, setSelectedToAdd] = useState<string[]>([]);
+  const [selectedUsersById, setSelectedUsersById] = useState<Record<string, User>>({});
   const [isAdding, setIsAdding] = useState(false);
+  const [sendDirectInviteOnAdd, setSendDirectInviteOnAdd] = useState(true);
+  const [sendPublicMentionOnAdd, setSendPublicMentionOnAdd] = useState(false);
+
+  const [invitePostText, setInvitePostText] = useState('');
+  const [isPublishingPost, setIsPublishingPost] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [copiedLink, setCopiedLink] = useState(false);
+  const messagesHost = useMessagesHost();
+
+  const groupTitle = (conversation.groupName || 'Grupo').trim();
+  const inviteLink = useMemo(() => {
+    const origin =
+      typeof window !== 'undefined' && window.location.origin
+        ? window.location.origin
+        : 'https://hiperverso.app';
+    return `${origin}/pt-BR/login?federated=fediverse&groupName=${encodeURIComponent(
+      groupTitle
+    )}&redirect=${encodeURIComponent(`/pt-BR/messages/group/${conversation.id}`)}`;
+  }, [conversation.id, groupTitle]);
 
   useEffect(() => {
     if (open) {
+      const title = (conversation.groupName || 'Grupo').trim();
       setGroupNameInput(conversation.groupName || '');
       setMemberFilter('');
       setAddSearchTerm('');
       setSelectedToAdd([]);
+      setSelectedUsersById({});
       setTab('members');
+      setInvitePostText(
+        `Estamos reunidos no grupo "${title}" aqui na rede! Quem quiser chegar junto na conversa entra em 1 toque:\n${inviteLink}`
+      );
     }
-  }, [open, conversation.groupName]);
+  }, [open, conversation.groupName, inviteLink]);
 
   useEffect(() => {
     if (!open || !isAdmin || tab !== 'add') return;
@@ -80,8 +115,11 @@ export function GroupManagementDialog({
       setIsLoadingCandidates(true);
       try {
         const term = debouncedAddSearch.trim();
-        const users = await searchUsers(term.length > 1 ? term : '', currentUserId);
+        const users = await searchUsers(term.length > 0 ? term : '', currentUserId);
         if (!active) return;
+        if (!term) {
+          setInitialPool(users);
+        }
         setRawCandidates(users);
       } catch (err) {
         console.error('Erro ao buscar candidatos para o grupo:', err);
@@ -98,14 +136,33 @@ export function GroupManagementDialog({
 
   const candidateUsers = useMemo(() => {
     const existingSet = new Set(conversation.participantIds);
-    return rawCandidates.filter(
+    const liveQuery = addSearchTerm.trim().replace(/^@+/, '').toLowerCase();
+    const combinedById = new Map<string, User>();
+    for (const u of [...rawCandidates, ...initialPool]) {
+      if (!u || combinedById.has(u.id)) continue;
+      if (liveQuery) {
+        const matchName = (u.name || '').toLowerCase().includes(liveQuery);
+        const matchUser = (u.username || '').toLowerCase().includes(liveQuery);
+        if (!matchName && !matchUser) continue;
+      }
+      combinedById.set(u.id, u);
+    }
+    const filtered = Array.from(combinedById.values()).filter(
       (u) =>
         !existingSet.has(u.id) &&
-        u.dmPreference !== 'none' &&
+        (u.dmPreference !== 'none' || u.id.startsWith('ap_') || u.username?.includes('@')) &&
         !u.hasBlockedCurrentUser &&
         !u.isBlocked
     );
-  }, [rawCandidates, conversation.participantIds]);
+    const seen = new Set(filtered.map((u) => u.id));
+    const extras: User[] = [];
+    for (const id of selectedToAdd) {
+      if (!seen.has(id) && !existingSet.has(id) && selectedUsersById[id]) {
+        extras.push(selectedUsersById[id]);
+      }
+    }
+    return [...extras, ...filtered];
+  }, [rawCandidates, initialPool, addSearchTerm, conversation.participantIds, selectedToAdd, selectedUsersById]);
 
   const filteredMembers = useMemo(() => {
     const q = memberFilter.trim().toLowerCase();
@@ -190,7 +247,9 @@ export function GroupManagementDialog({
     }
   };
 
-  const handleToggleCandidate = (userId: string) => {
+  const handleToggleCandidate = (user: User) => {
+    const userId = user.id;
+    setSelectedUsersById((prev) => ({ ...prev, [userId]: user }));
     setSelectedToAdd((prev) =>
       prev.includes(userId)
         ? prev.filter((id) => id !== userId)
@@ -204,13 +263,32 @@ export function GroupManagementDialog({
     if (!isAdmin || isAdding || selectedToAdd.length === 0) return;
     setIsAdding(true);
     try {
-      await addGroupParticipants(conversation.id, currentUserId, selectedToAdd);
+      const { addedUsers, remoteNotified } = await addGroupParticipants(
+        conversation.id,
+        currentUserId,
+        selectedToAdd,
+        {
+          sendFediverseInvite: sendDirectInviteOnAdd,
+          sendPublicFediverseMention: sendPublicMentionOnAdd,
+        }
+      );
+      const addedHandles = addedUsers
+        .map((u) => (u.username?.startsWith('@') ? u.username : `@${u.username}`))
+        .filter(Boolean);
+      if (addedHandles.length > 0) {
+        setInvitePostText(
+          `Boas-vindas a ${addedHandles.join(' ')} no grupo "${groupTitle}"! Quem quiser chegar junto na conversa entra em 1 toque:\n${inviteLink}`
+        );
+      }
       toast({
         title: 'Participantes adicionados',
-        description: `${selectedToAdd.length} pessoa(s) adicionada(s) ao grupo.`,
+        description:
+          remoteNotified > 0
+            ? `${selectedToAdd.length} pessoa(s) adicionada(s) e ${remoteNotified} convite(s) enviado(s) ao Fediverso.`
+            : `${selectedToAdd.length} pessoa(s) adicionada(s) ao grupo.`,
       });
       setSelectedToAdd([]);
-      setTab('members');
+      setTab('invite');
     } catch (err: unknown) {
       toast({
         title: 'Erro',
@@ -220,6 +298,89 @@ export function GroupManagementDialog({
     } finally {
       setIsAdding(false);
     }
+  };
+
+  const handleCopyInviteLink = async () => {
+    try {
+      await navigator.clipboard.writeText(inviteLink);
+      setCopiedLink(true);
+      toast({ title: 'Link copiado!' });
+      setTimeout(() => setCopiedLink(false), 2000);
+    } catch {
+      toast({ title: 'Não foi possível copiar', variant: 'destructive' });
+    }
+  };
+
+  const handleShareNative = async () => {
+    const shareText = `Venha participar do grupo "${groupTitle}": ${inviteLink}`;
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share({
+          title: groupTitle,
+          text: `Convite para o grupo "${groupTitle}"`,
+          url: inviteLink,
+        });
+        return;
+      } catch {
+        // fallback to clipboard
+      }
+    }
+    await navigator.clipboard.writeText(shareText).catch(() => {});
+    toast({ title: 'Convite copiado para enviar!' });
+  };
+
+  const handlePublishInvitePost = async () => {
+    const text = invitePostText.trim();
+    if (!text || isPublishingPost) return;
+    setIsPublishingPost(true);
+    try {
+      if (!messagesHost.publishGroupInvite) {
+        if (typeof navigator !== 'undefined' && navigator.clipboard) {
+          await navigator.clipboard.writeText(text);
+          toast({
+            title: 'Convite copiado!',
+            description: 'Cole onde desejar para convidar outras pessoas.',
+          });
+        }
+        return;
+      }
+      await messagesHost.publishGroupInvite({
+        userId: currentUserId,
+        text,
+        groupId: conversation.id,
+      });
+      toast({
+        title: 'Convite publicado no Feed!',
+        description: 'As pessoas mencionadas também recebem o aviso no Fediverso.',
+      });
+    } catch (err: unknown) {
+      toast({
+        title: 'Erro ao publicar',
+        description: err instanceof Error ? err.message : 'Tente novamente.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsPublishingPost(false);
+    }
+  };
+
+  const handleSendEmailInvite = (e: React.FormEvent) => {
+    e.preventDefault();
+    const to = inviteEmail.trim();
+    if (!to) return;
+    const subject = encodeURIComponent(`Convite para o grupo "${groupTitle}"`);
+    const body = encodeURIComponent(
+      `Olá!\n\nVocê foi convidado(a) para participar do grupo "${groupTitle}".\n\nPara entrar direto na conversa em 1 clique:\n${inviteLink}\n\nAté lá!`
+    );
+    window.open(`mailto:${to}?subject=${subject}&body=${body}`, '_blank');
+    toast({ title: 'Abrindo seu aplicativo de e-mail...' });
+  };
+
+  const toggleMentionInPost = (username: string) => {
+    const handle = username.startsWith('@') ? username : `@${username}`;
+    setInvitePostText((prev) =>
+      prev.includes(handle) ? prev : `${handle} ${prev}`
+    );
   };
 
   return (
@@ -261,12 +422,12 @@ export function GroupManagementDialog({
         )}
 
         {isAdmin && (
-          <div className="grid grid-cols-2 gap-1.5 sm:gap-2 rounded-full border border-border bg-muted/30 p-1">
+          <div className="grid grid-cols-3 gap-1 rounded-full border border-border bg-muted/30 p-1">
             <button
               type="button"
               onClick={() => setTab('members')}
               className={cn(
-                'flex min-w-0 items-center justify-center gap-1.5 rounded-full px-2 py-1.5 text-xs sm:text-sm font-medium transition-colors',
+                'flex min-w-0 items-center justify-center gap-1 rounded-full px-2 py-1.5 text-xs font-medium transition-colors',
                 tab === 'members'
                   ? 'bg-primary text-primary-foreground'
                   : 'text-muted-foreground hover:text-foreground'
@@ -279,7 +440,7 @@ export function GroupManagementDialog({
               type="button"
               onClick={() => setTab('add')}
               className={cn(
-                'flex min-w-0 items-center justify-center gap-1.5 rounded-full px-2 py-1.5 text-xs sm:text-sm font-medium transition-colors',
+                'flex min-w-0 items-center justify-center gap-1 rounded-full px-2 py-1.5 text-xs font-medium transition-colors',
                 tab === 'add'
                   ? 'bg-primary text-primary-foreground'
                   : 'text-muted-foreground hover:text-foreground'
@@ -287,6 +448,19 @@ export function GroupManagementDialog({
             >
               <UserPlus className="h-3.5 w-3.5 shrink-0" />
               <span className="truncate">Adicionar</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setTab('invite')}
+              className={cn(
+                'flex min-w-0 items-center justify-center gap-1 rounded-full px-2 py-1.5 text-xs font-medium transition-colors',
+                tab === 'invite'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              <Megaphone className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">Convidar</span>
             </button>
           </div>
         )}
@@ -391,20 +565,23 @@ export function GroupManagementDialog({
               </div>
             </div>
           </>
-        ) : (
+        ) : tab === 'add' ? (
           <>
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Buscar pessoas para adicionar..."
+                placeholder="Buscar pessoas ou @usuario@dominio..."
                 value={addSearchTerm}
                 onChange={(e) => setAddSearchTerm(e.target.value)}
-                className="pl-9 rounded-full border-border bg-muted/30"
+                className="pl-9 pr-9 rounded-full border-border bg-muted/30"
               />
+              {isLoadingCandidates && (
+                <Loader2 className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+              )}
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden pr-1">
-              {isLoadingCandidates ? (
+              {isLoadingCandidates && candidateUsers.length === 0 ? (
                 <div className="flex items-center justify-center py-12">
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                 </div>
@@ -416,7 +593,7 @@ export function GroupManagementDialog({
                       <button
                         key={user.id}
                         type="button"
-                        onClick={() => handleToggleCandidate(user.id)}
+                        onClick={() => handleToggleCandidate(user)}
                         className={cn(
                           'group relative flex min-w-0 flex-col items-center rounded-xl border p-2.5 text-center transition-colors',
                           selected
@@ -450,20 +627,159 @@ export function GroupManagementDialog({
               )}
             </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
-              <span className="text-xs text-muted-foreground">
-                {selectedToAdd.length} selecionado(s) · {remainingSlots} vagas restantes
-              </span>
-              <Button
-                onClick={handleAddSelected}
-                disabled={isAdding || selectedToAdd.length === 0 || remainingSlots === 0}
-                className="rounded-full px-5"
-              >
-                {isAdding ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Adicionar
-              </Button>
+            <div className="space-y-2 border-t border-border pt-2.5">
+              <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <Checkbox
+                    checked={sendDirectInviteOnAdd}
+                    onCheckedChange={(v) => setSendDirectInviteOnAdd(Boolean(v))}
+                  />
+                  <span>Enviar convite direto com link 1-toque</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <Checkbox
+                    checked={sendPublicMentionOnAdd}
+                    onCheckedChange={(v) => setSendPublicMentionOnAdd(Boolean(v))}
+                  />
+                  <span>Notificar também por menção pública</span>
+                </label>
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-xs text-muted-foreground">
+                  {selectedToAdd.length} selecionado(s) · {remainingSlots} vagas restantes
+                </span>
+                <Button
+                  onClick={handleAddSelected}
+                  disabled={isAdding || selectedToAdd.length === 0 || remainingSlots === 0}
+                  className="rounded-full px-5"
+                >
+                  {isAdding ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Adicionar
+                </Button>
+              </div>
             </div>
           </>
+        ) : (
+          <div className="min-h-0 flex-1 overflow-y-auto space-y-4 pr-1">
+            {/* 1. Link direto em 1 toque */}
+            <div className="rounded-xl border border-border/80 bg-muted/20 p-3 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-semibold text-foreground">
+                  Link de entrada em 1 toque
+                </p>
+                <div className="flex items-center gap-1.5">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={handleCopyInviteLink}
+                    className="h-7 rounded-full px-2.5 text-xs"
+                  >
+                    {copiedLink ? (
+                      <Check className="mr-1 h-3.5 w-3.5 text-emerald-500" />
+                    ) : (
+                      <Copy className="mr-1 h-3.5 w-3.5" />
+                    )}
+                    {copiedLink ? 'Copiado' : 'Copiar'}
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={handleShareNative}
+                    className="h-7 rounded-full px-2.5 text-xs"
+                  >
+                    <Share2 className="mr-1 h-3.5 w-3.5" />
+                    Compartilhar
+                  </Button>
+                </div>
+              </div>
+              <p className="truncate rounded-lg border border-border/60 bg-background/70 px-2.5 py-1.5 font-mono text-[11px] text-muted-foreground">
+                {inviteLink}
+              </p>
+            </div>
+
+            {/* 2. Postar convite no Feed / Fediverso marcando pessoas */}
+            <div className="rounded-xl border border-border/80 bg-muted/20 p-3 space-y-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                  <Globe className="h-3.5 w-3.5 text-primary" />
+                  Chamar pelo Feed e Fediverso
+                </p>
+                <span className="text-[11px] text-muted-foreground">
+                  Toque em um @ para marcar
+                </span>
+              </div>
+
+              <div className="flex flex-wrap gap-1.5 max-h-16 overflow-y-auto">
+                {conversation.participantsInfo
+                  .filter((p) => p.id !== currentUserId && (p.id.startsWith('ap_') || p.username?.includes('@')))
+                  .slice(0, 12)
+                  .map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => toggleMentionInPost(p.username)}
+                      className="inline-flex items-center gap-1 rounded-full border border-border/70 bg-background/80 px-2 py-0.5 text-[11px] text-foreground hover:border-primary/50"
+                    >
+                      <span>@{p.username}</span>
+                    </button>
+                  ))}
+              </div>
+
+              <Textarea
+                value={invitePostText}
+                onChange={(e) => setInvitePostText(e.target.value)}
+                rows={3}
+                className="text-xs rounded-xl bg-background/80"
+                placeholder="Escreva o convite..."
+              />
+
+              <div className="flex justify-end">
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={handlePublishInvitePost}
+                  disabled={isPublishingPost || !invitePostText.trim()}
+                  className="rounded-full px-4 text-xs"
+                >
+                  {isPublishingPost ? (
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Send className="mr-1.5 h-3.5 w-3.5" />
+                  )}
+                  Publicar convite no Feed
+                </Button>
+              </div>
+            </div>
+
+            {/* 3. Convidar por e-mail */}
+            <form
+              onSubmit={handleSendEmailInvite}
+              className="rounded-xl border border-border/80 bg-muted/20 p-3 space-y-2"
+            >
+              <p className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                <Mail className="h-3.5 w-3.5 text-primary" />
+                Convidar por e-mail
+              </p>
+              <div className="flex gap-2">
+                <Input
+                  type="email"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                  placeholder="email@exemplo.com"
+                  className="h-8 rounded-xl bg-background/80 text-xs"
+                />
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={!inviteEmail.trim()}
+                  className="h-8 rounded-full px-3 text-xs shrink-0"
+                >
+                  Enviar e-mail
+                </Button>
+              </div>
+            </form>
+          </div>
         )}
       </DialogContent>
     </Dialog>

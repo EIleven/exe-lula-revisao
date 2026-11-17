@@ -10,9 +10,8 @@ import Link from 'next/link';
 import Image from 'next/image';
 import TextWithMentions from '@/components/shared/TextWithMentions';
 import ImageViewer from '@/components/shared/ImageViewer';
-import { Check, CheckCheck, Loader2, Lock, MoreHorizontal, MessageSquareReply, Copy, Forward, Star, Trash2 } from 'lucide-react';
-import { getPostById } from '@/lib/services/postReadService';
-import EmbeddedPostCard from '@/components/feed/EmbeddedPostCard';
+import { Check, CheckCheck, ExternalLink, Loader2, Lock, MoreHorizontal, MessageSquareReply, Copy, Forward, Star, Trash2 } from 'lucide-react';
+import { useMessagesHost } from '@/modules/messages';
 import { useLocale } from 'next-intl';
 import { Skeleton } from '../ui/skeleton';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
@@ -24,19 +23,22 @@ import { deleteDirectMessage } from '@/lib/services/conversationService';
 import { extractYoutubeVideoInfo } from '@/lib/utils/youtubeLinks';
 import YoutubeEmbed from '@/components/shared/YoutubeEmbed';
 import PlatformVideo from '@/components/shared/PlatformVideo';
+import { useCurrentUserId } from '@/contexts/CurrentUserContext';
+import { decryptMediaToObjectUrl } from '@/lib/crypto/e2eeMedia';
 
 interface MessageBubbleProps {
   message: DirectMessage;
   isCurrentUserSender: boolean;
+  peerPublicKey?: string | null;
   onDeleteMessage: (messageId: string) => void;
   onReply: (message: DirectMessage) => void;
 }
 
-export default function MessageBubble({ message, isCurrentUserSender, onDeleteMessage, onReply }: MessageBubbleProps) {
+export default function MessageBubble({ message, isCurrentUserSender, peerPublicKey, onDeleteMessage, onReply }: MessageBubbleProps) {
+  const currentUserId = useCurrentUserId();
+  const messagesHost = useMessagesHost();
   const sender = message.sender;
   const [isViewerOpen, setIsViewerOpen] = useState(false);
-  const [sharedPost, setSharedPost] = useState<Post | null | undefined>(message.sharedPost);
-  const [isLoadingPost, setIsLoadingPost] = useState(false);
   const locale = useLocale();
 
   const [linkPreviewPost, setLinkPreviewPost] = useState<Post | null>(null);
@@ -46,32 +48,44 @@ export default function MessageBubble({ message, isCurrentUserSender, onDeleteMe
   const { toast } = useToast();
   const isMobile = useIsMobile();
   const youtubeInfo = useMemo(() => extractYoutubeVideoInfo(message.text || ''), [message.text]);
-
+  const [decryptedMediaUrl, setDecryptedMediaUrl] = useState<string | null>(null);
+  const [mediaDecryptError, setMediaDecryptError] = useState<'missing-key' | 'failed' | null>(null);
 
   useEffect(() => {
-    const fetchSharedPost = async () => {
-      if (message.sharedPostId && !sharedPost) {
-        setIsLoadingPost(true);
-        try {
-          const post = await getPostById(message.sharedPostId);
-          setSharedPost(post);
-        } catch (error) {
-          console.error("Failed to fetch shared post:", error);
-          setSharedPost(null);
-        } finally {
-          setIsLoadingPost(false);
-        }
+    if (!message.fileUrl || !message.mediaE2ee || !currentUserId) {
+      setDecryptedMediaUrl(null);
+      setMediaDecryptError(null);
+      return;
+    }
+    let cancelled = false;
+    void decryptMediaToObjectUrl(
+      message.fileUrl,
+      message.mediaE2ee,
+      currentUserId,
+      isCurrentUserSender,
+      peerPublicKey
+    ).then((res) => {
+      if (cancelled) return;
+      if (res.ok) {
+        setDecryptedMediaUrl(res.objectUrl);
+        setMediaDecryptError(null);
+      } else {
+        setDecryptedMediaUrl(null);
+        setMediaDecryptError(res.reason === 'missing-key' ? 'missing-key' : 'failed');
       }
+    });
+    return () => {
+      cancelled = true;
     };
-    fetchSharedPost();
-  }, [message.sharedPostId, sharedPost]);
+  }, [message.fileUrl, message.mediaE2ee, currentUserId, isCurrentUserSender, peerPublicKey]);
+
 
   useEffect(() => {
     const URL_REGEX = /^(https?:\/\/[^\s]+)$/;
     const textIsUrl = message.text && URL_REGEX.test(message.text);
 
     // Only fetch preview if there's no other content (shared post or file)
-    if (textIsUrl && !youtubeInfo.videoId && !sharedPost && !message.fileUrl) {
+    if (textIsUrl && !youtubeInfo.videoId && !message.sharedPostId && !message.fileUrl) {
       const fetchLinkPreview = async () => {
         setIsLoadingLinkPreview(true);
         setLinkPreviewPost(null);
@@ -96,7 +110,7 @@ export default function MessageBubble({ message, isCurrentUserSender, onDeleteMe
         setLinkPreviewPost(null);
         setIsLoadingLinkPreview(false);
     }
-  }, [message.text, youtubeInfo.videoId, sharedPost, message.fileUrl]);
+  }, [message.text, youtubeInfo.videoId, message.sharedPostId, message.fileUrl]);
 
   const handleImageClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -167,23 +181,45 @@ export default function MessageBubble({ message, isCurrentUserSender, onDeleteMe
   );
 
   const renderFile = () => {
-    if (message.fileUrl && message.fileType === 'image') {
+    if (!message.fileUrl) return null;
+
+    if (message.mediaE2ee) {
+      if (mediaDecryptError) {
+        return (
+          <div className="mt-2 flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2.5 text-xs text-amber-300">
+            <Lock className="h-4 w-4 shrink-0" />
+            <span>
+              {mediaDecryptError === 'missing-key'
+                ? 'Mídia cifrada ponta a ponta — pareie este aparelho em Configurações → P2P / E2EE.'
+                : 'Não foi possível decifrar esta mídia neste aparelho.'}
+            </span>
+          </div>
+        );
+      }
+      if (!decryptedMediaUrl) {
+        return <Skeleton className="mt-2 h-36 w-52 rounded-lg" />;
+      }
+    }
+
+    const mediaSrc = message.mediaE2ee ? decryptedMediaUrl! : message.fileUrl;
+
+    if (message.fileType === 'image') {
       return (
         <>
           <ImageViewer
             isOpen={isViewerOpen}
             onOpenChange={setIsViewerOpen}
-            imageUrl={message.fileUrl}
+            imageUrl={mediaSrc}
           />
-          <div className="mt-2" data-interactive="true">
+          <div className="mt-2 max-w-[260px] sm:max-w-[300px]" data-interactive="true">
             <div 
               onClick={handleImageClick}
-              className="block max-w-full rounded-lg overflow-hidden cursor-pointer group"
+              className="block max-w-full rounded-lg overflow-hidden cursor-pointer group bg-black/20"
             >
                 <img
-                src={message.fileUrl}
+                src={mediaSrc}
                 alt="Uploaded image"
-                className="w-full h-auto transition-transform group-hover:scale-105"
+                className="w-full max-h-[260px] object-contain rounded-lg transition-transform group-hover:scale-[1.02]"
                 />
             </div>
           </div>
@@ -191,20 +227,20 @@ export default function MessageBubble({ message, isCurrentUserSender, onDeleteMe
       );
     }
 
-    if (message.fileUrl && message.fileType === 'audio') {
+    if (message.fileType === 'audio') {
         return (
             <div className="mt-2" data-interactive="true">
-                <audio controls src={message.fileUrl} className="w-full max-w-full">
+                <audio controls src={mediaSrc} className="w-full max-w-full">
                     Your browser does not support the audio element.
                 </audio>
             </div>
         );
     }
 
-    if (message.fileUrl && message.fileType === 'video') {
+    if (message.fileType === 'video') {
          return (
             <div className="mt-2 max-w-[260px] sm:max-w-[300px] overflow-hidden rounded-lg bg-black/90" data-interactive="true">
-                <PlatformVideo controls src={message.fileUrl} className="w-full max-h-[260px] rounded-lg object-contain" preload="metadata" />
+                <PlatformVideo controls src={mediaSrc} className="w-full max-h-[260px] rounded-lg object-contain" preload="metadata" />
             </div>
         );
     }
@@ -216,32 +252,50 @@ export default function MessageBubble({ message, isCurrentUserSender, onDeleteMe
     if (!isCurrentUserSender) return null;
 
     if (message.readAt) {
-      return <CheckCheck className="h-4 w-4 text-blue-400" title={`Read at ${format(new Date(message.readAt), 'p')}`} />;
+      return (
+        <span title={`Lida às ${format(new Date(message.readAt), 'p')}`} className="inline-flex">
+          <CheckCheck className="h-4 w-4 text-blue-400" />
+        </span>
+      );
     }
     if (message.createdAt) { // Assuming createdAt means delivered
-      return <Check className="h-4 w-4 text-muted-foreground/80" title="Delivered" />;
+      return (
+        <span title="Entregue" className="inline-flex">
+          <Check className="h-4 w-4 text-muted-foreground/80" />
+        </span>
+      );
     }
     return null;
   };
   
   const renderMessageBody = () => {
-    if (isLoadingPost || isLoadingLinkPreview) {
-        return (
-            <div className="p-2 space-y-2">
-                <Skeleton className="h-4 w-3/4" />
-                <Skeleton className="h-3 w-1/2" />
-            </div>
-        )
+    if (isLoadingLinkPreview) {
+      return (
+        <div className="p-2 space-y-2">
+          <Skeleton className="h-4 w-3/4" />
+          <Skeleton className="h-3 w-1/2" />
+        </div>
+      );
     }
 
-    if (sharedPost) {
-        return (
-            <div className="mt-2">
-                <EmbeddedPostCard post={sharedPost} />
-            </div>
-        )
+    if (message.sharedPostId) {
+      return (
+        <div className="mt-2">
+          {messagesHost.renderSharedPost ? (
+            messagesHost.renderSharedPost(message.sharedPostId, locale)
+          ) : (
+            <Link
+              href={messagesHost.getPostHref(message.sharedPostId, locale)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border/70 bg-background/60 px-3 py-2 text-xs font-medium hover:underline"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              Abrir publicação compartilhada
+            </Link>
+          )}
+        </div>
+      );
     }
-    
+
     if (youtubeInfo.videoId) {
         return (
             <div className="mt-2 min-w-0 space-y-2">
@@ -258,12 +312,22 @@ export default function MessageBubble({ message, isCurrentUserSender, onDeleteMe
         )
     }
 
-    if (linkPreviewPost) {
-        return (
-            <div className="mt-2">
-                <EmbeddedPostCard post={linkPreviewPost} />
-            </div>
-        )
+    if (linkPreviewPost?.id) {
+      return (
+        <div className="mt-2">
+          {messagesHost.renderSharedPost ? (
+            messagesHost.renderSharedPost(linkPreviewPost.id, locale)
+          ) : (
+            <Link
+              href={messagesHost.getPostHref(linkPreviewPost.id, locale)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border/70 bg-background/60 px-3 py-2 text-xs font-medium hover:underline"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              Abrir link compartilhado
+            </Link>
+          )}
+        </div>
+      );
     }
 
     if (message.text) {

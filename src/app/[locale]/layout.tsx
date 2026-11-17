@@ -7,6 +7,7 @@ import React from 'react';
 
 import { Toaster } from "@/components/ui/toaster";
 import AppLayout from '@/components/layout/AppLayout';
+import { HiperversoMessagesHostProvider } from '@/modules/messages/hiperversoHost';
 import { CurrentUserProvider } from '@/contexts/CurrentUserContext';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { ThemeProvider } from '@/contexts/ThemeProvider';
@@ -17,8 +18,11 @@ import { FeedProvider } from '@/contexts/FeedContext';
 import HapticsEffects from '@/components/system/HapticsEffects';
 import PushBridge from '@/components/system/PushBridge';
 import ProvenanceGuard from '@/components/system/ProvenanceGuard';
+import SovereignEgressGuard from '@/components/system/SovereignEgressGuard';
+import { SovereignAntiAutomationShield } from '@/components/system/SovereignAntiAutomationShield';
 import BackButtonHandler from '@/components/system/BackButtonHandler';
 import PwaUpdateNotifier from '@/components/pwa/PwaUpdateNotifier';
+import ApkAutoUpdater from '@/components/system/ApkAutoUpdater';
 import { CommentSettingsProvider } from '@/contexts/CommentSettingsContext';
 import { ConsentProvider } from '@/contexts/ConsentContext';
 import ConsentBanner from '@/components/consent/ConsentBanner';
@@ -56,7 +60,21 @@ export const metadata: Metadata = {
       'application/feed+json': [{ url: '/feed.json', title: 'Exe. Lula (JSON Feed)' }],
     },
   },
-  keywords: ['social media', 'news', 'community', 'discussions', 'exe lula', 'exercito do lula', 'connect', 'share', 'resonate'],
+  keywords: [
+    'exe lula',
+    'exercito do lula',
+    'hiperverso',
+    'hiperverso social',
+    'hiperverso app',
+    'fediverso brasileiro',
+    'loja de apps br',
+    'games br',
+    'idp2p',
+    'soberania digital',
+    'social media',
+    'news',
+    'community',
+  ],
   authors: [{ name: 'Exe. Lula Team', url: BASE_URL }],
   creator: 'Exe. Lula Team',
   publisher: 'Exe. Lula',
@@ -144,8 +162,14 @@ export default function LocaleLayout({
     '@context': 'https://schema.org',
     '@type': 'WebSite',
     name: siteConfig.name,
+    alternateName: ['Hiperverso', 'Hiperverso Social', 'Hiperverso App', 'Exército do Lula'],
     url: siteConfig.baseUrl,
     description: siteConfig.description,
+    sameAs: [
+      'https://exercitodolula.app',
+      'https://hiperverso.social',
+      'https://hiperverso.app',
+    ],
     potentialAction: {
       '@type': 'SearchAction',
       target: {
@@ -156,7 +180,14 @@ export default function LocaleLayout({
     },
     publisher: {
       '@type': 'Organization',
-      name: 'Exe. Lula',
+      name: 'Exe. Lula / Hiperverso',
+      alternateName: 'Hiperverso',
+      url: siteConfig.baseUrl,
+      sameAs: [
+        'https://exercitodolula.app',
+        'https://hiperverso.social',
+        'https://hiperverso.app',
+      ],
       logo: {
         '@type': 'ImageObject',
         url: `${siteConfig.baseUrl}/icons/icon-512.png`,
@@ -184,7 +215,6 @@ export default function LocaleLayout({
       <link rel="preconnect" href="https://firestore.googleapis.com" crossOrigin="anonymous" />
       <link rel="preconnect" href="https://firebasestorage.googleapis.com" crossOrigin="anonymous" />
       <link rel="preconnect" href="https://firebase.googleapis.com" crossOrigin="anonymous" />
-      <link rel="preconnect" href="https://firebaseinstallations.googleapis.com" crossOrigin="anonymous" />
       {/* Os preconnect do AdSense foram para AdSenseScript.tsx: abrir conexão já entrega o IP a um terceiro. */}
 
       <NextIntlClientProvider locale={locale} messages={messages}>
@@ -200,15 +230,20 @@ export default function LocaleLayout({
               <CurrentUserProvider>
                 <FeedProvider>
                   <CommentSettingsProvider>
-                    <AppLayout>
-                      {children}
-                    </AppLayout>
+                    <HiperversoMessagesHostProvider>
+                      <AppLayout>
+                        {children}
+                      </AppLayout>
+                    </HiperversoMessagesHostProvider>
                     <PwaUpdateNotifier />
+                    <ApkAutoUpdater />
                   </CommentSettingsProvider>
                 </FeedProvider>
                 <Toaster />
                 <HapticsEffects />
                 <PushBridge />
+                <SovereignEgressGuard />
+                <SovereignAntiAutomationShield />
                 <ProvenanceGuard />
                 <BackButtonHandler />
               </CurrentUserProvider>

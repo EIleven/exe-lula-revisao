@@ -235,7 +235,7 @@ export default function ExploreView() {
             className="flex min-w-0 items-center gap-1.5 text-primary hover:underline"
           >
             <MapPin className="h-3.5 w-3.5 shrink-0" />
-            <span className="truncate font-medium">Foco Brasil: {locationLabel}</span>
+            <span className="truncate font-medium">{locationLabel}</span>
           </button>
           <button
             type="button"

@@ -47,6 +47,9 @@ export default function PixSupportBadge({
   const { toast } = useToast();
 
   const [open, setOpen] = useState(defaultOpen);
+  useEffect(() => {
+    if (defaultOpen) setOpen(true);
+  }, [defaultOpen]);
   const [selectedAmount, setSelectedAmount] = useState<number>(0);
   const [customAmount, setCustomAmount] = useState<string>('');
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
@@ -230,9 +233,7 @@ export default function PixSupportBadge({
           )}
           title="Apoiar via Pix"
         >
-          <QrCode className={compact ? 'h-3 w-3' : 'h-3.5 w-3.5'} />
           <span>Pix</span>
-          {!compact && <Sparkles className="h-3 w-3 opacity-80" />}
         </button>
       </DialogTrigger>
 
