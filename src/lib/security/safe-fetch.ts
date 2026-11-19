@@ -17,6 +17,7 @@ import http from 'node:http';
 import https from 'node:https';
 import net from 'node:net';
 import zlib from 'node:zlib';
+import { isSuspendedFediverseHost } from '../federation/suspendedDomains.ts';
 
 /**
  * Por que a busca foi recusada. `forbidden` é o único que significa "este destino não pode ser alcançado, nunca": os
@@ -133,6 +134,7 @@ export function assertSafeUrl(raw: string): URL {
   if (url.port && !['80', '443'].includes(url.port) && !loopbackTesting) throw new UnsafeUrlError('Porta não permitida.');
   if (net.isIP(host) !== 0 && isBlockedAddress(host)) throw new UnsafeUrlError('Endereço de destino não permitido.');
   if (host.toLowerCase() === 'localhost' && !allowLoopback()) throw new UnsafeUrlError('Endereço de destino não permitido.');
+  if (isSuspendedFediverseHost(host)) throw new UnsafeUrlError('Domínio suspenso pela política da instância.');
   return url;
 }
 
