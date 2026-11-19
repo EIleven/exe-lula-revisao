@@ -8,6 +8,7 @@ import { configError, federation, json, readJsonObject, requireAdmin } from '@/l
 import { adminFirestore } from '@/lib/server/firebaseAdmin';
 import { siteConfig } from '@/config/site';
 import { normalizeHandle } from '@/lib/activitypub/identity';
+import { purgeSuspendedDomainsFromFirestore } from '@/lib/server/purgeSuspended';
 
 export const dynamic = 'force-dynamic';
 
@@ -149,6 +150,10 @@ export async function POST(request: Request) {
       note: `https://${antigo.replace(/^www\./, '')}`,
     });
     return json(200, { ok: true, handle: reserva.handle, de: `https://${antigo.replace(/^www\./, '')}`, para: f.origin });
+  }
+  if (corpo.action === 'purge-suspended') {
+    const summary = await purgeSuspendedDomainsFromFirestore();
+    return json(200, { ok: true, ...summary });
   }
   return json(400, { error: 'acao-invalida' });
 }

@@ -56,10 +56,16 @@ import { siteConfig } from '@/config/site';
 import CommentCard from './CommentCard';
 import { addCommentToPost } from '@/lib/services/comments/commentWriteActions';
 import {
+  dispatchPostInteraction,
   getCachedPostInteraction,
   POST_INTERACTION_EVENT,
   type PostInteractionEventDetail,
 } from '@/lib/events/postInteractionState';
+import {
+  syncPostViewerState,
+  VIEWER_ACTIONS_REFRESHED_EVENT,
+  type ViewerActions,
+} from '@/lib/services/viewerActions';
 
 
 interface PostCardProps {
@@ -140,8 +146,54 @@ function PostCard({
       setPost((prev) => (prev ? { ...prev, ...detail.patch } : prev));
     };
     window.addEventListener(POST_INTERACTION_EVENT, onPostInteraction);
-    return () => window.removeEventListener(POST_INTERACTION_EVENT, onPostInteraction);
-  }, [currentUserId, initialPost?.id]);
+
+    const onViewerActionsRefreshed = (event: Event) => {
+      const detail = (event as CustomEvent<{ viewerId: string; actions: ViewerActions }>).detail;
+      if (!detail || detail.viewerId !== currentUserId) return;
+      const atual = postRef.current;
+      if (!atual || atual.id !== initialPost.id) return;
+      const nextLiked = detail.actions.like.has(initialPost.id);
+      const nextReposted = detail.actions.repost.has(initialPost.id);
+      const nextBookmarked = detail.actions.bookmark.has(initialPost.id);
+      const nextQuoted = detail.actions.quote.has(initialPost.id);
+      if (
+        Boolean(atual.isLiked) !== nextLiked ||
+        Boolean(atual.isReposted) !== nextReposted ||
+        Boolean(atual.isBookmarked) !== nextBookmarked ||
+        Boolean(atual.isQuotedByCurrentUser) !== nextQuoted
+      ) {
+        dispatchPostInteraction(currentUserId, initialPost.id, {
+          isLiked: nextLiked,
+          isReposted: nextReposted,
+          isBookmarked: nextBookmarked,
+          isQuotedByCurrentUser: nextQuoted,
+        });
+      }
+    };
+    window.addEventListener(VIEWER_ACTIONS_REFRESHED_EVENT, onViewerActionsRefreshed);
+
+    let cancelled = false;
+    if (isSinglePostView) {
+      void syncPostViewerState(currentUserId, initialPost.id).then((state) => {
+        if (cancelled || !state) return;
+        const atual = postRef.current;
+        if (!atual || atual.id !== initialPost.id) return;
+        if (
+          Boolean(atual.isLiked) !== state.isLiked ||
+          Boolean(atual.isReposted) !== state.isReposted ||
+          Boolean(atual.isBookmarked) !== state.isBookmarked
+        ) {
+          dispatchPostInteraction(currentUserId, initialPost.id, state);
+        }
+      });
+    }
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener(POST_INTERACTION_EVENT, onPostInteraction);
+      window.removeEventListener(VIEWER_ACTIONS_REFRESHED_EVENT, onViewerActionsRefreshed);
+    };
+  }, [currentUserId, initialPost?.id, isSinglePostView]);
 
   // Contadores em tempo real (curtidas, reposts, comentários, citações): UM ouvinte por post, compartilhado entre cartões, e só
   // enquanto o cartão está perto da tela (useLivePostCounters). Visualizações não entram: mudam a cada pessoa que vê o post.

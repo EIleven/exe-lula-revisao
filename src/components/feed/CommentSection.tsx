@@ -139,6 +139,7 @@ export default function CommentSection({
             <div key={ancestor.id} className="border-l-2 border-primary/30">
               <CommentCard
                 comment={{ ...ancestor, depth: 0 }}
+                onCommentAdded={onCommentAdded}
                 onPostCreated={onPostCreated}
                 parentPostAuthorId={post.userId}
               />
@@ -147,6 +148,7 @@ export default function CommentSection({
           <CommentCard
             key={focusedThread.focused.id}
             comment={{ ...focusedThread.focused, depth: 0 }}
+            onCommentAdded={onCommentAdded}
             onPostCreated={onPostCreated}
             parentPostAuthorId={post.userId}
             isFocused={true}
@@ -155,6 +157,7 @@ export default function CommentSection({
             <CommentCard
               key={reply.id}
               comment={reply}
+              onCommentAdded={onCommentAdded}
               onPostCreated={onPostCreated}
               parentPostAuthorId={post.userId}
             />
@@ -166,6 +169,7 @@ export default function CommentSection({
             <CommentCard
               key={comment.id}
               comment={comment}
+              onCommentAdded={onCommentAdded}
               onPostCreated={onPostCreated}
               parentPostAuthorId={post.userId}
             />

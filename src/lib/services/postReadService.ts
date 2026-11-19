@@ -33,6 +33,7 @@ import {
 import { getUser, getFollowedUserIds, searchUsers as serverSearchUsers } from './userService';
 import { janelaDeAtividades } from '@/lib/feed/activityWindow';
 import { isRemoteId } from '@/lib/federation/remoteId';
+import { isFromSuspendedFediverseDomain } from '@/lib/federation/suspendedDomains';
 import { getCurrentUserId } from './authService';
 import { postsCollection } from './postService';
 import { getCommentsForPost, getCommentById } from './comments';
@@ -194,6 +195,8 @@ async function buildPostFromSnapshot(
   if (!postSnap.exists()) return undefined;
   const postId = postSnap.id;
   const postData = postSnap.data() as any;
+
+  if (isFromSuspendedFediverseDomain(postData)) return undefined;
 
   const [author, actions] = await Promise.all([
     getUser(postData.userId, activeUserId),

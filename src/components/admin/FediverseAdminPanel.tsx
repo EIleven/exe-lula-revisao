@@ -332,7 +332,7 @@ export default function FediverseAdminPanel() {
         <CardContent className="space-y-4">
           <div className="flex flex-col gap-2 sm:flex-row">
             <Input
-              placeholder="Ex: ursal.zone"
+              placeholder="Ex: mastodon.social"
               value={domainInput}
               onChange={(e) => setDomainInput(e.target.value)}
               disabled={busy !== null}

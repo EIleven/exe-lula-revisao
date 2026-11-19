@@ -4,6 +4,7 @@ import { remoteFollowDocIdOf, remotePostIdOf } from '@/lib/activitypub/remoteIde
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import type { User } from '@/lib/types';
 import { decideInstance } from '@/lib/activitypub/gate';
+import { pausaDeConsentimento } from '@/lib/activitypub/consentimentoDeDominio';
 import { safeFetchText } from '@/lib/security/safe-fetch';
 import { federation } from '@/lib/server/federation';
 import { adminFirestore } from '@/lib/server/firebaseAdmin';
@@ -60,6 +61,9 @@ async function resolveStatusLocation(
   if (!plataforma.enabled || plataforma.killSwitch) return null;
   const politica = await f.store.getInstancePolicy();
   if (decideInstance(domain, politica, f.ownHost).decision === 'reject') return null;
+
+  const saude = await f.store.getDomainHealth(domain).catch(() => null);
+  if (pausaDeConsentimento(saude, Date.now()).pausado) return null;
 
   const directMatch = rawUrl.match(/\/(\d+)(?:\/activity)?(?:\/)?(?:\?.*)?$/);
   if (directMatch?.[1]) {

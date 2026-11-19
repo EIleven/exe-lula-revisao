@@ -24,6 +24,7 @@ import {
   or,
   onSnapshot, // Import onSnapshot for real-time listeners
 } from 'firebase/firestore';
+import { isFromSuspendedFediverseDomain } from '@/lib/federation/suspendedDomains';
 import { getCurrentUserId } from './authService';
 // createNotification is now handled by Cloud Functions, so we remove the import and calls.
 // import { createNotification } from './notificationService';
@@ -423,6 +424,9 @@ export const snapshotToPublicUser = (
     (userData as User & { isRemoteFediverse?: boolean }).isRemoteFediverse ||
     userData.username?.includes('@')
   ) {
+    if (isFromSuspendedFediverseDomain(userData as Record<string, unknown>)) {
+      return undefined;
+    }
     userData.dmPreference =
       userData.dmPreference && userData.dmPreference !== 'none'
         ? userData.dmPreference

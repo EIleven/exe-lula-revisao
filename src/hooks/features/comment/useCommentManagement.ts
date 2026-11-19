@@ -36,7 +36,9 @@ export function useCommentManagement({ postId, currentUserId, showComments }: Us
   
   // This function is now used to ADD a new comment to the top of the list optimistically
   const handleCommentAdded = useCallback((newComment: CommentType) => {
-    setLoadedComments(prevComments => [newComment, ...prevComments]);
+    setLoadedComments((prevComments) =>
+      prevComments.some((c) => c.id === newComment.id) ? prevComments : [newComment, ...prevComments],
+    );
   }, []);
 
   return {

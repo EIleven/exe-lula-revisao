@@ -40,6 +40,10 @@ import {
   getCachedCommentInteraction,
   type CommentInteractionEventDetail,
 } from '@/lib/events/postInteractionState';
+import {
+  VIEWER_ACTIONS_REFRESHED_EVENT,
+  type ViewerActions,
+} from '@/lib/services/viewerActions';
 
 interface UseCommentInteractionsProps {
   initialComment: Comment;
@@ -122,7 +126,37 @@ export function useCommentInteractions({
       setComment((prev) => ({ ...prev, ...detail.patch }));
     };
     window.addEventListener(COMMENT_INTERACTION_EVENT, onCommentInteraction);
-    return () => window.removeEventListener(COMMENT_INTERACTION_EVENT, onCommentInteraction);
+
+    const onViewerActionsRefreshed = (event: Event) => {
+      const detail = (event as CustomEvent<{ viewerId: string; actions: ViewerActions }>).detail;
+      if (!detail || detail.viewerId !== currentUserId) return;
+      const atual = commentRef.current;
+      if (!atual || atual.id !== initialComment.id) return;
+      const key = `${atual.parentPostId}/${atual.id}`;
+      const nextLiked = detail.actions.like.has(key);
+      const nextReposted = detail.actions.repost.has(key);
+      const nextBookmarked = detail.actions.bookmark.has(atual.id);
+      const nextQuoted = detail.actions.quote.has(key);
+      if (
+        Boolean(atual.isLiked) !== nextLiked ||
+        Boolean(atual.isReposted) !== nextReposted ||
+        Boolean(atual.isBookmarked) !== nextBookmarked ||
+        Boolean(atual.isQuotedByCurrentUser) !== nextQuoted
+      ) {
+        dispatchCommentInteraction(currentUserId, atual.id, {
+          isLiked: nextLiked,
+          isReposted: nextReposted,
+          isBookmarked: nextBookmarked,
+          isQuotedByCurrentUser: nextQuoted,
+        });
+      }
+    };
+    window.addEventListener(VIEWER_ACTIONS_REFRESHED_EVENT, onViewerActionsRefreshed);
+
+    return () => {
+      window.removeEventListener(COMMENT_INTERACTION_EVENT, onCommentInteraction);
+      window.removeEventListener(VIEWER_ACTIONS_REFRESHED_EVENT, onViewerActionsRefreshed);
+    };
   }, [currentUserId, initialComment?.id]);
 
   const reconcileLike = likeToggle.reconcile;

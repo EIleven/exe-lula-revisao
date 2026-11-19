@@ -20,6 +20,7 @@
 import { prepareVerification, verifyPrepared } from './signature.ts';
 import type { HeaderBag } from './signature.ts';
 import { decideInstance, isBlockedByUser } from './gate.ts';
+import { pausaDeConsentimento } from './consentimentoDeDominio.ts';
 import { activityUrl, domainOfUrl, isOwnUrl, parseLocalPath } from './identity.ts';
 import { buildFollowResponse, isAddressedToPublic, parseInboundActivity } from './activity.ts';
 import type { InboundActivity } from './activity.ts';
@@ -573,6 +574,10 @@ async function impulsionar(deps: InboxDeps, a: InboxActivity, ator: RemoteActorR
   const policy = await store.getInstancePolicy();
   if (!objDomain || decideInstance(objDomain, policy, deps.ownHost).decision === 'reject') {
     return resp(202, 'ignorada-alvo-desconhecido');
+  }
+  const objHealth = await store.getDomainHealth?.(objDomain).catch(() => null);
+  if (pausaDeConsentimento(objHealth, deps.now()).pausado) {
+    return resp(202, 'ignorada-dominio-pausado');
   }
 
   const remotePostId = remotePostIdOf(a.objectId);

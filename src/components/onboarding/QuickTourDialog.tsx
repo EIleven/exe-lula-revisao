@@ -91,7 +91,7 @@ export function VisitorWelcomeTour({ isGuest }: { isGuest: boolean }) {
       badge: 'Fediverso BR',
       title: 'Suas conexões em rede aberta',
       description:
-        'Sem venda de dados e com bloqueio ativo a bots de coleta. Interaja com instâncias do Fediverso brasileiro (URSAL, Orgânica, Bolha) e Bluesky mantendo sua conta.',
+        'Sem venda de dados e com bloqueio ativo a bots de coleta. Interaja com instâncias do Fediverso brasileiro e Bluesky mantendo sua conta.',
       highlights: ['@voce@hiperverso.social', 'Sem venda de dados', 'Zero Bots & Anti-IA'],
       icon: <Globe2 className="h-3 w-3 text-primary" />,
     },

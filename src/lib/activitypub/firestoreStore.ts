@@ -18,6 +18,7 @@
 //   campo de expiração sem TTL; não repetir.
 // - **Chave privada só cifrada**, em `ap_keys`, sem nenhuma regra que a libere ao cliente (acesso negado por padrão).
 import { remoteFollowDocIdOf, remoteHashOf, remoteObjectKeyOf, remotePostIdOf, remoteUserIdOf } from './remoteIdentity.ts';
+import { SUSPENDED_FEDIVERSE_DOMAINS } from '../federation/suspendedDomains.ts';
 import { LRUCache } from 'lru-cache';
 import type { DocumentData, Firestore, FieldPath as FieldPathType, FieldValue as FieldValueType, Timestamp as TimestampType } from 'firebase-admin/firestore';
 import type { SealedSecret } from './keys.ts';
@@ -225,6 +226,10 @@ export function createFirestoreStore(deps: FirestoreStoreDeps): FederationStore 
       for (const doc of snap.docs) {
         const a = doc.data().action;
         if (a === 'allow' || a === 'silence' || a === 'suspend') rules[doc.id] = { action: a };
+      }
+      // Corte explícito de comunicação com instâncias suspensas por política da casa.
+      for (const suspended of SUSPENDED_FEDIVERSE_DOMAINS) {
+        rules[suspended] = { action: 'suspend' };
       }
       const valor: InstancePolicy = { mode: plataforma.mode, rules };
       cachePolitica = { em: agora, valor };

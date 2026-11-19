@@ -159,7 +159,7 @@ export default function PainelDeBuscaAvancada({
                 id="busca-instancia"
                 value={busca.instancias.join(' ')}
                 onChange={(e) => aplicar({ instancias: e.target.value.split(/\s+/).map((x) => x.trim().toLowerCase()).filter(Boolean) })}
-                placeholder="ursal.zone"
+                placeholder="mastodon.social"
                 className="h-9 text-sm"
               />
             </div>

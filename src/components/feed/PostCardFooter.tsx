@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogTrigger } from '@/components/ui/dialog';
 import QuotePostDialogContent from './QuotePostDialogContent';
-import EditPostDialogContent from './EditPostDialogContent';
+import CreatePostDialogContent from './CreatePostDialogContent';
 import CreateNewsDialogContent from './CreateNewsDialogContent';
 import PostAnalyticsDialog from '@/components/analytics/PostAnalyticsDialog'; // Import the new component
 import MountOnceOpened from '@/components/shared/MountOnceOpened';
@@ -560,7 +560,7 @@ export default function PostCardFooter({
                       dialogClose={() => setIsEditDialogOpen(false)}
                     />
                   ) : (
-                    <EditPostDialogContent postToEdit={post} onPostEdited={onPostEdited} dialogClose={() => setIsEditDialogOpen(false)} />
+                    <CreatePostDialogContent postToEdit={post} onPostEdited={onPostEdited} dialogClose={() => setIsEditDialogOpen(false)} />
                   )}
                 </MountOnceOpened>
            </Dialog>

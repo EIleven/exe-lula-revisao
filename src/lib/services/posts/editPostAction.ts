@@ -82,6 +82,9 @@ export const editPost = async ( postId: string, newData: Partial<Pick<Post, 'tex
   // Interaction settings
   setIfDiff('allowReposts', newData.allowReposts !== undefined ? newData.allowReposts : oldData.allowReposts);
   setIfDiff('replyPermission', newData.replyPermission !== undefined ? newData.replyPermission : oldData.replyPermission);
+  if (newData.sensitive !== undefined) {
+    setIfDiff('sensitive', Boolean(newData.sensitive));
+  }
   
   const textContentForHashtags = (newText || '').replace(/<[^>]*>?/gm, ' ');
   const currentHeadlineForHashtags = updatePayload.hasOwnProperty('headline') ? updatePayload.headline : oldData.headline;

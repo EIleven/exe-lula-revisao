@@ -34,6 +34,7 @@ interface CommentThreadProps {
   currentUserId: string | null;
   canCurrentUserReplyToPost: boolean;
   isSinglePostView: boolean;
+  onCommentAdded?: (newComment: CommentType) => void;
   onCommentUpdated?: (updatedComment: CommentType) => void;
   onPostCreated?: (newPost: any) => void;
   openLoginPrompt: (actionName: string) => void;
@@ -45,6 +46,7 @@ export default function CommentThread({
   currentUserId,
   canCurrentUserReplyToPost,
   isSinglePostView,
+  onCommentAdded,
   onCommentUpdated,
   onPostCreated,
   openLoginPrompt,
@@ -101,6 +103,7 @@ export default function CommentThread({
   
   const handleReplySubmitted = (newComment: CommentType) => {
     setIsReplyDialogOpen(false);
+    onCommentAdded?.(newComment);
   }
 
 

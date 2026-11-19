@@ -119,10 +119,7 @@ function safeRedirectPath(value: string | null, fallback: string): string {
 }
 
 const BR_FEDIVERSE_INSTANCES = [
-  { domain: 'ursal.zone', label: 'URSAL (ursal.zone)' },
   { domain: 'organica.social', label: 'Orgânica (organica.social)' },
-  { domain: 'bolha.one', label: 'Bolha (bolha.one)' },
-  { domain: 'alquimidia.social.br', label: 'Alquimidia (alquimidia.social.br)' },
   { domain: 'social.teia.bio.br', label: 'Teia (social.teia.bio.br)' },
   { domain: 'comuna.social.br', label: 'Comuna (comuna.social.br)' },
   { domain: 'mato.social', label: 'Mato (mato.social)' },
@@ -848,7 +845,7 @@ function LoginPageContent() {
                 <form onSubmit={handleFederatedAuthStart} className="p-3 rounded-lg border border-border bg-muted/30 space-y-2">
                 <Label htmlFor="federated-handle" className="text-xs">
                   {federatedMode === 'fediverse'
-                    ? 'Instância ou @ do Fediverso BR (ex: ursal.zone)'
+                    ? 'Instância ou @ do Fediverso BR (ex: organica.social)'
                     : 'Seu @ na Atmosfera / Bluesky (ex: voce.bsky.social)'}
                 </Label>
                 <div className="flex gap-2">
@@ -856,7 +853,7 @@ function LoginPageContent() {
                     id="federated-handle"
                     value={federatedHandle}
                     onChange={(e) => setFederatedHandle(e.target.value)}
-                    placeholder={federatedMode === 'fediverse' ? 'ursal.zone' : 'voce.bsky.social'}
+                    placeholder={federatedMode === 'fediverse' ? 'organica.social' : 'voce.bsky.social'}
                     disabled={isFederatedLoading}
                     required
                     className="h-8 text-sm"

@@ -25,6 +25,7 @@ import {
 } from '@/components/ui/form';
 import { useToast } from '@/hooks/use-toast';
 import { createPost as serverCreatePost } from '@/lib/services/posts/createPostActions';
+import { editPost as serverEditPost } from '@/lib/services/posts/editPostAction';
 import type { Post, ReplyPermission, Draft, Media, PollDraft, PostLocation } from '@/lib/types';
 import Image from 'next/image';
 import {
@@ -78,12 +79,15 @@ type CreatePostFormValues = z.infer<typeof createPostFormSchema>;
 
 interface CreatePostDialogContentProps {
   onPostCreated?: (newPost: Post) => void;
+  postToEdit?: Post;
+  onPostEdited?: (editedPost: Post) => void;
   dialogClose?: () => void;
   initialData?: Partial<Draft>;
   initialFiles?: File[] | null;
 }
 
-export default function CreatePostDialogContent({ onPostCreated, dialogClose, initialData, initialFiles }: CreatePostDialogContentProps) {
+export default function CreatePostDialogContent({ onPostCreated, postToEdit, onPostEdited, dialogClose, initialData, initialFiles }: CreatePostDialogContentProps) {
+  const isEditing = Boolean(postToEdit);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [postAsOfficial, setPostAsOfficial] = useState(false);
   const [draftId, setDraftId] = useState<string | undefined>(initialData?.id);
@@ -152,6 +156,21 @@ export default function CreatePostDialogContent({ onPostCreated, dialogClose, in
       setIsSubmitting(true);
       
       try {
+          if (postToEdit) {
+              const updatedPost = await serverEditPost(postToEdit.id, {
+                  text: data.text ?? '',
+                  media: data.media ?? null,
+                  allowReposts: data.allowReposts,
+                  replyPermission: data.replyPermission,
+                  sensitive: data.sensitive,
+              });
+              if (updatedPost) {
+                  onPostEdited?.(updatedPost);
+                  toast({ title: 'Post atualizado!' });
+              }
+              handleClose();
+              return true;
+          }
           let newPost: Post | undefined;
           if (postAsOfficial && currentUser?.isAdmin && firebaseUser) {
               const token = await firebaseUser.getIdToken();
@@ -248,7 +267,7 @@ export default function CreatePostDialogContent({ onPostCreated, dialogClose, in
              <DialogTitle className="sr-only">{t('title')}</DialogTitle>
              <DialogDescription className="sr-only">{t('description')}</DialogDescription>
              <div className="flex items-center gap-1.5">
-                {currentUser?.isAdmin && (
+                {!isEditing && currentUser?.isAdmin && (
                   <Button
                     type="button"
                     size="sm"
@@ -262,18 +281,20 @@ export default function CreatePostDialogContent({ onPostCreated, dialogClose, in
                     <span className="hidden sm:inline">@ExercitoDoLula</span>
                   </Button>
                 )}
-                <PublishTargetsControls
-                  federationReach={federationReach}
-                  onFederationChange={updateFederationReach}
-                  connectedNetworks={connectedNetworks}
-                  selectedNetworks={selectedNetworks}
-                  onToggleNetwork={toggleNetwork}
-                  postWillBePublic={postWillBePublic}
-                  disabled={isSubmitting}
-                />
+                {!isEditing && (
+                  <PublishTargetsControls
+                    federationReach={federationReach}
+                    onFederationChange={updateFederationReach}
+                    connectedNetworks={connectedNetworks}
+                    selectedNetworks={selectedNetworks}
+                    onToggleNetwork={toggleNetwork}
+                    postWillBePublic={postWillBePublic}
+                    disabled={isSubmitting}
+                  />
+                )}
                 <Button type="submit" form="create-post-form" size="sm" className="rounded-full" disabled={isSubmitting}>
                     {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    {isSubmitting ? t('postButtonSubmitting') : t('postButton')}
+                    {isEditing ? (isSubmitting ? 'Salvando...' : 'Salvar') : (isSubmitting ? t('postButtonSubmitting') : t('postButton'))}
                 </Button>
              </div>
         </DialogHeader>
@@ -285,14 +306,14 @@ export default function CreatePostDialogContent({ onPostCreated, dialogClose, in
           onFileUpload={handleFileUpload}
           isSubmitting={isSubmitting}
           placeholder={t('placeholder')}
-          initialText={initialData?.text || ''}
-          initialMedia={initialData?.media}
+          initialText={postToEdit ? (postToEdit.text || '') : (initialData?.text || '')}
+          initialMedia={postToEdit ? (postToEdit.media ?? null) : initialData?.media}
           initialFiles={initialFiles}
-          initialReplyPermission={initialData?.replyPermission as ReplyPermission | undefined}
-          initialAllowReposts={initialData?.allowReposts}
+          initialReplyPermission={postToEdit?.replyPermission ?? (initialData?.replyPermission as ReplyPermission | undefined)}
+          initialAllowReposts={postToEdit?.allowReposts ?? initialData?.allowReposts}
           initialQuotedPost={initialData?.quotedPostObject}
-          initialLocation={initialData?.location}
-          initialSensitive={initialData?.sensitive}
+          initialLocation={postToEdit?.location ?? initialData?.location}
+          initialSensitive={postToEdit?.sensitive ?? initialData?.sensitive}
           initialPoll={initialData?.pollInput}
           draftId={initialData?.id}
           isModalLayout={true}

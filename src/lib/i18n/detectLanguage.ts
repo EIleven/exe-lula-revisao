@@ -8,6 +8,8 @@ const LANG_KEYWORDS: Record<SupportedTranslationLangCode, readonly string[]> = {
     'não', 'nao', 'para', 'com', 'uma', 'você', 'voce', 'isso', 'mais', 'muito', 'como', 'aqui', 'também', 'tambem',
     'sobre', 'entre', 'porque', 'quando', 'ainda', 'mesmo', 'pode', 'está', 'esta', 'são', 'sao', 'tem', 'foi', 'ser',
     'fazer', 'agora', 'hoje', 'sempre', 'então', 'entao', 'gente', 'tudo', 'nada', 'cada', 'quem', 'onde', 'pelo', 'pela',
+    'que', 'mas', 'dos', 'das', 'aos', 'nos', 'nas', 'desse', 'dessa', 'nesse', 'nessa', 'seu', 'sua', 'seus', 'suas',
+    'ele', 'ela', 'eles', 'elas', 'estão', 'estao', 'estamos', 'gosto', 'tema', 'um',
   ],
   en: [
     'the', 'and', 'that', 'have', 'for', 'not', 'with', 'you', 'this', 'but', 'his', 'from', 'they', 'say', 'her', 'she',
@@ -73,7 +75,8 @@ export function detectLikelyLanguage(rawText: string | null | undefined): Detect
   };
 
   // Diacríticos fortemente característicos dão peso extra imediato
-  if (/[ãõç]/i.test(clean)) scores.pt += 3;
+  if (/[ãõ]/i.test(clean) && !/[ñ¿¡]/i.test(clean)) scores.pt += 6;
+  else if (/[ç]/i.test(clean) && !/[ñ¿¡]/i.test(clean)) scores.pt += 3;
   if (/[ñ¿¡]/i.test(clean)) scores.es += 3;
   if (/[ßäöü]/i.test(clean)) scores.de += 3;
   if (/[çœæ]/i.test(clean) && !/[ãõ]/i.test(clean)) scores.fr += 2;

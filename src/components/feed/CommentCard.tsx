@@ -35,6 +35,7 @@ import SensitiveMediaCover from '@/components/shared/SensitiveMediaCover';
 
 interface CommentCardProps {
   comment: Comment & { depth?: number };
+  onCommentAdded?: (newComment: Comment) => void;
   onPostCreated?: (newPost: Post) => void;
   onCommentDeleted?: (commentId: string) => void; // For unbookmarking
   parentPostAuthorId?: string | null;
@@ -46,6 +47,7 @@ interface CommentCardProps {
 
 function CommentCard({
     comment: initialComment,
+    onCommentAdded,
     onPostCreated,
     onCommentDeleted, // Receive prop
     parentPostAuthorId,
@@ -168,7 +170,8 @@ function CommentCard({
       ...comment,
       repliesCount: (comment.repliesCount || 0) + 1,
     };
-     setComment(updatedParentComment); // Update local state as well for immediate feedback
+    setComment(updatedParentComment); // Update local state as well for immediate feedback
+    onCommentAdded?.(newComment);
   };
 
 
