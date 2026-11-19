@@ -1,7 +1,7 @@
 # Diretrizes de Governança, Licença e Divulgação Responsável
 
 **Mantenedor:** Breno César (`@Breno`) — Contato: `brenobarros11@hotmail.com`  
-**Repositório:** `github.com/EIleven/exe-lula-revisao`
+**Repositório:** `github.com/EIleven/hiperverso`
 
 ## 1. Licença Open Source (AGPL-3.0)
 

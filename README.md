@@ -1,4 +1,4 @@
-# HiperVerso (Exe. Lula) — Repositório Open Source (`exe-lula-revisao`)
+# HiperVerso — Repositório Open Source (`hiperverso`)
 
 > Repositório público do sistema **HiperVerso** licenciado sob a **GNU Affero General Public License v3.0 ([`LICENSE`](./LICENSE) — AGPL-3.0)**. Modelos complementares de governança e licenciamento seguem em avaliação após apresentação a professores do **IFTM** e reuniões com institutos de pesquisa voltados à soberania digital do Brasil. Consulte também [`CONTRIBUTING.md`](./CONTRIBUTING.md) e [`ACORDO_REVISAO.md`](./ACORDO_REVISAO.md).
 
@@ -86,7 +86,8 @@ Consulte [`CONTRIBUTING.md`](./CONTRIBUTING.md) para padrões de branch, commits
 
 ---
 
-## Licença e Propriedade
+## Licença
 
-Copyright (c) 2026 Breno César — Todos os direitos reservados.  
-Uso, análise e contribuição estritamente regulados por [`LICENSE`](./LICENSE) e [`ACORDO_REVISAO.md`](./ACORDO_REVISAO.md).
+Copyright (c) 2026 Breno Ramos.  
+Este projeto é software livre licenciado sob a **GNU Affero General Public License v3.0 (AGPL-3.0)**.  
+Você pode estudar, auditar, modificar e redistribuir nos termos de [`LICENSE`](./LICENSE) e [`ACORDO_REVISAO.md`](./ACORDO_REVISAO.md).
