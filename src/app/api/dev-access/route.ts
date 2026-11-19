@@ -158,7 +158,7 @@ export async function POST(request: NextRequest) {
   if (!adminsSnap.empty) {
     const batch = db.batch();
     const who = requesterUsername ? `@${requesterUsername} (GitHub @${githubHandle})` : `GitHub @${githubHandle}`;
-    const previewText = `[DEV] ${who} solicitou acesso ao repositório exe-lula-revisao (${focusArea}).`;
+    const previewText = `[DEV] ${who} solicitou acesso ao repositório hiperverso (${focusArea}).`;
 
     for (const adminDoc of adminsSnap.docs) {
       const notifRef = db.collection('notifications').doc();
@@ -232,8 +232,8 @@ export async function PATCH(request: NextRequest) {
       entityType: 'user',
       previewText:
         status === 'approved'
-          ? `[DEV] Seu acesso ao repositório exe-lula-revisao (@${data.githubHandle}) foi aprovado!`
-          : `[DEV] Sua solicitação ao repositório exe-lula-revisao foi recusada.${adminNote ? ` Motivo: ${adminNote}` : ''}`,
+          ? `[DEV] Seu acesso ao repositório hiperverso (@${data.githubHandle}) foi aprovado!`
+          : `[DEV] Sua solicitação ao repositório hiperverso foi recusada.${adminNote ? ` Motivo: ${adminNote}` : ''}`,
       createdAt: FieldValue.serverTimestamp(),
       readAt: null,
     });

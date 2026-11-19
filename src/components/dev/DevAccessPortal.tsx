@@ -243,7 +243,7 @@ export function DevAccessPortal() {
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <CardTitle className="flex items-center gap-2 text-base">
                   <GitBranch className="h-4 w-4 text-primary" />
-                  Repositório de Revisão (`exe-lula-revisao`)
+                  Repositório Público (`hiperverso`)
                 </CardTitle>
                 <div className="flex items-center gap-1.5">
                   <Button
@@ -253,7 +253,7 @@ export function DevAccessPortal() {
                     className="h-8 gap-1.5 text-xs"
                     onClick={() =>
                       void shareUrl(
-                        'https://github.com/EIleven/exe-lula-revisao',
+                        'https://github.com/EIleven/hiperverso',
                         'Repositório Público — HiperVerso',
                         'Repositório público sob licença AGPL-3.0 para auditoria técnica e contribuições.'
                       )
@@ -264,7 +264,7 @@ export function DevAccessPortal() {
                   </Button>
                   <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" asChild>
                     <a
-                      href="https://github.com/EIleven/exe-lula-revisao"
+                      href="https://github.com/EIleven/hiperverso"
                       target="_blank"
                       rel="noopener noreferrer"
                     >
@@ -347,7 +347,7 @@ export function DevAccessPortal() {
                     className="mt-0.5"
                   />
                   <span>
-                    Li e concordo com a licença <strong>AGPL-3.0</strong> e com as diretrizes de divulgação responsável de segurança do repositório <code>exe-lula-revisao</code>.
+                    Li e concordo com a licença <strong>AGPL-3.0</strong> e com as diretrizes de divulgação responsável de segurança do repositório <code>hiperverso</code>.
                   </span>
                 </label>
 
@@ -415,7 +415,7 @@ export function DevAccessPortal() {
           <TabsContent value="admin" className="space-y-3">
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Solicitações de Acesso (`exe-lula-revisao`)</CardTitle>
+                <CardTitle className="text-base">Solicitações de Acesso (`hiperverso`)</CardTitle>
                 <CardDescription>
                   Aprove ou recuse pedidos recebidos pelo portal DEV. O solicitante recebe notificação automática no HiperVerso.
                 </CardDescription>

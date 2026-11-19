@@ -19,14 +19,14 @@ export async function GET() {
   const payload = {
     uri: domain,
     domain,
-    title: 'HiperVerso · HiperVerso',
+    title: 'HiperVerso',
     short_description:
       'Comunidade brasileira independente focada em soberania digital, diálogo público e comunicação direta P2P/ActivityPub (código próprio em Next.js/TypeScript).',
     description:
-      'Projeto comunitário e independente brasileiro mantido por Breno Ramos (sem vínculo oficial partidário ou governamental). Arquitetura própria em TypeScript/Next.js com suporte a ActivityPub, E2EE e P2P WebRTC — não é fork de Misskey nem de Mastodon. Auditoria técnica e PRs abertos em https://github.com/EIleven/exe-lula-revisao.',
+      'Projeto comunitário e independente brasileiro mantido por Breno Ramos (sem vínculo oficial partidário ou governamental). Arquitetura própria em TypeScript/Next.js com suporte a ActivityPub, E2EE e P2P WebRTC (não é fork de Misskey nem de Mastodon). Auditoria técnica e PRs abertos em https://github.com/EIleven/hiperverso.',
     email: 'brenobarros11@hotmail.com',
     version: f.render.softwareVersion || '1.0.0',
-    source_url: 'https://github.com/EIleven/exe-lula-revisao',
+    source_url: 'https://github.com/EIleven/hiperverso',
     urls: {
       about: `${origin}/pt-BR/about`,
       dev: `${origin}/pt-BR/dev`,

@@ -428,7 +428,7 @@ export async function renderNodeInfo(deps: RenderDeps): Promise<Rendered> {
           'Comunidade brasileira independente e rede ActivityPub autoral em Next.js/TypeScript com WebRTC P2P e E2EE (sem vinculo institucional partidario ou governamental).',
         maintainer: 'Breno Ramos',
         homepageUrl: 'https://hiperverso.app/pt-BR/about',
-        repositoryUrl: 'https://github.com/EIleven/exe-lula-revisao',
+        repositoryUrl: 'https://github.com/EIleven/hiperverso',
         devPortalUrl: 'https://hiperverso.app/pt-BR/dev',
         softwareStack: 'Codigo proprio em TypeScript/Next.js + ActivityPub nativo (nao e fork de Misskey)',
       },
