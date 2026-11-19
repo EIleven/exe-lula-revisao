@@ -28,7 +28,7 @@ export async function generateMetadata(
 
   if (!user) {
     return {
-      title: 'User Not Found | Exe. Lula',
+      title: 'User Not Found | HiperVerso',
       description: 'The user profile you are looking for could not be found.',
        robots: {
         index: false,
@@ -37,14 +37,16 @@ export async function generateMetadata(
     };
   }
 
-  const siteName = 'Exe. Lula';
+  const siteName = 'HiperVerso';
   const profileUrl = `${BASE_URL}/${locale}/profile/${userId}`;
   const title = `${user.name} (@${user.username}) | ${siteName}`;
   const description = user.bio || `View the profile of ${user.name} (@${user.username}) on ${siteName}.`;
   
   const resolvedParent = await parent;
   const previousImages = resolvedParent.openGraph?.images || [];
-  const specificImage = user.avatarUrl ? [{ url: user.avatarUrl, alt: `${user.name}'s avatar` }] : [];
+  const specificImage = user.avatarUrl
+    ? [{ url: user.avatarUrl, alt: user.avatarAlt?.trim() || `${user.name}'s avatar` }]
+    : [];
 
   return {
     title: title,

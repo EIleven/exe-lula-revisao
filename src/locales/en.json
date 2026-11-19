@@ -80,14 +80,15 @@
     "crossPostSelected": "{count, plural, one {# network} other {# networks}}",
     "crossPostMenuTitle": "Also publish to",
     "crossPostMenuDescription": "The text and a link to this post will be sent to the selected networks.",
-    "crossPostPrivateWarning": "Restricted posts cannot leave your private circle.",
+    "crossPostPrivateWarning": "Your profile is set to private: posts go to followers only and cannot leave to other networks.",
+    "crossPostManagePrivacy": "Open privacy settings",
     "crossPostConnect": "Connect Bluesky or X",
     "crossPostSuccessTitle": "Published to other networks",
     "crossPostSuccessDescription": "Your post was also published to {providers}.",
     "crossPostPartialDescription": "Published to {published}. Could not send to {failed}.",
     "crossPostErrorTitle": "Post saved; external delivery pending",
     "crossPostErrorDescription": "Could not publish to {providers}. You can try again later.",
-    "crossPostGenericError": "The post was saved on Exe. Lula, but the external network did not respond.",
+    "crossPostGenericError": "The post was saved on HiperVerso, but the external network did not respond.",
     "federationSkippedTitle": "This post stayed here only",
     "federationSkippedDescription": "Polls and quotes do not go to the Fediverse yet. The post was published normally in the network."
   },
@@ -148,8 +149,7 @@
       "notifications": "Notifications",
       "media": "Content & Media",
       "appearance": "Appearance",
-      "accessibility": "Accessibility",
-      "languages": "Languages",
+      "accessibility": "Accessibility & Languages",
       "help": "Help",
       "about": "About",
       "fediverse": "Fediverse",
@@ -162,7 +162,7 @@
     "connected": "Connected",
     "connect": "Connect",
     "disconnect": "Disconnect",
-    "blueskyDescription": "Publish to Bluesky without sharing your password with Exe. Lula.",
+    "blueskyDescription": "Publish to Bluesky without sharing your password with HiperVerso.",
     "blueskyHandle": "Your Bluesky handle",
     "xDescription": "Send public posts to your X account using official authorization.",
     "serverSetupPending": "The secure Bluesky key still needs to be enabled on the server.",
@@ -278,7 +278,7 @@
     "description": "Customize the look and feel of the application.",
     "theme": {
       "label": "Theme",
-      "description": "Choose how Exe. Lula looks for you. Select a theme from the options below.",
+      "description": "Choose how HiperVerso looks for you. Select a theme from the options below.",
       "light": "Light",
       "dark": "Dark",
       "system": "System"
@@ -308,8 +308,8 @@
     "highContrastDescription": "Increases color contrast for better readability."
   },
   "AboutSettings": {
-    "title": "About Exe. Lula",
-    "description": "Information and legal documents for the Exe. Lula platform.",
+    "title": "About HiperVerso",
+    "description": "Information and legal documents for the HiperVerso platform.",
     "aboutUs": "About Us",
     "privacyPolicy": "Privacy Policy",
     "termsOfService": "Terms of Service",
@@ -318,8 +318,8 @@
     "dataRights": "Your rights over your data",
     "open": "Open",
     "viewPage": "View Page",
-    "version": "Exe. Lula Platform v1.0.0",
-    "copyright": "© {year} Exe. Lula. All Rights Reserved."
+    "version": "HiperVerso Platform v1.0.0",
+    "copyright": "© {year} HiperVerso. All Rights Reserved."
   },
   "ProfileTabs": {
     "posts": "Posts",
@@ -394,6 +394,44 @@
     "repostsDescription": "People who reposted the post from @{username}",
     "noReposts": "No one has reposted this post yet."
   },
+  "RemoteFollow": {
+    "follow": "Follow",
+    "requestToFollow": "Request to follow",
+    "requested": "Request sent",
+    "unfollow": "Unfollow",
+    "cancelRequest": "Cancel request",
+    "keepRequest": "Keep",
+    "cancelTitle": "Cancel the request?",
+    "cancelDescription": "You can ask again whenever you want.",
+    "dialogTitle": "Request to follow {handle}",
+    "help": "This profile approves followers manually. The message is private: only that person receives it, and the request can also go without it.",
+    "helpLabel": "How it works",
+    "messageLabel": "Message to {handle}",
+    "suggestedMessage": "Hi! I am {me}, from HiperVerso. I would like to follow you and keep up with your posts. If you can accept, thank you!",
+    "sendWithMessage": "Request with message",
+    "sendSilent": "Just request",
+    "requestSentTitle": "Request sent",
+    "requestSentDescription": "{handle} needs to accept before you start following.",
+    "requestSentNoteDescription": "Request and message sent to {handle}.",
+    "requestSentNoteFailed": "The request was sent, but the message could not be delivered.",
+    "followedTitle": "Following {handle}",
+    "unfollowedTitle": "You stopped following {handle}",
+    "requestCancelledTitle": "Request cancelled",
+    "unfollowRemoteNote": "That profile's server did not answer; you stopped following here anyway.",
+    "errorTitle": "Could not update",
+    "loginTitle": "Log in to follow",
+    "loginDescription": "Log in to follow Fediverse profiles.",
+    "errors": {
+      "federacao-nao-ativada": "Turn on the Fediverse in settings to follow profiles there.",
+      "plataforma-desligada": "The Fediverse is temporarily off.",
+      "conta-pausada": "Your account is paused on the Fediverse. Resume it in settings.",
+      "muitas-requisicoes": "Too many requests in a row. Try again shortly.",
+      "falha-entrega-remota": "That profile's server did not answer. Try again shortly.",
+      "inbox-remoto-indisponivel": "That profile is not accepting requests right now.",
+      "perfil-nao-encontrado": "Profile not found.",
+      "generic": "Try again shortly."
+    }
+  },
   "UserListItem": {
     "loginRequiredTitle": "Login Required",
     "loginRequiredDescription": "You need to log in to follow users.",
@@ -462,7 +500,7 @@
   },
   "TrendingPage": {
     "title": "Trending Now",
-    "description": "Discover what's buzzing in the Exe. Lula network.",
+    "description": "Discover what's buzzing in the HiperVerso network.",
     "topHashtagsTitle": "Top Hashtags",
     "topHashtagsDescription": "The most popular tags right now.",
     "noHashtags": "No trending hashtags at the moment.",
@@ -482,7 +520,7 @@
     "mentionsCount": "{count, plural, one {# mention} other {# mentions}}",
     "noTrendingTopics": "No trending topics right now.",
     "noTopArticles": "No top articles currently.",
-    "downloadAppTitle": "Exe. Lula App",
+    "downloadAppTitle": "HiperVerso App",
     "downloadAppDescription": "Get the best experience by installing the app on your device.",
     "downloadNow": "Download Now"
   },
@@ -599,13 +637,13 @@
   },
   "DownloadPage": {
     "title": "Download the App",
-    "description": "Install Exe. Lula on your device for the best experience.",
+    "description": "Install HiperVerso on your device for the best experience.",
     "androidTitle": "Download for Android",
     "androidSoonTitle": "Android app coming soon",
-    "androidSoonText": "We are preparing a new version of the Android app, which will be available here once it has been validated. In the meantime, use Exe. Lula in your browser.",
+    "androidSoonText": "We are preparing a new version of the Android app, which will be available here once it has been validated. In the meantime, use HiperVerso in your browser.",
     "iosTitle": "Install on iPhone/iPad",
     "desktopTitle": "Install on your Computer",
-    "downloadApkButton": "Download the Exe. Lula app",
+    "downloadApkButton": "Download the HiperVerso app",
     "apkInstallTitle": "How to Install the APK",
     "apkStep1": "1. Download the .apk file using the button above.",
     "apkStep2": "2. Open the downloaded file. Your device will ask for permission to 'install apps from unknown sources'. Allow it to continue.",
@@ -616,9 +654,9 @@
     "iosStep1": "1. Open this website in Safari.",
     "iosStep2": "2. Tap the Share icon in the browser's toolbar.",
     "iosStep3": "3. Scroll down and select 'Add to Home Screen'.",
-    "iosStep4": "4. Confirm to add the Exe. Lula icon to your home screen.",
+    "iosStep4": "4. Confirm to add the HiperVerso icon to your home screen.",
     "desktopInstallTitle": "How to Install in Your Browser",
-    "desktopInstallText": "Look for the install icon in your browser's address bar (usually on the right side) and follow the instructions to add Exe. Lula as an app on your computer.",
+    "desktopInstallText": "Look for the install icon in your browser's address bar (usually on the right side) and follow the instructions to add HiperVerso as an app on your computer.",
     "releaseInfoTitle": "Release Information",
     "version": "Version",
     "releaseNotes": "Release Notes",
@@ -691,7 +729,8 @@
     "pollError_duration": "Choose a valid duration.",
     "pollMediaConflictTitle": "Poll or media",
     "pollMediaConflictDescription": "Remove the poll to attach an image or video.",
-    "sensitiveButton": "Mark media as sensitive content"
+    "sensitiveButton": "Mark media as sensitive content",
+    "sensitiveActive": "Sensitive content flagged"
   },
   "Poll": {
     "title": "Poll",
@@ -708,16 +747,17 @@
   "PostContent": {
     "sensitiveWarning": "Sensitive content",
     "sensitiveHint": "The media was hidden because the author marked it as sensitive.",
-    "showSensitive": "Show media"
+    "showSensitive": "Show media",
+    "sensitiveSettingsLink": "Preferences"
   },
   "Signup": {
     "closedTitle": "Sign-ups are closed for now",
-    "closedMessage": "The first {limit} spots on Exe. Lula have been filled.",
+    "closedMessage": "The first {limit} spots on HiperVerso have been filled.",
     "closedHint": "If you already have an account, you can keep signing in as usual, with your email or with Google.",
     "goToLogin": "Go to login",
     "unavailable": "Sign-up is temporarily unavailable. Please try again in a few minutes.",
     "usernameInvalid": "Use 3 to 15 letters, numbers or _ (no spaces or accents).",
-    "humanCheckFailed": "We could not confirm you are a person. Reload the page and try again. If you use an ad or tracker blocker, allow Exe. Lula and Google reCAPTCHA.",
+    "humanCheckFailed": "We could not confirm you are a person. Reload the page and try again. If you use an ad or tracker blocker, allow HiperVerso and Google reCAPTCHA.",
     "recaptchaNotice": "This site is protected by Google reCAPTCHA Enterprise, and the Google Privacy Policy and Terms of Service apply."
   },
   "ImageViewer": {
@@ -727,8 +767,8 @@
     "save": "Save",
     "share": "Share",
     "imageAlt": "Full screen image",
-    "shareTitle": "Exe. Lula image",
-    "shareText": "Check out this image on Exe. Lula!",
+    "shareTitle": "HiperVerso image",
+    "shareText": "Check out this image on HiperVerso!",
     "linkCopiedTitle": "Link copied!",
     "linkCopiedBody": "The link to the post was copied to your clipboard.",
     "shareFailedTitle": "Could not share",
@@ -740,7 +780,7 @@
   },
   "NotificationItem": {
     "fallback": "You have a new notification.",
-    "welcome": "Welcome to Exe. Lula!",
+    "welcome": "Welcome to HiperVerso!",
     "someone": "Someone",
     "andOthers": "and {count} others",
     "andOne": "and 1 other",
@@ -765,6 +805,7 @@
       "new_post_from_user": "published a new post:",
       "new_message": "sent you a new message:",
       "new_conversation": "started a conversation with you",
+      "alt_text_request": "requested Alt Text on an image in your post",
       "default": "interacted with you"
     }
   },
@@ -775,17 +816,18 @@
     "later": "Not now",
     "close": "Close",
     "blockedTitle": "Notifications are blocked",
-    "blockedBody": "Allow Exe. Lula notifications in your browser or device settings to receive alerts.",
+    "blockedBody": "Allow HiperVerso notifications in your browser or device settings to receive alerts.",
     "enabledTitle": "Notifications turned on",
     "enabledBody": "You will receive alerts on this device.",
     "errorTitle": "Could not turn on notifications",
     "errorBody": "Try again in a moment."
   },
   "Consent": {
-    "title": "Cookies and usage measurement",
-    "description": "Some cookies are necessary so you can sign in, keep your language and theme and block abuse — those are not a choice. Measurement and advertising cookies are only used if you accept, and you can change your mind at any time.",
+    "title": "Cookies, zero ads & support",
+    "description": "We do not show ads or sell your data. Essential cookies keep your session, language, theme, and security working. Optional analytics only run if you accept.",
     "cookiePolicy": "Cookie Policy",
     "privacyPolicy": "Privacy Policy",
+    "supportPix": "Support via Pix (ad-free)",
     "acceptAll": "Accept all",
     "rejectAll": "Reject all",
     "customize": "Customize",
@@ -807,8 +849,8 @@
         "description": "They help us understand which pages are used and where the network fails. Off until you accept."
       },
       "marketing": {
-        "title": "Advertising",
-        "description": "They would allow ads and campaign measurement. The network shows no ads today; the category stays here so nothing can be turned on without your consent. Off until you accept."
+        "title": "Zero Advertising (Pix Support)",
+        "description": "We do not run ads or sell user data. Our network stays independent through voluntary community support via Pix."
       }
     }
   },
@@ -1007,7 +1049,7 @@
       "option": {
         "local": {
           "title": "Here only",
-          "description": "Stays on Exe. Lula. Nothing is sent to other servers."
+          "description": "Stays on HiperVerso. Nothing is sent to other servers."
         },
         "public": {
           "title": "Fediverse: public",

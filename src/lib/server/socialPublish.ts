@@ -47,7 +47,7 @@ async function publishBluesky(uid: string, post: PublishablePost, locale: string
         const excerpt = rawBody && maxExcerpt > 20 ? `\n\n${truncate(rawBody, maxExcerpt)}` : '';
         return `${headline}${excerpt}${suffix}`;
       })()
-    : truncate(plainPostText(post), 290) || (locale === 'en' ? 'New post on Exe. Lula' : 'Novo post no Exe. Lula');
+    : truncate(plainPostText(post), 290) || (locale === 'en' ? 'New post on HiperVerso' : 'Novo post no HiperVerso');
   const richText = new RichText({ text: body });
   await richText.detectFacets(agent);
   const response = await agent.post({
@@ -57,7 +57,7 @@ async function publishBluesky(uid: string, post: PublishablePost, locale: string
       $type: 'app.bsky.embed.external',
       external: {
         uri: sourceUrl,
-        title: truncate(post.headline || `Post de ${post.authorDetails?.name || post.authorDetails?.username || 'Exe. Lula'}`, 100),
+        title: truncate(post.headline || `Post de ${post.authorDetails?.name || post.authorDetails?.username || 'HiperVerso'}`, 100),
         description: truncate(rawBody || plainPostText(post), 240),
       },
     },

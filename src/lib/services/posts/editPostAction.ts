@@ -21,12 +21,13 @@ import {
     extractYoutubeVideoInfo, 
     extractHashtagsFromString,
 } from '@/lib/utils/textUtils';
+import { tokensDoDocumento } from '@/lib/search/indiceDeTexto';
 
 import { getCurrentUserId } from '@/lib/services/authService';
 import { getPostById } from '@/lib/services/postReadService'; 
 import { postsCollection } from '@/lib/services/postService'; 
 
-export const editPost = async ( postId: string, newData: Partial<Pick<Post, 'text' | 'headline' | 'sourceUrl' | 'newsCategory' | 'allowReposts' | 'replyPermission'>> & { media?: Media[] | null } ): Promise<Post | undefined> => {
+export const editPost = async ( postId: string, newData: Partial<Pick<Post, 'text' | 'headline' | 'sourceUrl' | 'newsCategory' | 'allowReposts' | 'replyPermission' | 'sensitive'>> & { media?: Media[] | null } ): Promise<Post | undefined> => {
   const postRef = doc(postsCollection, postId);
   const postSnap = await getDoc(postRef);
   if (!postSnap.exists()) throw new Error("Post not found.");
@@ -87,17 +88,33 @@ export const editPost = async ( postId: string, newData: Partial<Pick<Post, 'tex
   const newHashtags = extractHashtagsFromString(textContentForHashtags + ' ' + (currentHeadlineForHashtags || ''));
   
   const oldHashtags = oldData.hashtags || [];
+  // Editou o texto ou o titulo? Os termos da busca sao refeitos junto. Deixar o indice com o texto antigo faria a
+  // busca achar o post por uma palavra que ja nao esta nele -- pior do que nao achar.
+  updatePayload.searchTokens = tokensDoDocumento({
+    titulo: (currentHeadlineForHashtags as string | null | undefined) ?? null,
+    texto: newText,
+    autorNome: oldData.authorDetails?.name,
+    autorHandle: oldData.authorDetails?.username,
+    hashtags: newHashtags,
+  });
   if (JSON.stringify(newHashtags.sort()) !== JSON.stringify(oldHashtags.sort())) {
       updatePayload.hashtags = newHashtags.length > 0 ? newHashtags : null;
       changed = true;
   }
   
-  // Update hasMedia flag based on final state of media and youtubeVideoId
+  // Update hasMedia & sensitive flags based on final state of media and youtubeVideoId
   const finalMedia = updatePayload.hasOwnProperty('media') ? updatePayload.media : oldData.media;
   const finalYoutubeVideoId = updatePayload.hasOwnProperty('youtubeVideoId') ? updatePayload.youtubeVideoId : oldData.youtubeVideoId;
   const newHasMedia = !!(finalMedia?.length || finalYoutubeVideoId);
   if(newHasMedia !== oldData.hasMedia) {
       updatePayload.hasMedia = newHasMedia;
+      changed = true;
+  }
+  const hasStoredMedia = Array.isArray(finalMedia) && finalMedia.length > 0;
+  const requestedSensitive = newData.sensitive !== undefined ? newData.sensitive : Boolean(oldData.sensitive);
+  const nextSensitive = Boolean(requestedSensitive && hasStoredMedia);
+  if (nextSensitive !== Boolean(oldData.sensitive)) {
+      updatePayload.sensitive = nextSensitive;
       changed = true;
   }
 

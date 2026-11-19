@@ -12,6 +12,11 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useDebounce } from '@/hooks/use-debounce';
 import { useCurrentUser } from '@/contexts/CurrentUserContext';
 import type { SuggestionType } from '@/hooks/features/mentions/useMentions';
+import { siteConfig } from '@/config/site';
+import { parseLocalMentionQuery, plainLocalHandle } from '@/lib/mentions/localAddress';
+import { findLocalUserByHandle } from '@/lib/services/localMentionLookup';
+
+const LOCAL_DOMAINS = [siteConfig.federationHost, siteConfig.officialHost, siteConfig.wwwHost];
 
 interface MentionSuggestionsProps {
   type: SuggestionType | null;
@@ -47,10 +52,20 @@ export default function MentionSuggestions({
       try {
         if (type === 'user') {
           const trimmed = debouncedQuery.trim();
-          const users = await searchUsers(trimmed, currentUser?.id || null);
+          // `usuario@exercitodolula.app` (inteiro ou começado) é uma pessoa DAQUI: busca pelo handle, nunca pela string toda, e
+          // nunca passa pelo resolvedor do Fediverso (que responde "perfil-local" e a pessoa sumia da lista).
+          const local = parseLocalMentionQuery(trimmed, LOCAL_DOMAINS);
+          const termo = local ? local.handle : trimmed;
+          const users = await searchUsers(termo, currentUser?.id || null);
+          // Busca exata pelo índice `usernames`, que ignora a caixa: `searchUsers` não acha `ExercitoDoLula` (ver localMentionLookup.ts).
+          const exatoHandle = local ? (local.handle.length >= 3 ? local.handle : null) : plainLocalHandle(trimmed);
+          if (exatoHandle && !users.some((u) => u.username?.toLowerCase() === exatoHandle)) {
+            const exato = await findLocalUserByHandle(exatoHandle, currentUser?.id || null);
+            if (exato) users.unshift(exato);
+          }
           let combined = users;
 
-          if (FEDIVERSE_HANDLE_PATTERN.test(trimmed)) {
+          if (!local && FEDIVERSE_HANDLE_PATTERN.test(trimmed)) {
             const lower = trimmed.toLowerCase();
             const alreadyPresent = users.some((u) => u.username?.toLowerCase() === lower);
             if (!alreadyPresent) {

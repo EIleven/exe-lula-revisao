@@ -12,10 +12,11 @@ import {
 import { Dialog, DialogTrigger } from '@/components/ui/dialog';
 import QuotePostDialogContent from './QuotePostDialogContent';
 import EditPostDialogContent from './EditPostDialogContent';
+import CreateNewsDialogContent from './CreateNewsDialogContent';
 import PostAnalyticsDialog from '@/components/analytics/PostAnalyticsDialog'; // Import the new component
 import MountOnceOpened from '@/components/shared/MountOnceOpened';
 import {
-  MessageCircle, Heart, Repeat2, Edit3, MoreHorizontal,
+  Accessibility, Check, MessageCircle, Heart, Repeat2, Edit3, MoreHorizontal,
   Copy, Send, ExternalLink, EyeOff, VolumeX, ShieldAlert, AlertTriangle, Trash2, Loader2, BarChart2, Pin, Bookmark // Import Bookmark icon
 } from 'lucide-react';
 import type { Post } from '@/lib/types';
@@ -62,6 +63,12 @@ interface PostCardFooterProps {
   onLessOfThis?: (e: Event) => void; 
   onMuteThread?: (e: Event) => void; 
   onMuteWords?: (e: Event) => void; 
+  hasPostImages?: boolean;
+  hasMissingImageAlt?: boolean;
+  altRequested?: boolean;
+  isRequestingAltText?: boolean;
+  onOpenAltTextEditor?: () => void;
+  onRequestAltText?: (e: React.MouseEvent | Event) => void;
 }
 
 
@@ -193,6 +200,12 @@ const MoreOptionsMenu = ({
     onMutePostAuthor,
     onBlockPostAuthor,
     onReportPostAction,
+    hasPostImages,
+    hasMissingImageAlt,
+    altRequested,
+    isRequestingAltText,
+    onOpenAltTextEditor,
+    onRequestAltText,
 }: {
     post: Post;
     isDeleting: boolean;
@@ -209,6 +222,12 @@ const MoreOptionsMenu = ({
     onMutePostAuthor: (e: Event) => void;
     onBlockPostAuthor: (e: Event) => void;
     onReportPostAction: (e: Event) => void;
+    hasPostImages?: boolean;
+    hasMissingImageAlt?: boolean;
+    altRequested?: boolean;
+    isRequestingAltText?: boolean;
+    onOpenAltTextEditor?: () => void;
+    onRequestAltText?: (e: React.MouseEvent | Event) => void;
 }) => {
     const [isMoreOptionsSheetOpen, setIsMoreOptionsSheetOpen] = React.useState(false);
     
@@ -230,6 +249,11 @@ const MoreOptionsMenu = ({
               <DropdownMenuItem onSelect={() => setIsEditDialogOpen(true)} disabled={(post.editCount || 0) >= 1 && post.category !== 'news'} data-interactive="true">
                 <Edit3 className="mr-2 h-4 w-4" /> Editar post
               </DropdownMenuItem>
+              {hasPostImages && onOpenAltTextEditor && (
+                <DropdownMenuItem onSelect={() => onOpenAltTextEditor()} data-interactive="true">
+                  <Accessibility className="mr-2 h-4 w-4 text-emerald-500" /> {hasMissingImageAlt ? 'Adicionar Alt Text' : 'Editar Alt Text'}
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem onSelect={handleDeleteClick} className="text-destructive focus:text-destructive focus:bg-destructive/10" data-interactive="true" disabled={isDeleting}>
                 {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />} Deletar post
               </DropdownMenuItem>
@@ -239,6 +263,22 @@ const MoreOptionsMenu = ({
           <DropdownMenuItem onSelect={onCopyText} data-interactive="true"> <Copy className="mr-2 h-4 w-4" /> Copiar texto do post </DropdownMenuItem>
           <DropdownMenuItem onSelect={onSendViaDirect} data-interactive="true"> <Send className="mr-2 h-4 w-4" /> Enviar via Direct </DropdownMenuItem>
           <DropdownMenuItem onSelect={onShare} data-interactive="true"> <ExternalLink className="mr-2 h-4 w-4" /> Compartilhar </DropdownMenuItem>
+          {/* Funcionalidade de pedir Alt Text entre usuários desativada temporariamente
+          {hasMissingImageAlt && post.userId !== currentUserId && !post.userId.startsWith('ap_') && !post.id.startsWith('ap_') && onRequestAltText && (
+            <DropdownMenuItem
+              onSelect={(e) => onRequestAltText(e)}
+              disabled={Boolean(altRequested || isRequestingAltText)}
+              data-interactive="true"
+            >
+              {altRequested ? (
+                <Check className="mr-2 h-4 w-4 text-emerald-500" />
+              ) : (
+                <Accessibility className="mr-2 h-4 w-4 text-emerald-500" />
+              )}
+              {altRequested ? 'Alt Text já solicitado' : 'Notificar autor sobre Alt Text'}
+            </DropdownMenuItem>
+          )}
+          */}
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={onHidePost} data-interactive="true"> <EyeOff className="mr-2 h-4 w-4" /> Ocultar este post para mim </DropdownMenuItem>
           {post.user && currentUserId && post.userId !== currentUserId && (
@@ -272,6 +312,11 @@ const MoreOptionsMenu = ({
               <Button variant="ghost" className="w-full justify-start text-base py-4" onClick={() => { setIsEditDialogOpen(true); setIsMoreOptionsSheetOpen(false); }} disabled={(post.editCount || 0) >= 1 && post.category !== 'news'}>
                 <Edit3 className="mr-2 h-4 w-4" /> Editar post
               </Button>
+              {hasPostImages && onOpenAltTextEditor && (
+                <Button variant="ghost" className="w-full justify-start text-base py-4" onClick={() => { onOpenAltTextEditor(); setIsMoreOptionsSheetOpen(false); }}>
+                  <Accessibility className="mr-2 h-4 w-4 text-emerald-500" /> {hasMissingImageAlt ? 'Adicionar Alt Text' : 'Editar Alt Text'}
+                </Button>
+              )}
               <Button variant="ghost" className="w-full justify-start text-base py-4 text-destructive hover:text-destructive" onClick={(e) => { handleDeleteClick(e); setIsMoreOptionsSheetOpen(false); }} disabled={isDeleting}>
                 {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />} Deletar post
               </Button>
@@ -287,6 +332,23 @@ const MoreOptionsMenu = ({
           <Button variant="ghost" className="w-full justify-start text-base py-4" onClick={(e) => { onShare(e); setIsMoreOptionsSheetOpen(false); }}>
             <ExternalLink className="mr-2 h-4 w-4" /> Compartilhar
           </Button>
+          {/* Funcionalidade de pedir Alt Text entre usuários desativada temporariamente
+          {hasMissingImageAlt && post.userId !== currentUserId && !post.userId.startsWith('ap_') && !post.id.startsWith('ap_') && onRequestAltText && (
+            <Button
+              variant="ghost"
+              className="w-full justify-start text-base py-4"
+              disabled={Boolean(altRequested || isRequestingAltText)}
+              onClick={(e) => { onRequestAltText(e); setIsMoreOptionsSheetOpen(false); }}
+            >
+              {altRequested ? (
+                <Check className="mr-2 h-4 w-4 text-emerald-500" />
+              ) : (
+                <Accessibility className="mr-2 h-4 w-4 text-emerald-500" />
+              )}
+              {altRequested ? 'Alt Text já solicitado' : 'Notificar autor sobre Alt Text'}
+            </Button>
+          )}
+          */}
           <Separator />
           <Button variant="ghost" className="w-full justify-start text-base py-4" onClick={(e) => { onHidePost(e); setIsMoreOptionsSheetOpen(false); }}>
             <EyeOff className="mr-2 h-4 w-4" /> Ocultar este post para mim
@@ -371,6 +433,12 @@ export default function PostCardFooter({
   onPostQuoted,
   onPinPost, 
   onHidePost,
+  hasPostImages,
+  hasMissingImageAlt,
+  altRequested,
+  isRequestingAltText,
+  onOpenAltTextEditor,
+  onRequestAltText,
 }: PostCardFooterProps) {
   const [isDeleting, setIsDeleting] = React.useState(false);
   const [isAnalyticsOpen, setIsAnalyticsOpen] = React.useState(false);
@@ -477,9 +545,23 @@ export default function PostCardFooter({
                     onMutePostAuthor={onMutePostAuthor}
                     onBlockPostAuthor={onBlockPostAuthor}
                     onReportPostAction={onReportPostAction}
+                    hasPostImages={hasPostImages}
+                    hasMissingImageAlt={hasMissingImageAlt}
+                    altRequested={altRequested}
+                    isRequestingAltText={isRequestingAltText}
+                    onOpenAltTextEditor={onOpenAltTextEditor}
+                    onRequestAltText={onRequestAltText}
                 />
                 <MountOnceOpened open={isEditDialogOpen}>
-                  <EditPostDialogContent postToEdit={post} onPostEdited={onPostEdited} dialogClose={() => setIsEditDialogOpen(false)} />
+                  {post.category === 'news' ? (
+                    <CreateNewsDialogContent
+                      postToEdit={post}
+                      onPostEdited={onPostEdited}
+                      dialogClose={() => setIsEditDialogOpen(false)}
+                    />
+                  ) : (
+                    <EditPostDialogContent postToEdit={post} onPostEdited={onPostEdited} dialogClose={() => setIsEditDialogOpen(false)} />
+                  )}
                 </MountOnceOpened>
            </Dialog>
            {/* As estatísticas só são buscadas quando alguém abre o diálogo (antes eram lidas do servidor para TODO cartão). */}

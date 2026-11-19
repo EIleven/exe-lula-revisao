@@ -172,3 +172,4 @@ export function useTextTranslation(rawText: string | null | undefined) {
     toggleTranslation,
   };
 }
+

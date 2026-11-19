@@ -42,7 +42,7 @@ const createEmbeddedUserDetails = (user: User): EmbeddedUserDetails => {
   };
 };
 
-export const addCommentToPost = async (postId: string, commentUserId: string | null, data: { text?: string; media?: Media[] | null; youtubeVideoId?: string; quotedPostObject?: Post | null; }, parentCommentId?: string): Promise<Comment | undefined> => {
+export const addCommentToPost = async (postId: string, commentUserId: string | null, data: { text?: string; media?: Media[] | null; youtubeVideoId?: string; quotedPostObject?: Post | null; sensitive?: boolean; }, parentCommentId?: string): Promise<Comment | undefined> => {
     if (!commentUserId) return undefined;
     const post = await getPostById(postId, commentUserId);
     if (!post || !post.user) return undefined;
@@ -91,6 +91,7 @@ export const addCommentToPost = async (postId: string, commentUserId: string | n
                 newsCategory: op.newsCategory || null,
                 postFormat: op.postFormat || 'standard',
                 visibility: op.visibility || 'public',
+                sensitive: op.sensitive === true,
                 allowReposts: op.allowReposts,
                 replyPermission: op.replyPermission,
                 likes: op.likes || 0,
@@ -101,6 +102,8 @@ export const addCommentToPost = async (postId: string, commentUserId: string | n
         }
     }
 
+
+    const isSensitive = Boolean(data.sensitive && finalMedia && finalMedia.length > 0);
 
     const newCommentDataForFirestore: any = {
         userId: commentUserId,
@@ -117,6 +120,7 @@ export const addCommentToPost = async (postId: string, commentUserId: string | n
         media: finalMedia && finalMedia.length > 0 ? finalMedia : null,
         youtubeVideoId: detectedYoutubeVideoId || null,
         hasMedia: !!(finalMedia && finalMedia.length > 0) || !!detectedYoutubeVideoId || !!quotedPostData,
+        sensitive: isSensitive,
         ...(parentCommentId && { parentCommentId }),
         quotedPostObject: quotedPostData || null, // Store the sanitized quoted post
     };
@@ -148,6 +152,7 @@ export const addCommentToPost = async (postId: string, commentUserId: string | n
       media: finalMedia || undefined,
       youtubeVideoId: detectedYoutubeVideoId || undefined,
       hasMedia: newCommentDataForFirestore.hasMedia,
+      sensitive: isSensitive,
       quotedPostObject: data.quotedPostObject || undefined,
       hashtags: hashtags.length > 0 ? hashtags : null,
     };
@@ -223,7 +228,7 @@ export const deleteComment = async (postId: string, commentId: string, userId: s
     }
 };
 
-export const replyToComment = async (postId: string, parentCommentId: string, replyUserId: string | null, data: { text?: string; media?: Media[] | null; youtubeVideoId?: string; quotedPostObject?: Post | null; }): Promise<Comment | undefined> => {
+export const replyToComment = async (postId: string, parentCommentId: string, replyUserId: string | null, data: { text?: string; media?: Media[] | null; youtubeVideoId?: string; quotedPostObject?: Post | null; sensitive?: boolean; }): Promise<Comment | undefined> => {
     return addCommentToPost(postId, replyUserId, data, parentCommentId);
 };
 

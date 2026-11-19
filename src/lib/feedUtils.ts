@@ -50,3 +50,13 @@ export function getFeedActivityMillis(item: FeedItem): number {
   const repostedAt = 'repostedAt' in item ? item.repostedAt : undefined;
   return toMillis(repostedAt) || toMillis(item.createdAt);
 }
+
+/**
+ * Ordena itens do feed pela atividade mais recente (`repostedAt || createdAt`) e remove duplicatas
+ * mantendo sempre a ocorrência mais recente de cada conteúdo.
+ */
+export function sortAndDedupeFeedItems<T extends FeedItem>(items: T[]): T[] {
+  if (items.length <= 1) return uniqueFeedItems(items);
+  const sorted = [...items].sort((a, b) => getFeedActivityMillis(b) - getFeedActivityMillis(a));
+  return uniqueFeedItems(sorted);
+}

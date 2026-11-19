@@ -322,8 +322,8 @@ export function usePostMainInteractions({
     if (!post) return;
 
     const shareData: ShareData = {
-      title: `Post de @${post.user?.username || 'usuário'} no Exe. Lula`,
-      text: post.headline || post.text?.substring(0, 100) || `Confira este post no Exe. Lula!`,
+      title: `Post de @${post.user?.username || 'usuário'} no HiperVerso`,
+      text: post.headline || post.text?.substring(0, 100) || `Confira este post no HiperVerso!`,
       url: `${siteConfig.baseUrl}/${locale}/post/${post.id}`,
     };
 

@@ -40,7 +40,7 @@ export async function generateMetadata(
   // For simplicity, we'll construct metadata without fetching full tag info here,
   // as the main content loading will be client-side and paginated.
 
-  const siteName = 'Exe. Lula';
+  const siteName = 'HiperVerso';
   const tagUrl = `${BASE_URL}/tag/${encodeURIComponent(actualTagName)}`;
   const title = `Posts tagged with ${actualTagName} | ${siteName}`;
   const description = `Explore posts and discussions tagged with ${actualTagName} on ${siteName}.`;

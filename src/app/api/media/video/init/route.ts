@@ -20,10 +20,13 @@ import {
   videoStagingPath,
 } from '@/lib/media/videoPolicy';
 import { adminFirestore } from '@/lib/server/firebaseAdmin';
-import { verifyRequestMember } from '@/lib/server/requestAuth';
+import { requestIp, takeRateLimit, verifyRequestMember } from '@/lib/server/requestAuth';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
+
+const MAX_VIDEO_SOURCE_BYTES = 5 * 1024 * 1024 * 1024;
+const INIT_WINDOW_MS = 10 * 60 * 1000;
 
 const json = (body: Record<string, unknown>, status: number) =>
   NextResponse.json(body, { status, headers: { 'Cache-Control': 'no-store' } });
@@ -39,6 +42,14 @@ export async function POST(request: NextRequest) {
   const uid = await verifyRequestMember(request);
   if (!uid) return json({ error: 'unauthorized' }, 401);
 
+  const ip = requestIp(request);
+  if (
+    !takeRateLimit(`video-init:uid:${uid}`, 15, INIT_WINDOW_MS) ||
+    !takeRateLimit(`video-init:ip:${ip}`, 30, INIT_WINDOW_MS)
+  ) {
+    return json({ error: 'too-many-requests' }, 429);
+  }
+
   let body: InitBody;
   try {
     body = await request.json() as InitBody;
@@ -51,7 +62,7 @@ export async function POST(request: NextRequest) {
   const size = Number(body.size);
   const durationSeconds = body.durationSeconds == null ? null : Number(body.durationSeconds);
   if (!contentType.startsWith('video/')) return json({ error: 'not-a-video' }, 415);
-  if (!Number.isSafeInteger(size) || size <= 0) return json({ error: 'invalid-file-size' }, 400);
+  if (!Number.isSafeInteger(size) || size <= 0 || size > MAX_VIDEO_SOURCE_BYTES) return json({ error: 'invalid-file-size' }, 400);
   if (!isVideoDurationAllowed(durationSeconds)) {
     return json({ error: 'video-too-long', maxDurationSeconds: 10_200 }, 422);
   }

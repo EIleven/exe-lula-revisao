@@ -6,13 +6,13 @@ import { getPostById } from '@/lib/services/postReadService'
 import { useParams } from 'next/navigation'
 import PostCard from '@/components/feed/PostCard'
 import { PostInteractions } from './PostInteractions'
-import AdClientComponent from '@/components/shared/AdClientComponent'
 import PostPageHeader from './PostPageHeader'
 import PostCardSkeleton from '@/components/feed/PostCardSkeleton';
 import type { Post } from '@/lib/types';
 import Link from 'next/link';
 import { useLocale } from 'next-intl';
 import { useCurrentUser } from '@/contexts/CurrentUserContext';
+import { isPublicSafe } from '@/lib/feed/publicVisibility';
 import { siteConfig } from '@/config/site';
 
 
@@ -49,7 +49,10 @@ export default function PostPageClientContent() {
             await fetch(`/api/ap/remote-post-interactions?postId=${encodeURIComponent(postId)}&mode=comments`).catch(() => null);
           }
           const fetchedPost = await getPostById(postId, viewerId);
-          if (!cancelled) setPost(fetchedPost || null);
+          // Visitante sem conta não vê conteúdo com aviso nem fora do português, nem abrindo o endereço direto: o item
+          // simplesmente não existe para ele, como no feed.
+          const permitido = fetchedPost && (viewerId ? true : isPublicSafe(fetchedPost));
+          if (!cancelled) setPost(permitido ? fetchedPost : null);
         } catch (err) {
           console.error(`Error fetching post ${postId} in component:`, err);
           if (!cancelled) setPost(null);
@@ -92,17 +95,6 @@ export default function PostPageClientContent() {
         <PostCard post={post} isSinglePostView={true} />
         {/* Respiro inferior para que as barras fixas no mobile/app (chrome-bottom + FloatingCommentBar) nunca tampem os botões do último comentário */}
         <div className="h-[calc(9.5rem+env(safe-area-inset-bottom,0px))] md:h-12" aria-hidden="true" />
-         {/* Espaço de publicidade: desligado em siteConfig.adsEnabled, mantido inteiro para voltar depois. */}
-         {siteConfig.adsEnabled && (
-           <aside className="block xl:sticky top-[72px] h-fit px-4 xl:px-0 mt-4">
-              <div className="space-y-4">
-                  <div className="p-4 border rounded-lg bg-card space-y-4">
-                  <h3 className="font-semibold text-center text-muted-foreground">Publicidade</h3>
-                  <AdClientComponent adSlot="9625426118" />
-                  </div>
-              </div>
-          </aside>
-         )}
       </main>
       <PostInteractions />
     </Fragment>

@@ -5,8 +5,9 @@ import Link from 'next/link';
 import { useNotifications } from '@/hooks/features/notifications/useNotifications';
 import { NotificationTabs } from '@/components/notifications/NotificationTabs';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Loader2, Settings } from 'lucide-react';
+import { Loader2, Lock, Settings } from 'lucide-react';
 import { useCurrentUser } from '@/contexts/CurrentUserContext';
 import PushPrompt from '@/components/notifications/PushPrompt';
 import type { NotificationFilter } from '@/lib/services/notifications/notificationTypes';
@@ -61,6 +62,32 @@ export default function NotificationsPage() {
           </div>
         </div>
     )
+  }
+
+  if (!currentUser) {
+    return (
+      <div className="container mx-auto max-w-xl py-8 px-4">
+        <Card className="shadow-lg rounded-none">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-xl font-bold">
+              <Lock className="h-5 w-5 text-primary" />
+              Notificações
+            </CardTitle>
+            <CardDescription>
+              Entre na sua conta para acompanhar suas notificações.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-wrap gap-3">
+            <Button asChild>
+              <Link href={`/${locale}/login?redirect=/${locale}/notifications`}>Entrar</Link>
+            </Button>
+            <Button variant="outline" asChild>
+              <Link href={`/${locale}`}>Voltar ao Feed</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
 
   return (

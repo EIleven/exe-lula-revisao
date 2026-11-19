@@ -2,6 +2,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { adminFirestore } from './firebaseAdmin';
 import type { SocialConnectionSummary, SocialProvider } from '@/lib/social/types';
+import type { FederatedSyncConsent } from './federatedSync';
 
 const CONNECTIONS = 'social_connections';
 const LINK_STATES = 'social_oauth_links';
@@ -26,6 +27,7 @@ interface LinkState {
   expiresAt: number;
   verifier?: string;
   locale?: string;
+  consent?: FederatedSyncConsent;
 }
 
 const clean = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
@@ -59,6 +61,15 @@ export async function createLinkState(input: Omit<LinkState, 'expiresAt'>): Prom
     createdAt: FieldValue.serverTimestamp(),
   });
   return state;
+}
+
+export async function peekLinkState(state: string, provider: SocialProvider): Promise<LinkState | null> {
+  if (!state || state.length > 512) return null;
+  const snapshot = await adminFirestore().collection(LINK_STATES).doc(hash(state)).get();
+  if (!snapshot.exists) return null;
+  const value = snapshot.data() as LinkState;
+  if (value.provider !== provider || value.expiresAt < Date.now()) return null;
+  return value;
 }
 
 /** Reads and deletes an OAuth state in one transaction, so a callback cannot be replayed. */

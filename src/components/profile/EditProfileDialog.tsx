@@ -54,20 +54,26 @@ import { useTranslations } from 'next-intl';
 const profileFormSchema = z.object({
   name: z.string()
     .min(2, { message: "Name must be at least 2 characters." })
-    .max(50, { message: "Name cannot exceed 50 characters." }),
+    .max(50, { message: "O nome pode ter no máximo 50 caracteres." }),
+  avatarAlt: z.string()
+    .max(300, "Descrição (Alt Text) da foto pode ter no máximo 300 caracteres.")
+    .optional().or(z.literal('')),
+  coverImageAlt: z.string()
+    .max(300, "Descrição (Alt Text) da capa pode ter no máximo 300 caracteres.")
+    .optional().or(z.literal('')),
   bio: z.string()
-    .max(300, "Bio cannot exceed 300 characters.")
+    .max(300, "A bio pode ter no máximo 300 caracteres.")
     .optional().or(z.literal('')),
   pronouns: z.string()
     .max(30, "Pronomes podem ter no máximo 30 caracteres.")
     .optional().or(z.literal('')),
   location: z.string()
-    .max(30, "Location cannot exceed 30 characters.")
+    .max(30, "O local pode ter no máximo 30 caracteres.")
     .optional().or(z.literal('')),
   website: z.string()
-    .max(100, "Website URL cannot exceed 100 characters.")
+    .max(100, "O endereço do site pode ter no máximo 100 caracteres.")
     .refine((val) => !val || z.string().url().safeParse(val).success, {
-      message: "Please enter a valid URL (e.g., https://example.com).",
+      message: "Informe um endereço completo, começando com https://",
     })
     .optional().or(z.literal('')),
   pixKey: z.string()
@@ -197,6 +203,8 @@ export default function EditProfileDialog({ user, onProfileUpdated, children }: 
     resolver: zodResolver(profileFormSchema),
     defaultValues: {
       name: user.name || '',
+      avatarAlt: user.avatarAlt || '',
+      coverImageAlt: user.coverImageAlt || '',
       bio: user.bio || '',
       pronouns: user.pronouns || '',
       location: user.location || '',
@@ -234,6 +242,8 @@ export default function EditProfileDialog({ user, onProfileUpdated, children }: 
     if (justOpened) {
       form.reset({
         name: user.name || '',
+        avatarAlt: user.avatarAlt || '',
+        coverImageAlt: user.coverImageAlt || '',
         bio: user.bio || '',
         pronouns: user.pronouns || '',
         location: user.location || '',
@@ -349,11 +359,13 @@ export default function EditProfileDialog({ user, onProfileUpdated, children }: 
       setAvatarPreviewUrl(null);
       setCroppedAvatarFile(null);
       setAvatarRemoved(true);
+      form.setValue('avatarAlt', '', { shouldDirty: true, shouldValidate: true });
       if (avatarFileInputRef.current) avatarFileInputRef.current.value = '';
     } else {
       setCoverPreviewUrl(null);
       setCroppedCoverFile(null);
       setCoverRemoved(true);
+      form.setValue('coverImageAlt', '', { shouldDirty: true, shouldValidate: true });
       if (coverFileInputRef.current) coverFileInputRef.current.value = '';
     }
   };
@@ -390,6 +402,7 @@ export default function EditProfileDialog({ user, onProfileUpdated, children }: 
       } else if (avatarRemoved) {
         updatePayload.avatarUrl = null;
         updatePayload["data-ai-hint"] = null;
+        updatePayload.avatarAlt = null;
       }
 
       if (croppedCoverFile || coverRemoved) {
@@ -404,10 +417,19 @@ export default function EditProfileDialog({ user, onProfileUpdated, children }: 
       } else if (coverRemoved) {
         updatePayload.coverImageUrl = null;
         updatePayload["cover-image-ai-hint"] = null;
+        updatePayload.coverImageAlt = null;
       }
 
       if (isDirty) {
         if (data.name !== user.name) updatePayload.name = data.name;
+        const nextAvatarAlt = (data.avatarAlt || '').trim();
+        if (!avatarRemoved && nextAvatarAlt !== (user.avatarAlt || '').trim()) {
+          updatePayload.avatarAlt = nextAvatarAlt || null;
+        }
+        const nextCoverAlt = (data.coverImageAlt || '').trim();
+        if (!coverRemoved && nextCoverAlt !== (user.coverImageAlt || '').trim()) {
+          updatePayload.coverImageAlt = nextCoverAlt || null;
+        }
         if (data.bio !== (user.bio || '')) updatePayload.bio = data.bio;
         if ((data.pronouns || '') !== (user.pronouns || '')) updatePayload.pronouns = data.pronouns || '';
         if (data.location !== (user.location || '')) updatePayload.location = data.location;
@@ -514,7 +536,12 @@ export default function EditProfileDialog({ user, onProfileUpdated, children }: 
                   <FormLabel>{t('coverImageLabel')}</FormLabel>
                   <div className="mt-2 aspect-[3/1] w-full rounded-lg border border-dashed border-border overflow-hidden relative bg-muted flex items-center justify-center">
                     {coverPreviewUrl ? (
-                      <Image src={coverPreviewUrl} alt="Cover image preview" fill className="object-cover" />
+                      <Image
+                        src={coverPreviewUrl}
+                        alt={form.watch('coverImageAlt')?.trim() || 'Cover image preview'}
+                        fill
+                        className="object-cover"
+                      />
                     ) : (
                       <div className="text-center text-muted-foreground p-4">
                         <UploadCloud className="mx-auto h-8 w-8" />
@@ -539,7 +566,12 @@ export default function EditProfileDialog({ user, onProfileUpdated, children }: 
                   <FormItem className="-mt-12 sm:-mt-16 z-10">
                     <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-full border-4 border-background overflow-hidden relative group bg-muted">
                       {avatarPreviewUrl ? (
-                        <Image src={avatarPreviewUrl} alt="Avatar preview" fill className="object-cover" />
+                        <Image
+                          src={avatarPreviewUrl}
+                          alt={form.watch('avatarAlt')?.trim() || 'Avatar preview'}
+                          fill
+                          className="object-cover"
+                        />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center text-muted-foreground"><Camera className="w-8 h-8" /></div>
                       )}
@@ -568,9 +600,58 @@ export default function EditProfileDialog({ user, onProfileUpdated, children }: 
                         <FormMessage />
                       </FormItem>
                     )} />
+                    {avatarPreviewUrl && (
+                      <FormField control={form.control} name="avatarAlt" render={({ field }) => (
+                        <FormItem className="space-y-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <FormLabel className="text-xs font-medium text-muted-foreground">
+                              Descrição da foto de perfil (Alt Text)
+                            </FormLabel>
+                            <span className="text-[11px] text-muted-foreground tabular-nums">
+                              {(field.value || '').length}/300
+                            </span>
+                          </div>
+                          <FormControl>
+                            <Input
+                              placeholder="Descreva sua foto de perfil para leitores de tela (opcional)"
+                              maxLength={300}
+                              {...field}
+                              value={field.value ?? ''}
+                              className="h-9 text-xs sm:text-sm border-primary/40"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )} />
+                    )}
                   </div>
                 </div>
-                
+
+                {coverPreviewUrl && (
+                  <FormField control={form.control} name="coverImageAlt" render={({ field }) => (
+                    <FormItem className="space-y-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <FormLabel className="text-xs font-medium text-muted-foreground">
+                          Descrição da capa (Alt Text · acessibilidade)
+                        </FormLabel>
+                        <span className="text-[11px] text-muted-foreground tabular-nums">
+                          {(field.value || '').length}/300
+                        </span>
+                      </div>
+                      <FormControl>
+                        <Input
+                          placeholder="Descreva a imagem de capa para leitores de tela (opcional)"
+                          maxLength={300}
+                          {...field}
+                          value={field.value ?? ''}
+                          className="h-9 text-xs sm:text-sm border-primary/40"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                )}
+
                 {isAvatarCameraOpen && (
                   <div className="space-y-2 p-2 border rounded-md bg-muted/10">
                     <video ref={avatarVideoRef} className="w-full aspect-video rounded-md bg-black" autoPlay playsInline muted />

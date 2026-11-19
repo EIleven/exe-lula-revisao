@@ -5,12 +5,13 @@ import React, { useState, useEffect, useMemo } from 'react';
 import type { DirectMessage, Post } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
+import { ptBR, enUS } from 'date-fns/locale';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import Link from 'next/link';
 import Image from 'next/image';
 import TextWithMentions from '@/components/shared/TextWithMentions';
 import ImageViewer from '@/components/shared/ImageViewer';
-import { Check, CheckCheck, ExternalLink, Loader2, Lock, MoreHorizontal, MessageSquareReply, Copy, Forward, Star, Trash2 } from 'lucide-react';
+import { Check, CheckCheck, Clock, Cloud, ExternalLink, Loader2, Lock, MoreHorizontal, MessageSquareReply, Copy, Forward, Star, Trash2, Zap } from 'lucide-react';
 import { useMessagesHost } from '@/modules/messages';
 import { useLocale } from 'next-intl';
 import { Skeleton } from '../ui/skeleton';
@@ -24,7 +25,8 @@ import { extractYoutubeVideoInfo } from '@/lib/utils/youtubeLinks';
 import YoutubeEmbed from '@/components/shared/YoutubeEmbed';
 import PlatformVideo from '@/components/shared/PlatformVideo';
 import { useCurrentUserId } from '@/contexts/CurrentUserContext';
-import { decryptMediaToObjectUrl } from '@/lib/crypto/e2eeMedia';
+import { decryptMediaToObjectUrl, lerDescritorDeMidia } from '@/lib/crypto/e2eeMedia';
+import AnexoProtegidoGrande from './AnexoProtegidoGrande';
 
 interface MessageBubbleProps {
   message: DirectMessage;
@@ -40,6 +42,8 @@ export default function MessageBubble({ message, isCurrentUserSender, peerPublic
   const sender = message.sender;
   const [isViewerOpen, setIsViewerOpen] = useState(false);
   const locale = useLocale();
+  // 'p' sem locale cai no relógio de 12 horas (3:40 PM). Em pt-BR a hora é 15:40.
+  const localeDatas = locale === 'pt-BR' ? ptBR : enUS;
 
   const [linkPreviewPost, setLinkPreviewPost] = useState<Post | null>(null);
   const [isLoadingLinkPreview, setIsLoadingLinkPreview] = useState(false);
@@ -50,9 +54,23 @@ export default function MessageBubble({ message, isCurrentUserSender, peerPublic
   const youtubeInfo = useMemo(() => extractYoutubeVideoInfo(message.text || ''), [message.text]);
   const [decryptedMediaUrl, setDecryptedMediaUrl] = useState<string | null>(null);
   const [mediaDecryptError, setMediaDecryptError] = useState<'missing-key' | 'failed' | null>(null);
+  /** Descritor do anexo cifrado. Anexo GRANDE (v2) tem tela própria e não baixa sozinho. */
+  const [descritorDaMidia, setDescritorDaMidia] = useState<{ v: number; bruto: unknown } | null>(null);
 
   useEffect(() => {
     if (!message.fileUrl || !message.mediaE2ee || !currentUserId) {
+      setDescritorDaMidia(null);
+      return;
+    }
+    let cancelado = false;
+    void lerDescritorDeMidia(message.mediaE2ee, currentUserId, isCurrentUserSender, peerPublicKey).then((d) => {
+      if (!cancelado) setDescritorDaMidia(d);
+    });
+    return () => { cancelado = true; };
+  }, [message.fileUrl, message.mediaE2ee, currentUserId, isCurrentUserSender, peerPublicKey]);
+
+  useEffect(() => {
+    if (!message.fileUrl || !message.mediaE2ee || !currentUserId || descritorDaMidia?.v === 2) {
       setDecryptedMediaUrl(null);
       setMediaDecryptError(null);
       return;
@@ -77,7 +95,7 @@ export default function MessageBubble({ message, isCurrentUserSender, peerPublic
     return () => {
       cancelled = true;
     };
-  }, [message.fileUrl, message.mediaE2ee, currentUserId, isCurrentUserSender, peerPublicKey]);
+  }, [message.fileUrl, message.mediaE2ee, currentUserId, isCurrentUserSender, peerPublicKey, descritorDaMidia?.v]);
 
 
   useEffect(() => {
@@ -183,6 +201,17 @@ export default function MessageBubble({ message, isCurrentUserSender, peerPublic
   const renderFile = () => {
     if (!message.fileUrl) return null;
 
+    // Anexo grande protegido: capa, tamanho e um toque para baixar. Nada vem sozinho.
+    if (message.mediaE2ee && descritorDaMidia?.v === 2) {
+      return (
+        <AnexoProtegidoGrande
+          fileUrl={message.fileUrl}
+          posterUrl={message.posterUrl}
+          descritor={descritorDaMidia.bruto}
+        />
+      );
+    }
+
     if (message.mediaE2ee) {
       if (mediaDecryptError) {
         return (
@@ -248,19 +277,35 @@ export default function MessageBubble({ message, isCurrentUserSender, peerPublic
     return null;
   };
 
+  // A marca diz o que de fato sabemos, e nada mais.
+  //
+  // AZUL ("Lida") so quando a marca d'agua do aparelho da OUTRA pessoa cobre esta mensagem (quem preenche `readAt` a
+  // partir dela e a tela da conversa; ver src/lib/messages/recibos.ts). Sem hora: a marca guarda o instante em que a
+  // pessoa abriu a conversa, nao o em que leu esta linha, e "leu as 15:40" e prova de leitura.
+  // A classe `hv-recibo` governa SO a marca azul: desligar a confirmacao esconde a leitura dos outros (e deixa de
+  // enviar a sua), mas o ✓ de enviada e o ✓✓ de entregue falam do SEU envio e continuam sempre visiveis.
   const renderReadReceipt = () => {
     if (!isCurrentUserSender) return null;
 
     if (message.readAt) {
       return (
-        <span title={`Lida às ${format(new Date(message.readAt), 'p')}`} className="inline-flex">
+        <span title="Lida" className="hv-recibo inline-flex">
           <CheckCheck className="h-4 w-4 text-blue-400" />
         </span>
       );
     }
-    if (message.createdAt) { // Assuming createdAt means delivered
+    if (message.isP2p) {
+      // Na fila já tem aviso próprio ao lado; repetir aqui seria dizer duas vezes a mesma coisa.
+      if (message.p2pStatus === 'queued') return null;
       return (
-        <span title="Entregue" className="inline-flex">
+        <span title="Entregue no aparelho da pessoa" className="inline-flex">
+          <CheckCheck className="h-4 w-4 text-muted-foreground/80" />
+        </span>
+      );
+    }
+    if (message.createdAt) {
+      return (
+        <span title="Enviada" className="inline-flex">
           <Check className="h-4 w-4 text-muted-foreground/80" />
         </span>
       );
@@ -300,7 +345,7 @@ export default function MessageBubble({ message, isCurrentUserSender, peerPublic
         return (
             <div className="mt-2 min-w-0 space-y-2">
                 {youtubeInfo.cleanedText && (
-                    <p className="min-w-0 whitespace-pre-wrap break-words text-sm [overflow-wrap:anywhere]">
+                    <p className="hv-escala min-w-0 whitespace-pre-wrap break-words text-sm [overflow-wrap:anywhere]">
                         <TextWithMentions
                           text={youtubeInfo.cleanedText}
                           linkClassName={isCurrentUserSender ? 'text-primary-foreground underline font-medium hover:opacity-90' : undefined}
@@ -332,7 +377,7 @@ export default function MessageBubble({ message, isCurrentUserSender, peerPublic
 
     if (message.text) {
         return (
-            <p className="min-w-0 text-sm whitespace-pre-wrap break-words mr-auto [overflow-wrap:anywhere]">
+            <p className="hv-escala min-w-0 text-sm whitespace-pre-wrap break-words mr-auto [overflow-wrap:anywhere]">
                 <TextWithMentions
                   text={message.text}
                   linkClassName={isCurrentUserSender ? 'text-primary-foreground underline font-medium hover:opacity-90' : undefined}
@@ -373,13 +418,15 @@ export default function MessageBubble({ message, isCurrentUserSender, peerPublic
                 <div 
                     className={cn(
                     "relative min-w-0 max-w-full overflow-hidden px-3 py-2 rounded-lg shadow-md",
+                    // No celular o menu "..." fica sempre visível: reserva o canto para ele não deitar sobre o texto.
+                    isMobile && "pr-8",
                     isCurrentUserSender ? "bg-primary text-primary-foreground rounded-br-none" : "bg-card text-card-foreground rounded-bl-none border border-border"
                     )}
                 >
                     <div className={cn("absolute top-0 right-0 transition-opacity z-10", isMobile ? "opacity-100" : "opacity-0 group-hover:opacity-100")}>
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-7 w-7 rounded-full" data-interactive="true" onClick={(e) => e.stopPropagation()}>
+                                <Button variant="ghost" size="icon" className="h-6 w-6 rounded-full opacity-40 hover:opacity-100 focus-visible:opacity-100" data-interactive="true" onClick={(e) => e.stopPropagation()}>
                                     <MoreHorizontal className="h-4 w-4" />
                                 </Button>
                             </DropdownMenuTrigger>
@@ -411,31 +458,36 @@ export default function MessageBubble({ message, isCurrentUserSender, peerPublic
                     <div className={cn("flex min-w-0 max-w-full flex-wrap items-end justify-end gap-x-2", message.fileUrl ? 'mt-2' : '')}>
                         {renderMessageBody() || <div className="flex-grow"></div>}
                         <div className="flex items-center space-x-1 self-end flex-shrink-0">
+                            {/* O caminho da mensagem é sinal, não cartaz: só "Na fila" ganha palavra, porque é o único estado
+                                em que a pessoa precisa agir (ou esperar). O resto vive no title, para quem quiser saber. */}
                             {message.isP2p ? (
-                              <span
-                                title={
-                                  message.p2pStatus === 'queued'
-                                    ? 'Na fila P2P: será entregue automaticamente quando o contato conectar (Zero DB)'
-                                    : 'Entregue direto dispositivo a dispositivo (Zero DB)'
-                                }
-                                className={cn(
-                                  "rounded px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wide",
-                                  message.p2pStatus === 'queued'
-                                    ? (isCurrentUserSender ? "bg-amber-400/20 text-amber-100" : "bg-amber-500/15 text-amber-400")
-                                    : (isCurrentUserSender ? "bg-white/15 text-primary-foreground/90" : "bg-emerald-500/15 text-emerald-400")
-                                )}
-                              >
-                                {message.p2pStatus === 'queued' ? 'P2P · Na fila' : 'P2P'}
-                              </span>
+                              message.p2pStatus === 'queued' ? (
+                                <span
+                                  title="Esperando o contato conectar para ser entregue direto (Zero DB)"
+                                  className={cn(
+                                    "inline-flex",
+                                    isCurrentUserSender ? "text-amber-100" : "text-amber-500"
+                                  )}
+                                >
+                                  <Clock className="h-2.5 w-2.5" />
+                                  <span className="sr-only">Esperando entrega</span>
+                                </span>
+                              ) : (
+                                <span
+                                  title="Entregue direto dispositivo a dispositivo (Zero DB)"
+                                  className={cn("inline-flex", isCurrentUserSender ? "text-primary-foreground/80" : "text-emerald-500")}
+                                >
+                                  <Zap className="h-2.5 w-2.5" />
+                                  <span className="sr-only">Entregue direto, sem passar pelo servidor</span>
+                                </span>
+                              )
                             ) : (
                               <span
                                 title="Mensagem armazenada no banco de dados"
-                                className={cn(
-                                  "rounded px-1 py-0.5 text-[9px] font-medium uppercase tracking-wide",
-                                  isCurrentUserSender ? "bg-white/10 text-primary-foreground/70" : "bg-muted-foreground/15 text-muted-foreground/80"
-                                )}
+                                className={cn("inline-flex", isCurrentUserSender ? "text-primary-foreground/55" : "text-muted-foreground/60")}
                               >
-                                DB
+                                <Cloud className="h-2.5 w-2.5" />
+                                <span className="sr-only">Guardada no servidor</span>
                               </span>
                             )}
                             {message.e2ee && (
@@ -444,7 +496,7 @@ export default function MessageBubble({ message, isCurrentUserSender, peerPublic
                               </span>
                             )}
                             <p className={cn("text-[10px]", isCurrentUserSender ? "text-primary-foreground/70" : "text-muted-foreground/70")}>
-                                {format(new Date(message.createdAt), "p")}
+                                {format(new Date(message.createdAt), "p", { locale: localeDatas })}
                             </p>
                             {renderReadReceipt()}
                         </div>

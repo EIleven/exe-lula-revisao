@@ -54,7 +54,7 @@ function docToSyndicationItem(id: string, d: Record<string, unknown>): Syndicati
   const authorDetails = (d.authorDetails ?? {}) as { name?: unknown; username?: unknown };
   const authorName = typeof authorDetails.name === 'string' && authorDetails.name
     ? authorDetails.name
-    : (typeof authorDetails.username === 'string' ? `@${authorDetails.username}` : 'Exe. Lula');
+    : (typeof authorDetails.username === 'string' ? `@${authorDetails.username}` : 'HiperVerso');
   const authorHandle = typeof authorDetails.username === 'string' ? authorDetails.username : undefined;
 
   const mediaList = Array.isArray(d.media) ? d.media : [];

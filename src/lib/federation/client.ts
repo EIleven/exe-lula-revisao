@@ -12,7 +12,6 @@ export type FederationStatus = {
   acct: string | null;
   eligibleSince: number | null;
   followers: number;
-  alsoKnownAs: string[];
   movedTo: string | null;
 };
 
@@ -57,8 +56,6 @@ async function chamar<T>(firebaseUser: FirebaseUser, metodo: 'GET' | 'POST', cam
 export const getFederationStatus = (u: FirebaseUser) => chamar<FederationStatus>(u, 'GET', '/api/ap/account');
 export const changeFederation = (u: FirebaseUser, action: 'enable' | 'pause' | 'resume' | 'disable') =>
   chamar<FederationStatus>(u, 'POST', '/api/ap/account', { action });
-export const updateFederationAliases = (u: FirebaseUser, aliases: string[]) =>
-  chamar<FederationStatus>(u, 'POST', '/api/ap/account', { action: 'set-aliases', aliases });
 
 export const getDeliveries = async (u: FirebaseUser) => (await chamar<{ items: DeliveryItem[] }>(u, 'GET', '/api/ap/deliveries')).items;
 export const retryDelivery = (u: FirebaseUser, id: string) => chamar<{ ok: true }>(u, 'POST', '/api/ap/deliveries', { action: 'retry', id });

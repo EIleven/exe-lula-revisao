@@ -7,10 +7,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Card } from '@/components/ui/card';
 import AccessibilityAndLanguageSettings from '@/components/settings/AccessibilityAndLanguageSettings';
 import BackButton from '@/components/shared/BackButton';
-import { useTranslations } from 'next-intl';
 
 export default function AccessibilitySettingsPage() {
-    const t = useTranslations('AccessibilitySettings');
     const { currentUser, isLoading } = useCurrentUser();
 
     if (isLoading || !currentUser) {
@@ -26,7 +24,7 @@ export default function AccessibilitySettingsPage() {
         <div className="container mx-auto max-w-xl py-8">
             <BackButton />
             <Card>
-                <AccessibilityAndLanguageSettings user={currentUser} pageContext="accessibility" />
+                <AccessibilityAndLanguageSettings user={currentUser} />
             </Card>
         </div>
     );

@@ -1,4 +1,5 @@
 // src/lib/services/postReadService.ts
+import { filterForVisitor } from '@/lib/feed/publicVisibility';
 import { db } from '@/lib/firebase';
 import type { Post, User, Comment, OriginalPostDetails, ReplyPermission, EmbeddedUserDetails, LikedItem, PostType, CustomFeed } from '@/lib/types';
 import {
@@ -681,10 +682,26 @@ async function fetchActivityFeed(
   return { posts, nextCursor: hasMore ? nextCursor : null, hasMore };
 }
 
+/**
+ * O feed, já recortado para quem está vendo. Quem NÃO tem conta recebe só o que a vitrine mostra (ver
+ * lib/feed/publicVisibility.ts): nada com aviso de conteúdo e nada fora do português. Com conta, a lista é a de sempre.
+ * O recorte fica AQUI, numa saída só, porque a busca tem vários `return` e todas as telas passam por este caminho.
+ */
 export async function fetchPaginatedPosts(
   cursor: FirestoreTimestamp | null,
   limit: number,
   activeUserId: string | null = getCurrentUserId(),
+  options: PaginatedPostsOptions = {}
+): Promise<PaginatedPostsResponse> {
+  const resposta = await buscarPaginaDePosts(cursor, limit, activeUserId, options);
+  if (activeUserId) return resposta;
+  return { ...resposta, posts: [...filterForVisitor(resposta.posts, activeUserId)] };
+}
+
+async function buscarPaginaDePosts(
+  cursor: FirestoreTimestamp | null,
+  limit: number,
+  activeUserId: string | null,
   options: PaginatedPostsOptions = {}
 ): Promise<PaginatedPostsResponse> {
 

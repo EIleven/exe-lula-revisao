@@ -24,8 +24,8 @@ const serverUrl = resolveServerUrl();
 const isDevServer = serverUrl !== siteConfig.officialOrigin;
 
 const config: CapacitorConfig = {
-  appId: 'com.soberan.app',
-  appName: 'Exe. Lula',
+  appId: 'app.hiperverso',
+  appName: 'HiperVerso',
   webDir: 'out', // Diretório de build estático do Next.js
   // Fundo do WebView enquanto o site carrega: a cor da marca, a mesma da abertura e das barras (o padrão é branco).
   backgroundColor: '#0B0F14',

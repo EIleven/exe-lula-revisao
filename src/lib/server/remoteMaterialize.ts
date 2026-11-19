@@ -1,5 +1,5 @@
 // src/lib/server/remoteMaterialize.ts
-// Materializa perfis e posts remotos do Fediverso no Firestore com a mesma estrutura nativa de User e Post do Exe. Lula.
+// Materializa perfis e posts remotos do Fediverso no Firestore com a mesma estrutura nativa de User e Post do HiperVerso.
 //
 // O que este módulo garante (e antes não garantia):
 //  - **O que é do nosso domínio nunca vira `ap_`.** Resposta ou repost de um post/conta DAQUI, visto pelo perfil de quem
@@ -127,6 +127,7 @@ export async function materializeRemoteProfile(
     {
       id: uid,
       name: profile.name,
+      name_lowercase: (profile.name || profile.handle || '').toLowerCase(),
       username: profile.handle,
       bio: profile.summary || '',
       avatarUrl: profile.iconUrl || '',
@@ -135,12 +136,15 @@ export async function materializeRemoteProfile(
       followersCount: profile.followersCount ?? 0,
       followingCount: profile.followingCount ?? 0,
       postsCount: profile.postsCount ?? (profile.posts?.length ?? 0),
+      dmPreference: 'everyone' as const,
       profileVisibility: 'public' as const,
       isRemoteFediverse: true,
       remoteActorId: profile.actorId,
       remoteDomain: profile.domain,
       remoteUrl: profile.url,
       remoteInbox: targetInbox,
+      // Verdade do ator no momento da leitura: é o que decide, nas listas e nos balões, entre "Seguir" e "Pedir para seguir".
+      remoteManuallyApprovesFollowers: profile.manuallyApprovesFollowers === true,
       updatedAt: FieldValue.serverTimestamp(),
       ...(existingUserSnap.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
     },
@@ -159,11 +163,12 @@ export async function materializeRemoteProfile(
     followersCount: profile.followersCount ?? 0,
     followingCount: profile.followingCount ?? 0,
     postsCount: profile.postsCount ?? (profile.posts?.length ?? 0),
-    dmPreference: 'none',
+    dmPreference: 'everyone',
     isAdmin: false,
     isModerator: false,
     profileVisibility: 'public',
     createdAt: nowIso,
+    remoteManuallyApprovesFollowers: profile.manuallyApprovesFollowers === true,
   };
   const autorDoPerfil: Autor = { userId: uid, name: profile.name, username: profile.handle, avatarUrl: profile.iconUrl || '' };
   const hostDoAtor = domainOfUrl(profile.actorId);
@@ -199,11 +204,13 @@ export async function materializeRemoteProfile(
         batch.set(ref, {
           id: thirdUid,
           name: a.name || a.handle,
+          name_lowercase: (a.name || a.handle || '').toLowerCase(),
           username: a.handle,
           bio: a.summary || '',
           avatarUrl: a.iconUrl || '',
           coverImageUrl: '',
           website: a.actorId,
+          dmPreference: 'everyone',
           profileVisibility: 'public',
           isRemoteFediverse: true,
           remoteActorId: a.actorId,
@@ -319,7 +326,7 @@ export async function materializeRemoteProfile(
           {
             timeoutMs: 4000,
             maxBytes: 128_000,
-            headers: { Accept: 'application/json', 'User-Agent': `ExeLula/1.0 (+${f.origin})` },
+            headers: { Accept: 'application/json', 'User-Agent': `HiperVerso/1.0 (+${f.origin})` },
             allowedContentTypes: /^application\/json/i,
           },
         ).catch(() => null);

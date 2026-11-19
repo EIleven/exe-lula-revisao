@@ -10,6 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import { useCurrentUser } from '@/contexts/CurrentUserContext';
 import UserProfileHoverCard from './UserProfileHoverCard';
+import RemoteFollowButton, { isRemoteFediverseUser } from './RemoteFollowButton';
 import { useLocale } from 'next-intl';
 import { useTranslations } from 'next-intl';
 import { useFollowToggle } from '@/hooks/features/profile/useFollowToggle';
@@ -129,6 +130,14 @@ export default function UserListItem({
         <Button variant="outline" size="sm" onClick={() => onManageRoles?.(userToList)}>
           <Shield className="mr-2 h-4 w-4" /> Gerenciar
         </Button>
+      ) : activeUserId && activeUserId !== userToList.id && isRemoteFediverseUser(userToList) ? (
+        <RemoteFollowButton
+          targetUser={userToList}
+          activeUserId={activeUserId}
+          variant="list"
+          compact={isCompact}
+          onStateChange={onFollowStateChange}
+        />
       ) : activeUserId && activeUserId !== userToList.id ? (
         <Button
           variant={follow.isFollowing ? "secondary" : "default"}

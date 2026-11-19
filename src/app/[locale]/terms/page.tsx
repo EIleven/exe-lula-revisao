@@ -25,7 +25,7 @@ export default function TermsOfServicePage() {
         </CardHeader>
         <CardContent className="space-y-6 text-foreground/90 prose prose-invert prose-p:text-foreground/90 prose-a:text-primary prose-li:text-foreground/90">
           <p>
-            Estes Termos regem o uso da plataforma <strong>Exe. Lula</strong> (o &ldquo;Serviço&rdquo;), operada por{' '}
+            Estes Termos regem o uso da plataforma <strong>HiperVerso</strong> (anteriormente Exe. Lula, o &ldquo;Serviço&rdquo;), operada por{' '}
             <strong>{operador}</strong>, {siteConfig.controller.nature}. Usando o Serviço, você concorda com eles. Se
             discordar de alguma parte, não use a rede.
           </p>

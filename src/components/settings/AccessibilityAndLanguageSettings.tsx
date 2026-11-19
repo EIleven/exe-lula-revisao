@@ -35,13 +35,12 @@ import { useTheme } from 'next-themes';
 
 interface SettingsProps {
   user: User;
-  pageContext: 'accessibility' | 'languages';
 }
 
 const FONT_SIZE_STORAGE_KEY = 'soberan-font-size';
 const DEFAULT_FONT_SIZE = 16; // Default base font size in pixels
 
-export default function AccessibilityAndLanguageSettings({ user, pageContext }: SettingsProps) {
+export default function AccessibilityAndLanguageSettings({ user }: SettingsProps) {
   const t = useTranslations('AccessibilitySettings');
   const locale = useLocale();
   const router = useRouter();
@@ -130,8 +129,8 @@ export default function AccessibilityAndLanguageSettings({ user, pageContext }: 
   };
 
 
-  const title = pageContext === 'accessibility' ? t('accessibilityTitle') : t('languageTitle');
-  const description = pageContext === 'accessibility' ? t('accessibilityDescriptionPage') : t('languageDescription');
+  const title = t('title');
+  const description = t('description');
 
   return (
     <>

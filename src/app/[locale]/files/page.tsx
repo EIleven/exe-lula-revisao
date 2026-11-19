@@ -24,7 +24,34 @@ import {
   Share2,
   Edit,
   Trash2,
+  Lock,
+  ShieldCheck,
+  SlidersHorizontal,
+  KeyRound,
+  Copy,
 } from 'lucide-react';
+import Link from 'next/link';
+import { useLocale, useTranslations } from 'next-intl';
+import { Switch } from '@/components/ui/switch';
+import { Badge } from '@/components/ui/badge';
+import {
+  getP2pPreferences,
+  saveP2pPreferences,
+  DEFAULT_P2P_PREFERENCES,
+  type P2pPreferences,
+} from '@/lib/p2p/p2pPreferences';
+import {
+  decryptFileBytes,
+  DEFAULT_FILE_VAULT_SETTINGS,
+  encryptFileForUpload,
+  exportLocalFileSecret,
+  getFileVaultSettings,
+  importLocalFileSecret,
+  isEncryptedFileName,
+  saveFileVaultSettings,
+  stripEncryptedExtension,
+  type FileVaultSettings,
+} from '@/lib/crypto/fileVaultCrypto';
 import { useToast } from '@/hooks/use-toast';
 import {
   getFiles,
@@ -56,7 +83,6 @@ import {
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { useTranslations } from 'next-intl';
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -127,8 +153,16 @@ const FileListItem = ({ item, isSelected, onToggleSelection, onOpen, onRename, o
         className="flex flex-1 items-center min-w-0"
       >
         <Icon className="h-6 w-6 mr-4 text-primary flex-shrink-0" />
-        <div className="flex-1 min-w-0">
-          <p className="font-medium truncate">{item.name}</p>
+        <div className="flex-1 min-w-0 flex items-center gap-2">
+          <p className="font-medium truncate">
+            {isEncryptedFileName(item.name) ? stripEncryptedExtension(item.name) : item.name}
+          </p>
+          {isEncryptedFileName(item.name) && (
+            <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-primary/40 text-primary shrink-0 gap-1">
+              <Lock className="h-2.5 w-2.5" />
+              AES-256
+            </Badge>
+          )}
         </div>
       </div>
       <div className="text-sm text-muted-foreground hidden sm:block w-40 text-right shrink-0">
@@ -178,9 +212,14 @@ const FileListItem = ({ item, isSelected, onToggleSelection, onOpen, onRename, o
 
 export default function FilesPage() {
   const t = useTranslations('FilesPage');
+  const locale = useLocale();
   const { currentUser, isLoading: isUserLoading } = useCurrentUser();
   const router = useRouter();
   const { toast } = useToast();
+  const [showInfraSettings, setShowInfraSettings] = useState(false);
+  const [vaultSettings, setVaultSettings] = useState<FileVaultSettings>(DEFAULT_FILE_VAULT_SETTINGS);
+  const [p2pPrefs, setP2pPrefs] = useState<P2pPreferences>(DEFAULT_P2P_PREFERENCES);
+  const [importKeyText, setImportKeyText] = useState('');
 
   const [items, setItems] = useState<FileItem[]>([]);
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
@@ -223,14 +262,46 @@ export default function FilesPage() {
   useEffect(() => {
     if (currentUser) {
       fetchItems(currentUser.id, currentFolderId);
+      setVaultSettings(getFileVaultSettings(currentUser.id));
+      setP2pPrefs(getP2pPreferences(currentUser.id));
     }
   }, [currentUser, currentFolderId, fetchItems]);
+
+  const downloadDecryptedItem = async (item: FileItem) => {
+    if (!currentUser || !item.url) return;
+    try {
+      toast({ title: 'Decifrando arquivo localmente...', description: stripEncryptedExtension(item.name) });
+      const res = await fetch(item.url);
+      if (!res.ok) throw new Error('Falha ao baixar os bytes cifrados.');
+      const cipherBuffer = await res.arrayBuffer();
+      const plainBuffer = await decryptFileBytes(cipherBuffer, currentUser.id);
+      const blob = new Blob([plainBuffer]);
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.download = stripEncryptedExtension(item.name);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 10_000);
+    } catch (error: any) {
+      toast({
+        title: 'Erro ao decifrar arquivo',
+        description: error?.message || 'Verifique se a chave local do cofre está importada neste aparelho.',
+        variant: 'destructive',
+      });
+    }
+  };
 
   const handleOpenItem = (item: FileItem) => {
     if (item.type === 'folder') {
       setCurrentFolderId(item.id);
     } else if (item.url) {
-      window.open(item.url, '_blank');
+      if (isEncryptedFileName(item.name)) {
+        void downloadDecryptedItem(item);
+      } else {
+        window.open(item.url, '_blank');
+      }
     }
   };
 
@@ -267,7 +338,10 @@ export default function FilesPage() {
 
     for (const file of filesArray) {
         try {
-            await uploadAndRegisterFile(currentUser.id, currentFolderId, file);
+            const fileToUpload = vaultSettings.encryptOnUpload
+              ? await encryptFileForUpload(file, currentUser.id)
+              : file;
+            await uploadAndRegisterFile(currentUser.id, currentFolderId, fileToUpload);
             successCount++;
         } catch (error: any) {
             errorCount++;
@@ -384,7 +458,11 @@ export default function FilesPage() {
 
   const handleDownloadItem = (item: FileItem) => {
       if (item.type === 'file' && item.url) {
-          window.open(item.url, '_blank');
+          if (isEncryptedFileName(item.name)) {
+            void downloadDecryptedItem(item);
+          } else {
+            window.open(item.url, '_blank');
+          }
       } else {
           toast({ title: 'Ação não disponível', description: 'O download só está disponível para arquivos.', variant: 'default' });
       }
@@ -508,9 +586,18 @@ export default function FilesPage() {
               ) : (
                 <>
                   <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" multiple />
+                  <Button
+                    type="button"
+                    variant={showInfraSettings ? 'secondary' : 'outline'}
+                    size="sm"
+                    onClick={() => setShowInfraSettings((v) => !v)}
+                  >
+                    <SlidersHorizontal className="mr-2 h-4 w-4 text-primary" />
+                    P2P &amp; Cripto
+                  </Button>
                   <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>
                       {isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Upload className="mr-2 h-4 w-4" />}
-                      Upload
+                      {vaultSettings.encryptOnUpload ? 'Upload Cifrado' : 'Upload'}
                   </Button>
                   <AlertDialog open={isCreateFolderOpen} onOpenChange={setIsCreateFolderOpen}>
                       <AlertDialogTrigger asChild>
@@ -562,6 +649,159 @@ export default function FilesPage() {
             </React.Fragment>
           ))}
         </nav>
+
+        {showInfraSettings && currentUser && (
+          <Card className="mb-4 mx-2 sm:mx-0 border-primary/30 bg-primary/5">
+            <CardHeader className="pb-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <ShieldCheck className="h-4 w-4 text-primary" />
+                  Controle Total · Infra P2P &amp; Criptografia de Arquivos
+                </CardTitle>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" asChild className="h-7 text-xs">
+                    <Link href={`/${locale}/keys`}>
+                      <KeyRound className="mr-1.5 h-3.5 w-3.5" />
+                      Chaves
+                    </Link>
+                  </Button>
+                  <Button variant="outline" size="sm" asChild className="h-7 text-xs">
+                    <Link href={`/${locale}/settings/p2p`}>Aparelhos P2P</Link>
+                  </Button>
+                </div>
+              </div>
+              <CardDescription className="text-xs">
+                Configure aqui como seus arquivos são cifrados no seu aparelho e sincronizados na rede P2P.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-sm font-medium flex items-center gap-1.5">
+                    <Lock className="h-3.5 w-3.5 text-primary" />
+                    Criptografia Local AES-GCM-256 no Upload
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Cifra o arquivo no seu dispositivo antes de enviar (.lulaenc). Só aparelhos com sua chave conseguem abrir.
+                  </p>
+                </div>
+                <Switch
+                  checked={vaultSettings.encryptOnUpload}
+                  onCheckedChange={(checked) => {
+                    const next = { ...vaultSettings, encryptOnUpload: checked };
+                    setVaultSettings(next);
+                    saveFileVaultSettings(currentUser.id, next);
+                    toast({
+                      title: checked ? 'Criptografia AES-GCM-256 ativada' : 'Criptografia automática desativada',
+                      description: checked
+                        ? 'Novos uploads serão cifrados localmente antes do envio.'
+                        : 'Novos uploads serão enviados sem cifragem adicional.',
+                    });
+                  }}
+                />
+              </div>
+
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-sm font-medium">Conexão P2P automática</p>
+                  <p className="text-xs text-muted-foreground">
+                    Conecta diretamente entre seus dispositivos autorizados e contatos sem passar pelo servidor central.
+                  </p>
+                </div>
+                <Switch
+                  checked={p2pPrefs.autoConnectP2p}
+                  onCheckedChange={(checked) => {
+                    const next = { ...p2pPrefs, autoConnectP2p: checked };
+                    setP2pPrefs(next);
+                    saveP2pPreferences(currentUser.id, next);
+                  }}
+                />
+              </div>
+
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-sm font-medium">Modo Zero-Banco por padrão (P2P)</p>
+                  <p className="text-xs text-muted-foreground">
+                    Mantém dados trafegando exclusivamente ponta-a-ponta quando o par estiver online.
+                  </p>
+                </div>
+                <Switch
+                  checked={p2pPrefs.defaultZeroDbOnly}
+                  onCheckedChange={(checked) => {
+                    const next = { ...p2pPrefs, defaultZeroDbOnly: checked };
+                    setP2pPrefs(next);
+                    saveP2pPreferences(currentUser.id, next);
+                  }}
+                />
+              </div>
+
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-sm font-medium">Ocultar meu IP (somente relay TURN)</p>
+                  <p className="text-xs text-muted-foreground">
+                    Evita expor seu endereço IP direto durante transferências P2P.
+                  </p>
+                </div>
+                <Switch
+                  checked={p2pPrefs.relayOnly}
+                  onCheckedChange={(checked) => {
+                    const next = { ...p2pPrefs, relayOnly: checked };
+                    setP2pPrefs(next);
+                    saveP2pPreferences(currentUser.id, next);
+                  }}
+                />
+              </div>
+
+              <div className="pt-2 border-t border-border/60 space-y-2">
+                <p className="text-xs font-semibold">Chave Local do Cofre de Arquivos (Portabilidade)</p>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-8 text-xs"
+                    onClick={() => {
+                      const secret = exportLocalFileSecret(currentUser.id);
+                      void navigator.clipboard.writeText(secret);
+                      toast({
+                        title: 'Chave copiada!',
+                        description: 'Importe esta chave no seu outro aparelho para decifrar seus arquivos .lulaenc.',
+                      });
+                    }}
+                  >
+                    <Copy className="mr-1.5 h-3.5 w-3.5" />
+                    Copiar Chave Local
+                  </Button>
+                  <div className="flex flex-1 min-w-[200px] gap-1.5">
+                    <Input
+                      value={importKeyText}
+                      onChange={(e) => setImportKeyText(e.target.value)}
+                      placeholder="Cole chave de outro aparelho..."
+                      className="h-8 text-xs"
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="h-8 text-xs shrink-0"
+                      disabled={importKeyText.trim().length < 16}
+                      onClick={() => {
+                        const ok = importLocalFileSecret(currentUser.id, importKeyText);
+                        if (ok) {
+                          setImportKeyText('');
+                          toast({ title: 'Chave importada!', description: 'Agora este aparelho decifra seus arquivos.' });
+                        } else {
+                          toast({ title: 'Chave inválida', variant: 'destructive' });
+                        }
+                      }}
+                    >
+                      Importar
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <Card 
           onDragOver={handleDragOver}

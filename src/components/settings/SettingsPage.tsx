@@ -28,6 +28,8 @@ import { Separator } from '@/components/ui/separator';
 import { useLocale } from 'next-intl';
 import { Card } from '@/components/ui/card';
 import Link from 'next/link';
+import { useHiperChatMode } from '@/hooks/useHiperChatMode';
+import HiperChatSettingsView from './HiperChatSettingsView';
 
 type SettingsSection = 'account' | 'privacy' | 'moderation' | 'notifications' | 'media' | 'appearance' | 'accessibility' | 'languages' | 'help' | 'about' | 'interaction';
 
@@ -66,6 +68,7 @@ export default function SettingsPage() {
   const router = useRouter();
   const { toast } = useToast();
   const locale = useLocale();
+  const isHiperChat = useHiperChatMode();
 
   const handleLogout = async () => {
     try {
@@ -85,6 +88,16 @@ export default function SettingsPage() {
 
   if (isLoading || !currentUser) {
     return <SettingsPageSkeleton />;
+  }
+
+  if (isHiperChat) {
+    return (
+      <HiperChatSettingsView
+        user={currentUser}
+        onUpdated={refreshCurrentUser}
+        onLogout={handleLogout}
+      />
+    );
   }
   
   const availableSections = SETTINGS_SECTIONS.filter(section => 

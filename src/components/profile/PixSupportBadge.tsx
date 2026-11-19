@@ -191,7 +191,7 @@ export default function PixSupportBadge({
   };
 
   const handleShareExternal = async () => {
-    const shareText = `Apoie ${user.name} (@${user.username}) via Pix no Exe. Lula:`;
+    const shareText = `Apoie ${user.name} (@${user.username}) via Pix no HiperVerso:`;
     if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
       try {
         await navigator.share({ title: `Apoiar ${user.name} via Pix`, text: shareText, url: shareUrl });

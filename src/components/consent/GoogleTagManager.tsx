@@ -6,6 +6,7 @@ import { useConsent } from '@/hooks/features/consent/useConsent';
 import { shouldLoadGtm } from '@/lib/consent/consentState';
 import { GTM_CONTAINER_ID, gtmContainerScript } from '@/lib/consent/googleConsent';
 import { firebaseEnv } from '@/config/firebase';
+import { siteConfig } from '@/config/site';
 
 /**
  * Carrega o Google Tag Manager SÓ depois de consentimento para alguma categoria opcional. Antes disso nada é pedido
@@ -20,6 +21,7 @@ import { firebaseEnv } from '@/config/firebase';
 export default function GoogleTagManager() {
   const { decision, isReady } = useConsent();
 
+  if (!siteConfig.googleTelemetryEnabled) return null;
   if (firebaseEnv.useEmulators) return null;
   if (!isReady || !shouldLoadGtm(decision)) return null;
 

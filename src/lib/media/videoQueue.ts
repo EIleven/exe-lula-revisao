@@ -1,5 +1,5 @@
 // src/lib/media/videoQueue.ts
-// A FILA do teatro de vídeo do Exe. Lula (modo imersivo): quais vídeos entram, por onde começa, para onde ↑/↓ andam e quais
+// A FILA do teatro de vídeo do HiperVerso (modo imersivo): quais vídeos entram, por onde começa, para onde ↑/↓ andam e quais
 // ficam montados. PURO (sem React nem DOM): e2e/video-playback-check.mjs prova cada regra.
 //
 // A fila é a lista que a pessoa estava vendo (o feed ou a aba Mídia do perfil), já carregada: cada vídeo de cada post vira uma

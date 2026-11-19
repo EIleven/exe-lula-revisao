@@ -351,7 +351,7 @@ export default function ProfileContentTabs({
             <TabsContent value="likes" className="mt-4 space-y-3">
               {isRemoteId(profileUser.id) && (
                 <p className="text-xs text-muted-foreground px-3 py-2 rounded-md border border-border bg-muted/30">
-                  Servidores do Fediverso mantêm a lista de curtidas privada por padrão; aparecem aqui apenas curtidas em posts federados no Exe. Lula.
+                  Servidores do Fediverso mantêm a lista de curtidas privada por padrão; aparecem aqui apenas curtidas em posts federados no HiperVerso.
                 </p>
               )}
               {/* A lista de curtidas exige login (regra do Firestore). */}

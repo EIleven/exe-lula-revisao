@@ -1,9 +1,11 @@
 // src/app/api/auth/fediverse/callback/route.ts
 import { createHash } from 'node:crypto';
 import { NextResponse } from 'next/server';
+import { loginErrorUrl } from '@/lib/auth/loginErrors';
 import { safeFetchText } from '@/lib/security/safe-fetch';
 import { federation } from '@/lib/server/federation';
 import { createLoginTicket, provisionOrLoginFederatedUser } from '@/lib/server/federatedAuth';
+import { normalizeFederatedConsent, syncMastodonData, type FederatedSyncConsent } from '@/lib/server/federatedSync';
 import { adminFirestore } from '@/lib/server/firebaseAdmin';
 import { stripHtml } from '@/lib/server/remoteProfile';
 
@@ -28,7 +30,7 @@ export async function GET(request: Request) {
       const snap = await tx.get(stateRef);
       if (!snap.exists) return null;
       tx.delete(stateRef);
-      const d = snap.data() as { domain?: string; locale?: string; expiresAt?: number };
+      const d = snap.data() as { domain?: string; locale?: string; expiresAt?: number; consent?: FederatedSyncConsent };
       if (!d.domain || (d.expiresAt ?? 0) < Date.now()) return null;
       return d;
     });
@@ -52,7 +54,7 @@ export async function GET(request: Request) {
       headers: {
         'Content-Type': 'application/json',
         Accept: 'application/json',
-        'User-Agent': `ExeLula/1.0 (+${f.origin})`,
+        'User-Agent': `HiperVerso/1.0 (+${f.origin})`,
       },
       body: JSON.stringify({
         client_id: appData.clientId,
@@ -80,7 +82,7 @@ export async function GET(request: Request) {
       headers: {
         Authorization: `Bearer ${tokenJson.access_token}`,
         Accept: 'application/json',
-        'User-Agent': `ExeLula/1.0 (+${f.origin})`,
+        'User-Agent': `HiperVerso/1.0 (+${f.origin})`,
       },
       allowedContentTypes: /^application\/json/i,
     });
@@ -104,6 +106,8 @@ export async function GET(request: Request) {
       return NextResponse.redirect(`${f.origin}/${locale}/login?auth_error=fediverse_profile_failed`);
     }
 
+    const consent = normalizeFederatedConsent(stateData.consent);
+
     const provisioned = await provisionOrLoginFederatedUser({
       provider: 'fediverse',
       externalId: `${domain}:${acct.id}`,
@@ -115,13 +119,26 @@ export async function GET(request: Request) {
       website: typeof acct.url === 'string' && acct.url.startsWith('https://') ? acct.url : '',
       actorId: typeof acct.uri === 'string' && acct.uri.startsWith('https://') ? acct.uri : acct.url,
       locale,
+      consent,
     });
+
+    if (consent.syncFollowing || consent.syncPosts) {
+      await syncMastodonData({
+        uid: provisioned.uid,
+        domain,
+        accountId: acct.id,
+        accessToken: tokenJson.access_token,
+        consent,
+        origin: f.origin,
+      }).catch((err) => console.warn('Mastodon sync warning:', err instanceof Error ? err.message : String(err)));
+    }
 
     const ticket = await createLoginTicket(provisioned);
     return NextResponse.redirect(`${f.origin}/${locale}/login?ticket=${encodeURIComponent(ticket)}`);
   } catch (err) {
+    // O texto do erro fica só no log; a URL leva um CÓDIGO conhecido (loginErrors.ts), nunca a mensagem interna.
     console.error('Fediverse OAuth callback failed:', err instanceof Error ? err.message : String(err));
-    return NextResponse.redirect(`${f.origin}/${locale}/login?auth_error=fediverse_error`);
+    return NextResponse.redirect(loginErrorUrl(f.origin, locale, 'fediverse_error', err));
   }
 }
 

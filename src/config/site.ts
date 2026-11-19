@@ -2,8 +2,8 @@
 // FONTE ÚNICA do endereço público do SOBERAN. Nenhum outro arquivo deve repetir URLs do domínio:
 // importe siteConfig (o `npm run check:domain` falha se o domínio antigo reaparecer no código).
 
-/** Domínio oficial (decisão do projeto). O www redireciona para ele (ver next.config.ts). */
-const OFFICIAL_ORIGIN = 'https://exercitodolula.app';
+/** Domínio oficial (decisão do projeto). O www e os aliases redirecionam para ele (ver next.config.ts). */
+const OFFICIAL_ORIGIN = 'https://hiperverso.app';
 const OFFICIAL_HOST = new URL(OFFICIAL_ORIGIN).host;
 
 /**
@@ -45,13 +45,41 @@ function resolveBaseUrl(override: string | undefined): string {
 }
 
 export const siteConfig = {
-  name: "Exe. Lula",
+  name: "HiperVerso",
   description: "Conectando vozes com soberania digital, democracia de dados e moderação comunitária.",
   baseUrl: resolveBaseUrl(process.env.NEXT_PUBLIC_BASE_URL),
   /** Origem oficial, independente de variáveis de ambiente (redirecionamentos e app Android). */
   officialOrigin: OFFICIAL_ORIGIN,
   officialHost: OFFICIAL_HOST,
   wwwHost: `www.${OFFICIAL_HOST}`,
+  /** Host canônico dos endereços ActivityPub (@usuario@hiperverso.social). */
+  federationHost: 'hiperverso.social',
+  federationOrigin: 'https://hiperverso.social',
+  /**
+   * Hosts em que esta instância JÁ TEVE identidade no Fediverso. Os seguidores remotos conhecem as contas por estes
+   * endereços, e servidores de fora voltam a eles para reconferir a conta. Enquanto estiverem aqui:
+   *
+   * - o ator continua a ser servido por eles, com o `id` DELES (um documento que declara `id` de outro host é
+   *   recusado como falsificação — pelo Mastodon e pelo nosso próprio `validateFetchedActor`);
+   * - esse ator leva `movedTo` apontando para o canônico, que é como o Fediverso diz "esta conta se mudou";
+   * - o WebFinger deles volta a responder, senão ninguém consegue nem reencontrar a conta antiga;
+   * - o ator canônico declara `alsoKnownAs` apontando de volta (veja MIGRACAO_ATIVA).
+   *
+   * Tirar um host daqui faz quem seguia por ele perder a conta de vista. Só sai depois que o `Move` for aceito e o
+   * número de seguidores no endereço antigo chegar a zero.
+   */
+  legacyFederationHosts: ['exercitodolula.app', 'www.exercitodolula.app'] as const,
+  /**
+   * Janela de migração aberta. Enquanto `true`, o ator canônico declara `alsoKnownAs` com os atores dos hosts antigos
+   * — é a prova que o Mastodon exige para aceitar o `Move` (o destino tem de reconhecer a origem).
+   *
+   * Isto NÃO é a lista de contas externas que a pessoa digitava (removida em 2026-11-17 por expor um mapa de
+   * identidades cruzadas): aqui é UM endereço, gerado pelo servidor, da MESMA conta no NOSSO domínio anterior, e só
+   * enquanto a mudança está em curso. Depois que todos migrarem, vira `false` e o campo some do ator.
+   */
+  migrationAliasEnabled: true,
+  aliasHosts: ['hiperverso.social', 'www.hiperverso.social', 'exercitodolula.app', 'www.exercitodolula.app', 'www.hiperverso.app'] as const,
+  appStoreHosts: ['hiperverso.app', 'www.hiperverso.app'] as const,
   /**
    * Domínio das URLs públicas de mídia. Aponta para o MESMO backend do App Hosting que o apex (conferido por DNS:
    * media, www e apex resolvem para o mesmo IP), então não há infraestrutura separada — quem serve é a rota /m/[id].
@@ -59,6 +87,11 @@ export const siteConfig = {
    */
   mediaHost: `media.${OFFICIAL_HOST}`,
   mediaOrigin: `https://media.${OFFICIAL_HOST}`,
+  mediaOrigins: [
+    `https://media.${OFFICIAL_HOST}`,
+    'https://media.hiperverso.social',
+    'https://media.exercitodolula.app',
+  ] as const,
   controller: CONTROLLER,
   contact: {
     // Sem interruptor de ambiente: o canal do titular é obrigatório e passou a existir (ver OWNER_CONTACT_EMAIL).
@@ -71,9 +104,10 @@ export const siteConfig = {
   // Distribuição do APK: desligada até existir um APK novo, assinado e validado no domínio definitivo
   // (o APK antigo aponta para um domínio que não controlamos). Ligar com NEXT_PUBLIC_APK_DOWNLOAD_ENABLED=true.
   apkDownloadEnabled: process.env.NEXT_PUBLIC_APK_DOWNLOAD_ENABLED === 'true',
-  // Publicidade DESLIGADA por decisão de produto (2026-10-24): a rede não mostra anúncios por enquanto. A estrutura
-  // (AdClientComponent, AdPostCard, espaços na página do post e no feed) fica inteira no código para voltar a ser
-  // testada e melhorada depois — nada de anúncio é carregado, nenhum espaço vazio aparece e o script do AdSense nem é
-  // baixado. Ligar com NEXT_PUBLIC_ADS_ENABLED=true.
-  adsEnabled: process.env.NEXT_PUBLIC_ADS_ENABLED === 'true',
+  // A rede NÃO exibe anúncios. Não há bandeira para ligar, nem componente para chamar: o código de publicidade
+  // foi removido em 2026-11-19, por decisão de produto. Deixar a estrutura "desligada" era uma promessa mais
+  // fraca do que não ter o código -- e, numa rede que se apresenta como soberana, a diferença importa.
+  // Telemetria externa do Google (GTM / Google Analytics) DESLIGADA por soberania de dados:
+  // nenhum evento de navegação é enviado para servidores de medição ou anúncios do Google.
+  googleTelemetryEnabled: false,
 };

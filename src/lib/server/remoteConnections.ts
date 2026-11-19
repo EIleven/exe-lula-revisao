@@ -23,6 +23,8 @@ interface MastodonAccount {
   followers_count?: number;
   following_count?: number;
   statuses_count?: number;
+  /** Perfil que aprova seguidores manualmente. */
+  locked?: boolean;
 }
 
 function remoteDomainFromUrl(rawUrl: string, fallback: string): string {
@@ -70,7 +72,7 @@ export async function fetchAndMaterializeRemoteConnections(
   const politica = await f.store.getInstancePolicy();
   if (decideInstance(domain, politica, f.ownHost).decision === 'reject') return { users: [] };
 
-  const userAgent = `ExeLula/1.0 (+${f.origin})`;
+  const userAgent = `HiperVerso/1.0 (+${f.origin})`;
   const localUsername = (profileData.username || '').split('@')[0];
   let sawRestricted = false;
 
@@ -119,6 +121,8 @@ export async function fetchAndMaterializeRemoteConnections(
     followersCount: number;
     followingCount: number;
     postsCount: number;
+    /** Só quando a origem diz (API Mastodon: `locked`); ausente = não se sabe. */
+    locked?: boolean;
   }[] = [];
 
   // 1. Tenta API pública Mastodon/Pleroma/Akkoma/GoToSocial (/api/v1/accounts/:id/followers|following)
@@ -191,6 +195,7 @@ export async function fetchAndMaterializeRemoteConnections(
                 followersCount: typeof m.followers_count === 'number' ? m.followers_count : 0,
                 followingCount: typeof m.following_count === 'number' ? m.following_count : 0,
                 postsCount: typeof m.statuses_count === 'number' ? m.statuses_count : 0,
+                ...(typeof m.locked === 'boolean' ? { locked: m.locked } : {}),
               });
             }
           }
@@ -411,24 +416,36 @@ export async function fetchAndMaterializeRemoteConnections(
   if (accounts.length === 0) return { users: [], restricted: sawRestricted };
 
   const ownHostLower = f.ownHost.toLowerCase();
+  const ownDomainsSet = new Set([
+    ownHostLower,
+    'exercitodolula.app',
+    'hiperverso.app',
+    'hiperverso.social',
+  ]);
 
-  // Separa contas locais (do próprio Exe. Lula) das contas remotas do Fediverso
+  // Separa contas locais (do próprio HiperVerso / HiperVerso) das contas remotas do Fediverso
   const localResolutionMap = new Map<string, { user: User }>();
-  const localCandidates = accounts.filter((a) => a.domain === ownHostLower);
+  const localCandidates = accounts.filter((a) => ownDomainsSet.has(a.domain.toLowerCase()));
   if (localCandidates.length > 0) {
     const localHandles = Array.from(
       new Set(localCandidates.map((a) => a.handle.split('@')[0].toLowerCase()).filter(Boolean)),
     );
-    const handleSnaps = await Promise.all(
-      localHandles.map((h) => db.collection('ap_handles').doc(h).get()),
-    );
+    const [handleSnaps, usernameSnaps] = await Promise.all([
+      Promise.all(localHandles.map((h) => db.collection('ap_handles').doc(h).get())),
+      Promise.all(localHandles.map((h) => db.collection('usernames').doc(h).get())),
+    ]);
     const handleToUid = new Map<string, string>();
-    handleSnaps.forEach((snap, idx) => {
-      if (snap.exists) {
-        const uid = (snap.data() as { uid?: string })?.uid;
-        if (typeof uid === 'string' && uid) {
-          handleToUid.set(localHandles[idx], uid);
-        }
+    localHandles.forEach((h, idx) => {
+      const apSnap = handleSnaps[idx];
+      const unSnap = usernameSnaps[idx];
+      const uid =
+        (apSnap?.exists ? (apSnap.data() as { uid?: string })?.uid : undefined) ||
+        (unSnap?.exists
+          ? ((unSnap.data() as { userId?: string; uid?: string })?.userId ||
+            (unSnap.data() as { userId?: string; uid?: string })?.uid)
+          : undefined);
+      if (typeof uid === 'string' && uid) {
+        handleToUid.set(h, uid);
       }
     });
 
@@ -481,16 +498,20 @@ export async function fetchAndMaterializeRemoteConnections(
 
   // Verifica quais contas remotas o usuário logado já segue no Fediverso
   const remoteAccounts = accounts.filter(
-    (a) => !(a.domain === ownHostLower && localResolutionMap.has(a.handle.split('@')[0].toLowerCase())),
+    (a) => !ownDomainsSet.has(a.domain.toLowerCase()),
   );
+  // "Seguindo" (aceito, ou registro antigo) e "Solicitação enviada" (pedido pendente a perfil fechado) são estados diferentes.
   const followedSet = new Set<string>();
+  const requestedSet = new Set<string>();
   if (callerUid && remoteAccounts.length > 0) {
     const actorHashes = remoteAccounts.map((a) => remoteFollowDocIdOf(a.actorId));
     const snaps = await Promise.all(
       actorHashes.map((h) => db.collection('ap_following').doc(callerUid).collection('actors').doc(h).get()),
     );
     snaps.forEach((s, idx) => {
-      if (s.exists) followedSet.add(remoteAccounts[idx].actorId);
+      if (!s.exists) return;
+      if ((s.data() as { status?: string } | undefined)?.status === 'pending') requestedSet.add(remoteAccounts[idx].actorId);
+      else followedSet.add(remoteAccounts[idx].actorId);
     });
   }
 
@@ -500,19 +521,22 @@ export async function fetchAndMaterializeRemoteConnections(
   const resultUsers: User[] = [];
 
   for (const acc of accounts) {
-    const localKey = acc.domain === ownHostLower ? acc.handle.split('@')[0].toLowerCase() : '';
+    const isOwnDomain = ownDomainsSet.has(acc.domain.toLowerCase());
+    const localKey = isOwnDomain ? acc.handle.split('@')[0].toLowerCase() : '';
     const resolvedLocal = localKey ? localResolutionMap.get(localKey) : undefined;
-    if (resolvedLocal) {
-      const linkRef = db.collection('users').doc(profileUserId).collection(type).doc(resolvedLocal.user.id);
-      batch.set(
-        linkRef,
-        {
-          userId: resolvedLocal.user.id,
-          createdAt: FieldValue.serverTimestamp(),
-        },
-        { merge: true },
-      );
-      resultUsers.push(resolvedLocal.user);
+    if (isOwnDomain) {
+      if (resolvedLocal) {
+        const linkRef = db.collection('users').doc(profileUserId).collection(type).doc(resolvedLocal.user.id);
+        batch.set(
+          linkRef,
+          {
+            userId: resolvedLocal.user.id,
+            createdAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        );
+        resultUsers.push(resolvedLocal.user);
+      }
       continue;
     }
 
@@ -523,6 +547,7 @@ export async function fetchAndMaterializeRemoteConnections(
       {
         id: uid,
         name: acc.name,
+        name_lowercase: (acc.name || acc.handle || '').toLowerCase(),
         username: acc.handle,
         bio: acc.bio,
         avatarUrl: acc.avatarUrl,
@@ -531,11 +556,13 @@ export async function fetchAndMaterializeRemoteConnections(
         followersCount: acc.followersCount,
         followingCount: acc.followingCount,
         postsCount: acc.postsCount,
+        dmPreference: 'everyone',
         profileVisibility: 'public',
         isRemoteFediverse: true,
         remoteActorId: acc.actorId,
         remoteDomain: acc.domain,
         remoteUrl: acc.url,
+        ...(typeof acc.locked === 'boolean' ? { remoteManuallyApprovesFollowers: acc.locked } : {}),
         updatedAt: FieldValue.serverTimestamp(),
       },
       { merge: true },
@@ -570,6 +597,8 @@ export async function fetchAndMaterializeRemoteConnections(
       profileVisibility: 'public',
       createdAt: nowIso,
       isFollowing: followedSet.has(acc.actorId),
+      followRequested: requestedSet.has(acc.actorId),
+      ...(typeof acc.locked === 'boolean' ? { remoteManuallyApprovesFollowers: acc.locked } : {}),
     });
   }
 

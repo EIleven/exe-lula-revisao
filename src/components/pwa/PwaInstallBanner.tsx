@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils';
 import Image from 'next/image';
 import { siteConfig } from '@/config/site';
 import { isNativeApp } from '@/lib/nativeApp';
+import { isAppAlreadyInstalled } from '@/lib/pwa/detectInstalledApp';
 
 const PWA_INSTALL_BANNER_DISMISSED_KEY = 'pwa_install_banner_dismissed';
 
@@ -35,18 +36,23 @@ export default function PwaInstallBanner() {
     // Sem APK novo e validado, não promover "instalar o aplicativo" no Android.
     if (/android/i.test(navigator.userAgent) && !siteConfig.apkDownloadEnabled) return;
 
-    // Check if the app is already running in standalone mode
-    const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
 
-    // Set a timer to show the banner after 5 seconds if conditions are met
-    const timer = setTimeout(() => {
-      if (isMobile && !isStandalone && !isDismissed) {
-        setIsVisible(true);
-      }
-    }, 5000); // 5 seconds delay
+    void isAppAlreadyInstalled().then((installed) => {
+      if (cancelled || installed) return;
+      timer = setTimeout(() => {
+        if (!cancelled && isMobile && !isDismissed) {
+          setIsVisible(true);
+        }
+      }, 5000);
+    });
 
     // Cleanup timer on component unmount
-    return () => clearTimeout(timer);
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
   }, [isMobile, isDismissed]);
 
   const handleDismiss = () => {
@@ -71,9 +77,14 @@ export default function PwaInstallBanner() {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 animate-in fade-in-0">
       <Card className="w-[calc(100%-2rem)] max-w-sm m-4 shadow-2xl animate-in zoom-in-95">
         <CardHeader className="relative items-center text-center p-4">
-            <Image src="/brand/lula-logo.svg" alt="Exe. Lula Logo" width={56} height={56} />
+            <span
+              aria-hidden="true"
+              className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/15 text-primary border border-primary/30 font-black text-lg tracking-tight shrink-0"
+            >
+              HV
+            </span>
             <CardTitle className="mt-2">Tenha a Melhor Experiência</CardTitle>
-            <CardDescription>Instale o aplicativo do Exe. Lula no seu dispositivo.</CardDescription>
+            <CardDescription>Instale o aplicativo do HiperVerso no seu dispositivo.</CardDescription>
             <Button
                 variant="ghost"
                 size="icon"

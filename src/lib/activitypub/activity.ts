@@ -119,6 +119,32 @@ function linhaParaHtml(linha: string, { tagHref }: TextToHtmlOptions): string {
 
 // ───────────────────────── Construtores de saída ─────────────────────────
 
+/** `@usuario@dominio` escritos no texto. Só o formato completo: `@fulano` sozinho é daqui e não vira menção federada. */
+const MENCAO = /(^|[^\w@.\/-])@([A-Za-z0-9_.-]{1,64})@([A-Za-z0-9.-]{1,253}\.[A-Za-z]{2,})/g;
+
+/**
+ * As pessoas de OUTROS servidores mencionadas no texto, como `usuario@dominio` em minúsculas e sem repetir.
+ *
+ * Sem isto o `tag` do Note saía só com hashtags: quem foi mencionado em outro servidor nunca era avisado, porque é a tag
+ * `Mention` (mais o endereço no `cc`) que diz ao servidor de lá que aquilo é para alguém de lá.
+ */
+export function mencoesDoTexto(texto: string, ownHost: string, max = 20): string[] {
+  const proprio = ownHost.toLowerCase();
+  const vistos = new Set<string>();
+  const fora: string[] = [];
+  for (const m of texto.matchAll(MENCAO)) {
+    const dominio = m[3].toLowerCase();
+    // Menção a alguém daqui não sai como menção federada: dentro de casa ela já é resolvida pelo @ local.
+    if (dominio === proprio || dominio.endsWith(`.${proprio}`)) continue;
+    const handle = `${m[2].toLowerCase()}@${dominio}`;
+    if (vistos.has(handle)) continue;
+    vistos.add(handle);
+    fora.push(handle);
+    if (fora.length >= max) break;
+  }
+  return fora;
+}
+
 export type ActorInput = {
   id: string;
   handle: string;
@@ -133,17 +159,36 @@ export type ActorInput = {
   keyId: string;
   publicKeyPem: string;
   avatarUrl?: string | null;
+  avatarAlt?: string | null;
   coverUrl?: string | null;
+  coverAlt?: string | null;
   publishedIso: string;
   discoverable?: boolean;
   /** Consentimento para mecanismos de busca (Mastodon 4.3+). Segue o mesmo padrão protetor: desligado. */
   indexable?: boolean;
+  /**
+   * SÓ a migração de domínio: o endereço DESTA MESMA conta no nosso domínio anterior. É gerado pelo servidor, nunca
+   * digitado por ninguém, e só sai enquanto a mudança está em curso (siteConfig.migrationAliasEnabled).
+   *
+   * Não confundir com o recurso removido em 2026-11-17, em que a pessoa cadastrava contas externas quaisquer: aquilo
+   * publicava, para qualquer leitor sem autenticação, o mapa das identidades dela em outros servidores, e cada URI
+   * custava mais uma resolução de ator a cada instância que lesse o documento. Aqui é um endereço nosso, apontando
+   * para nós mesmos, e é o que o Mastodon exige para aceitar o `Move`.
+   */
   alsoKnownAs?: string[];
   movedTo?: string | null;
   website?: string | null;
   location?: string | null;
 };
 
+/**
+ * O documento público do ator (`/ap/users/<handle>`).
+ *
+ * **`alsoKnownAs` só existe para a migração de domínio.** O campo liga publicamente a conta a outras identidades, e
+ * quando era a lista que a pessoa preenchia virava um mapa de identidades cruzadas aberto a raspagem, com uma resolução
+ * de ator a mais por URI. Por isso só entra aqui o auto-alias gerado pelo servidor (o endereço desta conta no nosso
+ * domínio anterior), enquanto a mudança está em curso. Quem migra de FORA para cá declara o vínculo no servidor de origem.
+ */
 export function buildActor(a: ActorInput) {
   const attachment: unknown[] = [];
   if (a.website) {
@@ -175,12 +220,113 @@ export function buildActor(a: ActorInput) {
     indexable: a.indexable ?? false,
     published: a.publishedIso,
     publicKey: { id: a.keyId, owner: a.id, publicKeyPem: a.publicKeyPem },
-    ...(a.avatarUrl ? { icon: { type: 'Image', url: a.avatarUrl } } : {}),
-    ...(a.coverUrl ? { image: { type: 'Image', url: a.coverUrl } } : {}),
+    ...(a.avatarUrl ? { icon: { type: 'Image', url: a.avatarUrl, ...(a.avatarAlt ? { name: a.avatarAlt } : {}) } } : {}),
+    ...(a.coverUrl ? { image: { type: 'Image', url: a.coverUrl, ...(a.coverAlt ? { name: a.coverAlt } : {}) } } : {}),
     ...(attachment.length ? { attachment } : {}),
     ...(a.alsoKnownAs?.length ? { alsoKnownAs: a.alsoKnownAs } : {}),
     ...(a.movedTo ? { movedTo: a.movedTo } : {}),
   };
+}
+
+// ───────────────────────── Artigo → HTML do Fediverso ─────────────────────────
+
+/** Teto do corpo de um artigo federado: acima disto a nota vira um payload que servidor pequeno recusa. */
+export const ARTICLE_HTML_MAX = 40_000;
+
+/** Blocos que viram parágrafo: Mastodon e Misskey só desenham `p`, `br`, `a` e ênfase; o resto eles descartam. */
+const BLOCO_PARA_P = /<\/?(?:div|section|article|figure|figcaption|table|tr|td|th|tbody|thead)\b[^>]*>/gi;
+/** O que nunca sai daqui: script e estilo levam código, e a mídia já vai como anexo do Note. */
+const FORA = /<(script|style|iframe|object|embed|noscript)\b[^>]*>[\s\S]*?<\/\1>|<(?:img|source|video|audio|input|link|meta)\b[^>]*\/?>/gi;
+/** As únicas marcas que atravessam, e sem atributo nenhum. */
+const MARCAS: Record<string, string> = {
+  strong: 'strong', b: 'strong', em: 'em', i: 'em', u: 'u', code: 'code',
+  ul: 'ul', ol: 'ol', li: 'li', blockquote: 'blockquote',
+};
+
+/** `&amp;`, `&lt;`, `&#39;`… do editor voltam a caractere antes de serem escapados de novo (senão vira `&amp;amp;`). */
+function decodeEntidades(texto: string): string {
+  return texto
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#0*39;|&#x0*27;|&apos;/gi, "'")
+    .replace(/&amp;/gi, '&');
+}
+
+/**
+ * O corpo de um Artigo, do HTML do editor para o HTML que o Fediverso desenha.
+ *
+ * O artigo vai INTEIRO. Antes ele era achatado em texto puro e cortado em 360 caracteres com reticências, o que obrigava
+ * quem lia no Mastodon a sair de lá para abrir o site — leitores de `mastodon.social` e `ursal.zone` reclamaram disso. O
+ * endereço canônico continua no campo `url` da nota, como referência, e não enfiado no meio do texto.
+ *
+ * Mantém parágrafo, quebra de linha, ênfase, lista, citação e link. Título dentro do corpo vira parágrafo em negrito (o
+ * Mastodon descarta `h1`-`h6`). Atributo nenhum sobrevive, salvo o `href` de um link `http(s)`: é o que impede que estilo,
+ * `onerror` ou `javascript:` vindos do editor cheguem a outro servidor.
+ */
+export function articleBodyToHtml(bruto: string, max = ARTICLE_HTML_MAX): string {
+  if (typeof bruto !== 'string' || !bruto.trim()) return '';
+
+  let h = bruto
+    .replace(/<!--[\s\S]*?-->/g, ' ')
+    .replace(FORA, ' ')
+    .replace(/<h[1-6]\b[^>]*>([\s\S]*?)<\/h[1-6]\s*>/gi, '<p><strong>$1</strong></p>')
+    .replace(BLOCO_PARA_P, '\n\n')
+    .replace(/<\/p\s*>/gi, '\n\n')
+    .replace(/<p\b[^>]*>/gi, '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    // Lista e citação são blocos por si: ficam em pedaço próprio, senão sairiam aninhadas dentro de um <p> (HTML inválido).
+    .replace(/<(ul|ol|blockquote)\b[^>]*>/gi, '\n\n<$1>')
+    .replace(/<\/(ul|ol|blockquote)\s*>/gi, '</$1>\n\n');
+
+  // Link com destino que não é http(s) é descartado — e o `</a>` dele também, senão sobra marca órfã no texto.
+  let linksDescartados = 0;
+  h = h.replace(/<(\/?)([a-zA-Z0-9]+)\b([^>]*)>/g, (_todo, barra: string, tagBruta: string, atributos: string) => {
+    const tag = tagBruta.toLowerCase();
+    if (tag === 'a') {
+      if (barra) {
+        if (linksDescartados > 0) {
+          linksDescartados--;
+          return '';
+        }
+        return '</a>';
+      }
+      const m = /href\s*=\s*("([^"]*)"|'([^']*)'|([^\s>]+))/i.exec(atributos);
+      const href = (m?.[2] ?? m?.[3] ?? m?.[4] ?? '').trim();
+      if (!/^https?:\/\//i.test(href)) {
+        linksDescartados++;
+        return '';
+      }
+      return `<a href="${escapeHtml(href)}" rel="nofollow noopener noreferrer" target="_blank">`;
+    }
+    const permitida = MARCAS[tag];
+    return permitida ? `<${barra}${permitida}>` : '';
+  });
+
+  // O texto solto é escapado sem tocar nas marcas que sobraram.
+  h = h
+    .split(/(<[^>]+>)/)
+    .map((p) => (p.startsWith('<') && p.endsWith('>') ? p : escapeHtml(decodeEntidades(p))))
+    .join('');
+
+  const pedacos = h
+    .split(/\n{2,}/)
+    .map((p) => p.trim())
+    .filter((p) => p.replace(/<[^>]+>/g, '').trim().length > 0);
+
+  const saida: string[] = [];
+  let tamanho = 0;
+  for (const pedaco of pedacos) {
+    const jaEBloco = /^<(ul|ol|blockquote)>/i.test(pedaco);
+    const bloco = jaEBloco
+      ? pedaco
+      : `<p>${pedaco.split('\n').map((l) => l.trim()).filter(Boolean).join('<br>')}</p>`;
+    if (tamanho + bloco.length > max) break;
+    saida.push(bloco);
+    tamanho += bloco.length;
+  }
+  return saida.join('');
 }
 
 export type NoteAttachment = { url: string; mediaType: string; alt?: string | null };
@@ -199,6 +345,8 @@ export type NoteInput = {
   quoteUrl?: string | null;
   attachments: NoteAttachment[];
   hashtags: { name: string; href: string }[];
+  /** Pessoas de outros servidores mencionadas: viram tag `Mention` e entram no `cc` (é o que faz o servidor delas avisar). */
+  mentions?: { href: string; acct: string }[];
 };
 
 export function buildNote(n: NoteInput) {
@@ -211,7 +359,8 @@ export function buildNote(n: NoteInput) {
     published: n.publishedIso,
     ...(n.updatedIso ? { updated: n.updatedIso } : {}),
     to: n.to,
-    cc: n.cc,
+    // O endereço de quem foi mencionado entra no `cc`: sem ele, o servidor de lá recebe a nota e não a entrega a ninguém.
+    cc: [...n.cc, ...(n.mentions ?? []).map((m) => m.href).filter((href) => !n.cc.includes(href))],
     url: n.url,
     sensitive: n.sensitive,
     inReplyTo: n.inReplyTo ?? null,
@@ -222,7 +371,10 @@ export function buildNote(n: NoteInput) {
       url: a.url,
       ...(a.alt ? { name: a.alt } : {}),
     })),
-    tag: n.hashtags.map((h) => ({ type: 'Hashtag', href: h.href, name: `#${h.name}` })),
+    tag: [
+      ...n.hashtags.map((h) => ({ type: 'Hashtag', href: h.href, name: `#${h.name}` })),
+      ...(n.mentions ?? []).map((m) => ({ type: 'Mention', href: m.href, name: `@${m.acct}` })),
+    ],
   };
 }
 
@@ -283,6 +435,48 @@ export function buildFollowResponse(
 
 export function buildFollow(id: string, actorId: string, targetActorId: string) {
   return { '@context': AP_CONTEXT, id, type: 'Follow', actor: actorId, object: targetActorId };
+}
+
+/**
+ * `Create { Note }` PRIVADO endereçado a UM ator (mensagem direta: sem `Public`, sem seguidores no `cc`). É o bilhete cordial que
+ * acompanha um pedido de seguir um perfil fechado: só quem recebe o vê. O texto vai escapado, com a menção ao destinatário na frente
+ * (é a menção que faz o servidor entregá-lo como mensagem direta e não como post).
+ */
+export function buildDirectCreate(input: {
+  id: string;
+  noteId: string;
+  actorId: string;
+  targetActorId: string;
+  /** `usuario@dominio` do destinatário (sem o @ da frente). */
+  mentionHandle: string;
+  text: string;
+  publishedIso: string;
+}) {
+  const usuario = input.mentionHandle.split('@')[0] ?? '';
+  const corpo = escapeHtml(input.text).replace(/\r?\n/g, '<br />');
+  const contentHtml = `<p><span class="h-card"><a href="${escapeHtml(input.targetActorId)}" class="u-url mention">@<span>${escapeHtml(usuario)}</span></a></span> ${corpo}</p>`;
+  const note = {
+    id: input.noteId,
+    type: 'Note',
+    attributedTo: input.actorId,
+    published: input.publishedIso,
+    to: [input.targetActorId],
+    cc: [] as string[],
+    content: contentHtml,
+    directMessage: true,
+    tag: [{ type: 'Mention', href: input.targetActorId, name: `@${input.mentionHandle}` }],
+  };
+  return {
+    '@context': AP_CONTEXT,
+    id: input.id,
+    type: 'Create',
+    actor: input.actorId,
+    published: input.publishedIso,
+    to: [input.targetActorId],
+    cc: [] as string[],
+    directMessage: true,
+    object: note,
+  };
 }
 
 export function buildLike(id: string, actorId: string, objectId: string) {

@@ -27,20 +27,57 @@ import {
 import { v4 as uuidv4 } from 'uuid'; // For unique file names
 
 import { deepCopyConversation, deepCopyDirectMessage, deepCopyUser } from '../utils/dataTransformers';
-import { getUser } from './userService';
+import { getUser, fetchPublicUsersByIds } from './userService';
 import { getCurrentUserId } from './authService';
 import { getPostById } from './postReadService';
 
 export const conversationsCollection = collection(db, 'conversations');
 
 export const firestoreToConversation = async (convId: string, convDataFromDb: any, activeUserId: string | null): Promise<Conversation | null> => {
-    const participantsInfoPromises = (convDataFromDb.participantIds || []).map(async (pid: string) => {
-        return await getUser(pid, activeUserId);
-    });
-    const participantsInfo = (await Promise.all(participantsInfoPromises)).filter(p => p !== null) as User[];
-    if (participantsInfo.length < convDataFromDb.participantIds.length) {
-      console.warn(`Conversation ${convId} has missing participant details.`);
+    const embeddedById = new Map<string, Partial<User>>();
+    if (Array.isArray(convDataFromDb.participantsInfo)) {
+      for (const item of convDataFromDb.participantsInfo) {
+        if (item && typeof item.id === 'string') {
+          embeddedById.set(item.id, item);
+        }
+      }
     }
+
+    const participantIds: string[] = Array.isArray(convDataFromDb.participantIds)
+      ? convDataFromDb.participantIds
+      : [];
+    const isLargeGroup = Boolean(convDataFromDb.isGroup) && participantIds.length > 4;
+    const batchLoadedById = new Map<string, User>();
+    if (isLargeGroup) {
+      const batchUsers = await fetchPublicUsersByIds(participantIds, activeUserId).catch(() => [] as User[]);
+      for (const u of batchUsers) {
+        batchLoadedById.set(u.id, u);
+      }
+    }
+
+    const participantsInfoPromises = participantIds.map(async (pid: string): Promise<User> => {
+        const loaded = isLargeGroup
+          ? batchLoadedById.get(pid)
+          : await getUser(pid, activeUserId).catch(() => undefined);
+        if (loaded) return loaded;
+        const embedded = embeddedById.get(pid);
+        return {
+          id: pid,
+          name: embedded?.name || (pid.startsWith('ap_') ? 'Usuário do Fediverso' : 'Participante'),
+          username: embedded?.username || pid.replace(/^ap_/, 'fediverso_'),
+          email: '',
+          avatarUrl: embedded?.avatarUrl || '',
+          followersCount: 0,
+          followingCount: 0,
+          postsCount: 0,
+          isAdmin: false,
+          isModerator: false,
+          dmPreference: 'everyone',
+          profileVisibility: 'public',
+          createdAt: new Date().toISOString(),
+        };
+    });
+    const participantsInfo = await Promise.all(participantsInfoPromises);
 
     let lastMessageForClient: DirectMessage | undefined | null = undefined;
     if (convDataFromDb.lastMessageId && convDataFromDb.lastMessageSenderId) {
@@ -197,18 +234,93 @@ const assertGroupAdmin = async (conversationId: string, actorUserId: string) => 
   return { conversationRef, data, adminIds };
 };
 
+export interface AddGroupParticipantsOptions {
+  sendFediverseInvite?: boolean;
+  sendPublicFediverseMention?: boolean;
+  announceInGroup?: boolean;
+}
+
 export const addGroupParticipants = async (
   conversationId: string,
   actorUserId: string,
-  userIdsToAdd: string[]
-): Promise<void> => {
+  userIdsToAdd: string[],
+  options: AddGroupParticipantsOptions = {}
+): Promise<{ addedUsers: User[]; remoteNotified: number }> => {
   const { conversationRef, data } = await assertGroupAdmin(conversationId, actorUserId);
   const currentIds: string[] = Array.isArray(data.participantIds) ? data.participantIds : [];
+  const newlyAddedIds = userIdsToAdd.filter((id) => Boolean(id) && !currentIds.includes(id));
   const nextIds = Array.from(new Set([...currentIds, ...userIdsToAdd.filter(Boolean)]));
   if (nextIds.length > 1000) {
     throw new Error("O grupo pode ter no máximo 1000 participantes.");
   }
-  await updateDoc(conversationRef, { participantIds: nextIds });
+
+  // Atualiza apenas participantIds para cumprir estritamente a regra isGroupAdminUpdating do Firestore
+  await updateDoc(conversationRef, {
+    participantIds: nextIds,
+  });
+
+  const addedUsers =
+    newlyAddedIds.length > 0
+      ? await fetchPublicUsersByIds(newlyAddedIds, actorUserId).catch(() => [] as User[])
+      : [];
+
+  let remoteNotified = 0;
+  const groupTitle = (data.groupName || 'Grupo').trim();
+  const origin =
+    typeof window !== 'undefined' && window.location.origin
+      ? window.location.origin
+      : 'https://hiperverso.app';
+
+  // Notifica via ActivityPub novos integrantes do Fediverso adicionados ao grupo com link mágico 1-clique
+  const remoteNewUsers = addedUsers.filter(
+    (u) => u.id.startsWith('ap_') || u.username?.includes('@')
+  );
+  if (
+    options.sendFediverseInvite !== false &&
+    remoteNewUsers.length > 0 &&
+    typeof window !== 'undefined'
+  ) {
+    const [token, inviter] = await Promise.all([
+      auth.currentUser?.getIdToken().catch(() => null),
+      getUser(actorUserId, actorUserId).catch(() => null),
+    ]);
+    const inviterLabel = inviter?.name || (inviter?.username ? `@${inviter.username}` : 'Alguém');
+    if (token) {
+      await Promise.all(
+        remoteNewUsers.map(async (remoteUser) => {
+          const cleanHandle = (remoteUser.username || '').replace(/^@+/, '');
+          const magicUrl = `${origin}/pt-BR/login?federated=fediverse&handle=${encodeURIComponent(
+            cleanHandle
+          )}&groupName=${encodeURIComponent(
+            groupTitle
+          )}&redirect=${encodeURIComponent(`/pt-BR/messages/group/${conversationId}`)}`;
+
+          const inviteText = `👋 ${inviterLabel} adicionou você ao grupo "${groupTitle}" no HiperVerso (${nextIds.length} participantes).\n\nPara participar da roda de conversa com todos os membros usando sua conta @${cleanHandle}, toque aqui:\n👉 ${magicUrl}`;
+
+          try {
+            const res = await fetch('/api/ap/dm', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({
+                recipientId: remoteUser.id,
+                conversationId,
+                text: inviteText,
+                visibility: options.sendPublicFediverseMention ? 'public' : 'direct',
+              }),
+            });
+            if (res.ok) remoteNotified++;
+          } catch {
+            // Best-effort delivery
+          }
+        })
+      );
+    }
+  }
+
+  return { addedUsers, remoteNotified };
 };
 
 export const removeGroupParticipant = async (
@@ -395,15 +507,46 @@ export const getUserConversations = async (userId: string): Promise<Conversation
     }
 };
 
-export const markConversationAsRead = async (conversationId: string, userId: string): Promise<void> => {
+/**
+ * Zera o contador de nao lidas desta pessoa.
+ *
+ * `confirmarLeitura` tambem avisa o OUTRO LADO que voce leu (campo `lastReadAt`, com a hora do servidor). Ele e
+ * explicito de proposito: o botao "marcar todas como lidas" da lista chama esta funcao para N conversas de uma vez,
+ * e se o recibo pegasse carona voce avisaria N pessoas que leu sem ter aberto nada. Quem passa `true` e so a tela da
+ * conversa ABERTA, e so quando a pessoa deixou a confirmacao ligada (src/lib/messages/recibos.ts).
+ */
+export const markConversationAsRead = async (
+  conversationId: string,
+  userId: string,
+  opcoes?: { confirmarLeitura?: boolean },
+): Promise<void> => {
   if (!conversationId || !userId) return;
-  
+
   const conversationRef = doc(db, 'conversations', conversationId);
   try {
-      const fieldToUpdate = `unreadCounts.${userId}`;
-      await updateDoc(conversationRef, { [fieldToUpdate]: 0 });
+      const mudanca: Record<string, unknown> = { [`unreadCounts.${userId}`]: 0 };
+      if (opcoes?.confirmarLeitura) mudanca[`lastReadAt.${userId}`] = serverTimestamp();
+      await updateDoc(conversationRef, mudanca);
   } catch (error) {
       console.error(`Error marking conversation ${conversationId} as read for user ${userId}:`, error);
+  }
+};
+
+/**
+ * Avisa que voce leu SEM mexer no contador de nao lidas: serve para a conversa que ja esta aberta quando chega
+ * mensagem nova (o contador ja foi zerado na abertura, mas a marca de leitura precisa avancar).
+ */
+export const confirmarLeituraDaConversa = async (conversationId: string, userId: string): Promise<boolean> => {
+  if (!conversationId || !userId) return false;
+  try {
+    await updateDoc(doc(db, 'conversations', conversationId), {
+      [`lastReadAt.${userId}`]: serverTimestamp(),
+      [`unreadCounts.${userId}`]: 0,
+    });
+    return true;
+  } catch (error) {
+    console.error(`Error confirming read for ${conversationId}:`, error);
+    return false;
   }
 };
 
@@ -412,10 +555,13 @@ export const sendDirectMessage = async (
   conversationId: string,
   senderId: string,
   data: { 
+    customMessageId?: string;
     text?: string; 
     e2ee?: E2eeMessagePayload | null;
+    mediaE2ee?: E2eeMessagePayload | null;
     fileUrl?: string; 
     fileType?: DirectMessage['fileType'], 
+    posterUrl?: string | null;
     sharedPostId?: string,
     parentMessageId?: string;
     parentMessageText?: string;
@@ -447,41 +593,62 @@ export const sendDirectMessage = async (
         }
 
         const messagesColRef = collection(db, 'conversations', conversationId, 'messages');
-        const newMessageRef = await addDoc(messagesColRef, {
+        const messagePayload = {
             senderId,
             text: data.e2ee ? null : (data.text || null),
             e2ee: data.e2ee || null,
+            mediaE2ee: data.mediaE2ee || null,
             fileUrl: data.fileUrl || null,
             fileType: data.fileType || null,
+            posterUrl: data.posterUrl || null,
             sharedPostId: data.sharedPostId || null,
             createdAt: serverTimestamp(),
             readAt: null, // Initialize readAt as null
             parentMessageId: data.parentMessageId || null,
-            parentMessageText: data.parentMessageText || null,
-            parentMessageSenderName: data.parentMessageSenderName || null,
-        });
+            parentMessageText: data.e2ee ? (data.parentMessageId ? '🔒 Mensagem criptografada' : null) : (data.parentMessageText || null),
+            parentMessageSenderName: data.e2ee ? null : (data.parentMessageSenderName || null),
+        };
+        const safeCustomId =
+          data.customMessageId && /^[A-Za-z0-9_-]{6,120}$/.test(data.customMessageId)
+            ? data.customMessageId
+            : null;
+        let newMessageRef;
+        if (safeCustomId) {
+          newMessageRef = doc(messagesColRef, safeCustomId);
+          await setDoc(newMessageRef, messagePayload);
+        } else {
+          newMessageRef = await addDoc(messagesColRef, messagePayload);
+        }
         
         // Note: The parent conversation document is now updated by the `onMessageCreated` Cloud Function.
 
-        const remoteRecipientId = (participantIds as string[]).find(
-          (id) => id !== senderId && id.startsWith('ap_'),
+        const isDirect1on1 = !conversationData.isGroup && participantIds.length === 2;
+        const remoteRecipientIds = (participantIds as string[]).filter(
+          (id) => id !== senderId && (id.startsWith('ap_') || isDirect1on1),
         );
-        if (remoteRecipientId) {
-          const outboundText = [data.text?.trim(), data.fileUrl].filter(Boolean).join('\n');
+        if (remoteRecipientIds.length > 0) {
+          const rawOutboundText = [data.text?.trim(), data.fileUrl].filter(Boolean).join('\n');
+          const outboundText =
+            conversationData.isGroup && conversationData.groupName && rawOutboundText
+              ? `[${conversationData.groupName}] ${rawOutboundText}`
+              : rawOutboundText;
           if (outboundText) {
             const token = await auth.currentUser?.getIdToken().catch(() => null);
             if (token) {
-              fetch('/api/ap/dm', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  Authorization: `Bearer ${token}`,
-                },
-                body: JSON.stringify({
-                  recipientId: remoteRecipientId,
-                  text: outboundText,
-                }),
-              }).catch((err) => console.warn('Erro ao enviar DM ao Fediverso:', err));
+              for (const remoteRecipientId of remoteRecipientIds) {
+                fetch('/api/ap/dm', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${token}`,
+                  },
+                  body: JSON.stringify({
+                    recipientId: remoteRecipientId,
+                    ...(conversationData.isGroup ? { conversationId } : {}),
+                    text: outboundText,
+                  }),
+                }).catch((err) => console.warn('Erro ao enviar DM ao Fediverso:', err));
+              }
             }
           }
         }
@@ -503,6 +670,7 @@ export const sendDirectMessage = async (
             e2ee: data.e2ee || undefined,
             fileUrl: data.fileUrl,
             fileType: data.fileType,
+            posterUrl: data.posterUrl,
             sharedPostId: data.sharedPostId,
             sharedPost: sharedPost,
             createdAt: new Date().toISOString(),

@@ -15,6 +15,8 @@ export const PRIVATE_USER_FIELDS = [
   'displaySensitiveContent',
   'tabPreferences',
   'totalUnreadMessages',
+  'translationPreferences',
+  'recommendationPreferences',
 ] as const;
 
 export type PrivateUserField = (typeof PRIVATE_USER_FIELDS)[number];

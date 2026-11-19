@@ -24,7 +24,7 @@ import { activityUrl, domainOfUrl, isOwnUrl, parseLocalPath } from './identity.t
 import { buildFollowResponse, isAddressedToPublic, parseInboundActivity } from './activity.ts';
 import type { InboundActivity } from './activity.ts';
 import { deliveryId } from './delivery.ts';
-import { ownPostRef, remotePostIdOf, sameHost } from './remoteIdentity.ts';
+import { isOwnHostUrl, ownPostRef, remotePostIdOf, sameHost } from './remoteIdentity.ts';
 import { ACTIVITY_ACCEPT, plainText, resolveRemoteActor } from './remote.ts';
 import type { RemoteDeps } from './remote.ts';
 import type { WindowLimiter } from './rateLimit.ts';
@@ -216,9 +216,9 @@ async function despachar(deps: InboxDeps, a: InboxActivity, ator: RemoteActorRec
       return respostaDeFollow(deps, a, ator, false);
     case 'Update':
       return atualizar(deps, a, ator);
+    case 'Move':
+      return mudouDeCasa(deps, a, ator);
     default:
-      // Move: reconhecido e (por ora) não tratado. 202, não erro:
-      // o remetente não precisa saber que não fazemos nada com isso. `silenciada` fica registrado para o painel.
       return resp(202, silenciada ? 'ignorada-instancia-silenciada' : 'ignorada-tipo');
   }
 }
@@ -325,6 +325,29 @@ async function desfazer(deps: InboxDeps, a: InboxActivity, ator: RemoteActorReco
   return resp(202, 'ignorada-tipo');
 }
 
+/**
+ * `Move`: a conta remota avisa que se mudou para outro endereço.
+ *
+ * Registramos para onde foi — e **não** arrastamos quem a seguia. Mover seguidores sem pedir seria decidir pela pessoa daqui
+ * a quem ela passa a seguir, e é exatamente o passo que vira sequestro de audiência se o `Move` for forjado (a prova de que o
+ * destino aceita a mudança mora no `alsoKnownAs` do destino, que nem todo servidor publica e que não dá para conferir aqui sem
+ * sair buscando). Com o destino registrado, a pessoa decide seguir a conta nova quando quiser.
+ *
+ * Só o PRÓPRIO ator pode anunciar a própria mudança, e o destino tem de ser outro endereço (nunca um daqui).
+ */
+async function mudouDeCasa(deps: InboxDeps, a: InboxActivity, ator: RemoteActorRecord): Promise<InboxResponse> {
+  const bruto = a.raw as { target?: unknown; object?: unknown };
+  const destino = typeof bruto.target === 'string' ? bruto.target : null;
+  const quem = typeof bruto.object === 'string' ? bruto.object : ator.actorId;
+  if (quem !== ator.actorId) return resp(202, 'ignorada-ator-diferente');
+  if (!destino || !destino.startsWith('https://') || destino === ator.actorId) return resp(202, 'ignorada-sem-destino');
+  // Mudança para um endereço NOSSO não existe: ninguém de fora decide que uma conta daqui é a continuação dela.
+  if (isOwnHostUrl(destino, deps.ownHost)) return resp(202, 'ignorada-destino-proprio');
+  if (ator.movedTo === destino) return resp(202, 'ignorada-duplicado');
+  await deps.store.putRemoteActor({ ...ator, movedTo: destino, fetchedAtMs: deps.now() });
+  return resp(202, 'aceita-mudanca');
+}
+
 async function bloqueadoPor(deps: InboxDeps, a: InboxActivity, ator: RemoteActorRecord): Promise<InboxResponse> {
   const { store } = deps;
   const handle = handleLocalDe(deps, a.objectId);
@@ -333,6 +356,20 @@ async function bloqueadoPor(deps: InboxDeps, a: InboxActivity, ator: RemoteActor
   if (!reserva) return resp(202, 'ignorada-alvo-desconhecido');
   // Quem nos bloqueou não quer receber o que publicamos: deixa de ser seguidor, e nada mais é entregue a ele.
   await store.deleteFollower(reserva.uid, ator.actorId);
+  // E não queremos continuar seguindo quem nos bloqueou: o vínculo cai dos dois lados, não só do lado dele.
+  await store.rejectOutboundFollow?.(reserva.uid, ator.actorId);
+
+  // Sobrou algum vínculo com esta pessoa? Se NÃO sobrou, o que guardamos dela não tem mais por que ficar no ar:
+  // o conteúdo só estava aqui por causa de um laço que ela acabou de cortar. Vira túmulo, como no `Delete`.
+  //
+  // A condição existe por um motivo: um `Block` é de UMA pessoa contra UMA pessoa. Se outra conta daqui segue este
+  // ator — e ele não bloqueou essa outra conta —, apagar tudo puniria quem não tem nada a ver, e seria mais do que
+  // ele pediu. Some o espelho quando o último laço acaba, não antes.
+  const aindaHaVinculo = (await store.hasLocalLinkToActor?.(ator.actorId)) ?? true;
+  if (!aindaHaVinculo) {
+    const apagados = await store.removeRemoteActorContent?.(ator.actorId);
+    return resp(202, `aceita-bloqueio-conteudo-retirado:${apagados ?? 0}`);
+  }
   return resp(202, 'aceita-bloqueio');
 }
 
@@ -423,6 +460,50 @@ function extractCustomEmojis(obj: Record<string, unknown>): Record<string, strin
   return customEmojis;
 }
 
+/**
+ * O aviso de conteúdo que o autor escreveu (`summary` do Note; "CW" no Mastodon), em texto puro e curto. `null` quando
+ * não há. É o texto que a pessoa daqui lê ANTES de decidir abrir o conteúdo.
+ */
+export function extractContentWarning(obj: Record<string, unknown>): string | null {
+  if (typeof obj.summary !== 'string') return null;
+  const limpo = obj.summary
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&#x27;/gi, "'")
+    .replace(/\s+/g, ' ')
+    .trim();
+  return limpo ? limpo.slice(0, 200) : null;
+}
+
+/**
+ * O conteúdo remoto é sensível quando o autor marcou `sensitive` OU escreveu um aviso (`summary`).
+ *
+ * **Vale mesmo SEM mídia.** Antes a regra exigia anexo, e um texto com aviso (relato de violência, spoiler, gatilho)
+ * chegava aqui aberto: o autor pediu que se avisasse e nós mostrávamos direto. O aviso é do AUTOR sobre o conteúdo,
+ * não sobre o anexo.
+ */
+export function extractSensitiveFlag(obj: Record<string, unknown>): boolean {
+  return obj.sensitive === true || extractContentWarning(obj) !== null;
+}
+
+/**
+ * O idioma que a origem declarou: `contentMap` (a chave é a etiqueta) ou o campo `language` do Mastodon. `null` quando
+ * ninguém declarou — e aí não se inventa: a vitrine para visitante prefere não mostrar a chutar.
+ */
+export function extractLanguage(obj: Record<string, unknown>): string | null {
+  const mapa = obj.contentMap;
+  if (mapa && typeof mapa === 'object' && !Array.isArray(mapa)) {
+    const chaves = Object.keys(mapa as Record<string, unknown>);
+    if (chaves.length > 0 && typeof chaves[0] === 'string' && chaves[0].trim()) return chaves[0].trim().slice(0, 16);
+  }
+  if (typeof obj.language === 'string' && obj.language.trim()) return obj.language.trim().slice(0, 16);
+  return null;
+}
+
 export function extractAttachments(obj: Record<string, unknown>): { url: string; type: 'image' | 'video'; alt?: string | null }[] {
   if (!Array.isArray(obj.attachment)) return [];
   const out: { url: string; type: 'image' | 'video'; alt?: string | null }[] = [];
@@ -485,6 +566,15 @@ async function impulsionar(deps: InboxDeps, a: InboxActivity, ator: RemoteActorR
     ? Date.parse((a.raw as { published: string }).published)
     : deps.now();
 
+  // A politica da instancia vale ANTES de qualquer caminho rapido: se o dominio de origem foi recusado, nem um post que ja
+  // estava guardado volta ao feed por impulso de terceiro. Antes, bloquear um dominio nao impedia que boosts ressuscitassem
+  // o que ele ja tinha publicado aqui.
+  const objDomain = domainOfUrl(a.objectId);
+  const policy = await store.getInstancePolicy();
+  if (!objDomain || decideInstance(objDomain, policy, deps.ownHost).decision === 'reject') {
+    return resp(202, 'ignorada-alvo-desconhecido');
+  }
+
   const remotePostId = remotePostIdOf(a.objectId);
   const alreadyExists = await store.hasPost?.(remotePostId);
   if (alreadyExists) {
@@ -501,11 +591,6 @@ async function impulsionar(deps: InboxDeps, a: InboxActivity, ator: RemoteActorR
     return resp(202, res === 'duplicate' ? 'ignorada-duplicado' : 'ignorada-sem-alvo');
   }
 
-  const objDomain = domainOfUrl(a.objectId);
-  const policy = await store.getInstancePolicy();
-  if (!objDomain || decideInstance(objDomain, policy, deps.ownHost).decision === 'reject') {
-    return resp(202, 'ignorada-alvo-desconhecido');
-  }
 
   try {
     const r = await deps.fetcher.get(a.objectId, { accept: ACTIVITY_ACCEPT });
@@ -545,6 +630,9 @@ async function impulsionar(deps: InboxDeps, a: InboxActivity, ator: RemoteActorR
     const url = typeof fetchedObj.url === 'string' && fetchedObj.url.startsWith('https://') ? fetchedObj.url : a.objectId;
     const customEmojis = extractCustomEmojis(fetchedObj);
     const media = extractAttachments(fetchedObj);
+    const sensitive = extractSensitiveFlag(fetchedObj);
+    const contentWarning = extractContentWarning(fetchedObj);
+    const language = extractLanguage(fetchedObj);
 
     const res = await store.ingestRemoteAnnounce({
       booster: ator,
@@ -556,6 +644,9 @@ async function impulsionar(deps: InboxDeps, a: InboxActivity, ator: RemoteActorR
       url,
       postCreatedAtMs,
       media,
+      sensitive,
+      contentWarning,
+      language,
       ...(Object.keys(customEmojis).length > 0 ? { customEmojis } : {}),
     });
     if (res === 'added') {
@@ -632,6 +723,9 @@ async function criar(deps: InboxDeps, a: InboxActivity, ator: RemoteActorRecord,
     const url = typeof obj.url === 'string' && obj.url.startsWith('https://') ? obj.url : a.objectId;
     const customEmojis = extractCustomEmojis(obj);
     const media = extractAttachments(obj);
+    const sensitive = extractSensitiveFlag(obj);
+    const contentWarning = extractContentWarning(obj);
+    const language = extractLanguage(obj);
     const rawQuote = obj.quoteUrl ?? obj.quoteUri ?? obj._misskey_quote;
     const quoteUrl = typeof rawQuote === 'string' && rawQuote.startsWith('https://') ? rawQuote : null;
     const ing = await deps.store.ingestRemotePost?.({
@@ -641,6 +735,9 @@ async function criar(deps: InboxDeps, a: InboxActivity, ator: RemoteActorRecord,
       url,
       createdAtMs: publishedMs,
       media,
+      sensitive,
+      contentWarning,
+      language,
       quoteUrl,
       ...(Object.keys(customEmojis).length > 0 ? { customEmojis } : {}),
     });
@@ -676,6 +773,10 @@ async function criar(deps: InboxDeps, a: InboxActivity, ator: RemoteActorRecord,
     ? Date.parse(obj.published)
     : deps.now();
 
+  const replyMedia = extractAttachments(obj);
+  const replySensitive = extractSensitiveFlag(obj);
+  const replyContentWarning = extractContentWarning(obj);
+
   const res = await store.recordRemoteComment?.({
     postId: targetPostId,
     apObjectId: a.objectId,
@@ -683,6 +784,9 @@ async function criar(deps: InboxDeps, a: InboxActivity, ator: RemoteActorRecord,
     text: texto,
     createdAtMs: publishedMs,
     parentCommentId: targetParentCommentId,
+    media: replyMedia,
+    sensitive: replySensitive,
+    contentWarning: replyContentWarning,
   });
   if (res === 'added') {
     await store.bump('interacoes.respostas');
@@ -720,7 +824,11 @@ async function atualizar(deps: InboxDeps, a: InboxActivity, ator: RemoteActorRec
   if (!obj || !a.objectId) return resp(202, 'ignorada-sem-conteudo');
   const texto = plainText(obj.content, 5000);
   if (!texto) return resp(202, 'ignorada-sem-conteudo');
-  const onde = await deps.store.updateRemoteContent?.(a.objectId, ator.actorId, texto);
+  // Numa edição o aviso pode ter sido ACRESCENTADO ou RETIRADO: `null` apaga o que havia, e marcar sensível segue a mesma regra
+  // da ingestão (aviso escrito já basta, com ou sem mídia).
+  const avisoAtualizado = extractContentWarning(obj);
+  const sensitiveUpdate = typeof obj.sensitive === 'boolean' || avisoAtualizado !== null ? extractSensitiveFlag(obj) : undefined;
+  const onde = await deps.store.updateRemoteContent?.(a.objectId, ator.actorId, texto, sensitiveUpdate, avisoAtualizado);
   if (!onde || onde === 'unknown') return resp(202, 'ignorada-sem-conteudo-local');
   return resp(202, onde === 'comment' ? 'aceita-edicao-comentario' : 'aceita-edicao-post');
 }

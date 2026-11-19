@@ -22,6 +22,9 @@ export default function robots(): MetadataRoute.Robots {
     '/drafts',
     '/bookmarks',
     '/files',
+    '/breaknews',
+    '/keys',
+    '/share',
     '/admin',
   ];
   const disallowPaths = [

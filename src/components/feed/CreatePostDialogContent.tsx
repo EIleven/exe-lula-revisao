@@ -80,9 +80,10 @@ interface CreatePostDialogContentProps {
   onPostCreated?: (newPost: Post) => void;
   dialogClose?: () => void;
   initialData?: Partial<Draft>;
+  initialFiles?: File[] | null;
 }
 
-export default function CreatePostDialogContent({ onPostCreated, dialogClose, initialData }: CreatePostDialogContentProps) {
+export default function CreatePostDialogContent({ onPostCreated, dialogClose, initialData, initialFiles }: CreatePostDialogContentProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [postAsOfficial, setPostAsOfficial] = useState(false);
   const [draftId, setDraftId] = useState<string | undefined>(initialData?.id);
@@ -286,6 +287,7 @@ export default function CreatePostDialogContent({ onPostCreated, dialogClose, in
           placeholder={t('placeholder')}
           initialText={initialData?.text || ''}
           initialMedia={initialData?.media}
+          initialFiles={initialFiles}
           initialReplyPermission={initialData?.replyPermission as ReplyPermission | undefined}
           initialAllowReposts={initialData?.allowReposts}
           initialQuotedPost={initialData?.quotedPostObject}

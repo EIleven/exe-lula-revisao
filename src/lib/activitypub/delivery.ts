@@ -165,11 +165,18 @@ export type Target = { inbox: string; domain: string; followers: number };
 /**
  * Agrupa seguidores por destino: um POST para o inbox COMPARTILHADO serve todos os seguidores daquele servidor.
  * Mil seguidores em `mastodon.social` viram uma entrega, não mil.
+ *
+ * **`allowSharedInbox: false` para post SÓ DE SEGUIDORES.** Nesse alcance o destinatário é a coleção de seguidores, que o
+ * servidor remoto não consegue abrir (a nossa responde só a contagem). Entregue no inbox compartilhado, o outro servidor
+ * não tem como saber quem de lá pode ver, e o Misskey e versões do Pleroma simplesmente descartam. O Mastodon também só
+ * usa o inbox compartilhado em público/não listado. Então aqui a entrega vai ao inbox PESSOAL de cada seguidor: é mais
+ * uma requisição por pessoa, e é o preço de a mensagem chegar a quem tem direito a ela — e só a essa pessoa.
  */
-export function groupTargets(seguidores: readonly FollowerTarget[]): Target[] {
+export function groupTargets(seguidores: readonly FollowerTarget[], opcoes: { allowSharedInbox?: boolean } = {}): Target[] {
+  const compartilhar = opcoes.allowSharedInbox !== false;
   const mapa = new Map<string, Target>();
   for (const s of seguidores) {
-    const destino = s.sharedInbox || s.inbox;
+    const destino = (compartilhar ? s.sharedInbox : null) || s.inbox;
     const atual = mapa.get(destino);
     if (atual) atual.followers++;
     else mapa.set(destino, { inbox: destino, domain: s.domain, followers: 1 });

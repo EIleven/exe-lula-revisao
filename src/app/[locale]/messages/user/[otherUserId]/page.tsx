@@ -6,21 +6,31 @@ import { useParams, useRouter } from 'next/navigation';
 import { navigateBack } from '@/lib/backNavigation';
 import Link from 'next/link';
 import { getCurrentUserId } from '@/lib/services/authService';
-import { getOrCreateConversation, sendDirectMessage, declineOrLeaveConversation, conversationsCollection, markConversationAsRead, deleteDirectMessage } from '@/lib/services/conversationService';
+import { getOrCreateConversation, sendDirectMessage, declineOrLeaveConversation, conversationsCollection, markConversationAsRead, confirmarLeituraDaConversa, deleteDirectMessage } from '@/lib/services/conversationService';
 import { getUser as serverGetUser } from '@/lib/services/userService';
-import { collection, query, orderBy, onSnapshot, Timestamp, where } from 'firebase/firestore'; 
+import { collection, doc as docRef, query, orderBy, onSnapshot, Timestamp, where } from 'firebase/firestore'; 
 import type { Conversation, DirectMessage, User } from '@/lib/types';
 import MessageBubble from '@/components/messages/MessageBubble';
+import { useHiperChatPreferences } from '@/hooks/useHiperChatPreferences';
+import {
+  deveEnviarRecibo,
+  foiLida,
+  instanteDe,
+  lidaAteDe,
+  lerMarcaLocal,
+  precisaConfirmar,
+} from '@/lib/messages/recibos';
 import MessageInputArea from '@/components/messages/MessageInputArea';
 import P2pNoticeBanner from '@/components/messages/P2pNoticeBanner';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { ArrowLeft, AlertCircle, MessageSquareOff, LogIn, MoreVertical, LogOut, Loader2, Lock, Wifi, WifiOff, RefreshCw } from 'lucide-react';
+import { ArrowLeft, AlertCircle, Clock, MessageSquareOff, LogIn, MoreVertical, LogOut, Loader2, Lock, Wifi, WifiOff, RefreshCw } from 'lucide-react';
 import { encryptDirectMessage, decryptDirectMessage, getE2eeStatus, type IdentityStatus } from '@/lib/crypto/e2ee';
 import {
   createP2pSession,
   deleteLocalP2pMessage,
+  ENCRYPTED_PLACEHOLDER,
   loadHydratedP2pMessages,
   loadP2pHistoryFromOwnDevices,
   watchOwnDevicesP2pHistory,
@@ -83,6 +93,8 @@ function ConversationPageContent() {
   const { currentUser, refreshCurrentUser } = useCurrentUser();
   const currentUserId = currentUser?.id;
   const locale = useLocale();
+  const otherUserIdParam = typeof params?.otherUserId === 'string' ? params.otherUserId : '';
+  const isSelfChat = Boolean(currentUserId && otherUserIdParam && otherUserIdParam === currentUserId);
 
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [otherUser, setOtherUser] = useState<User | null>(null);
@@ -97,17 +109,48 @@ function ConversationPageContent() {
   const [isLeaving, setIsLeaving] = useState(false);
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const [replyingTo, setReplyingTo] = useState<DirectMessage | null>(null);
+  // Ate quando o outro lado leu. Duas fontes da MESMA marca: o documento da conversa (normal) e o tunel (Zero DB,
+  // onde nao existe documento). `null` = sem marca -- ou voce desligou a confirmacao: quem nao envia, nao ve.
+  const [lidaAteServidor, setLidaAteServidor] = useState<number | null>(null);
+  const [lidaAteP2p, setLidaAteP2p] = useState<number | null>(null);
+  const [telaVisivel, setTelaVisivel] = useState(true);
+  const confirmadoAteRef = useRef<number | null>(null);
+  const ultimaConfirmacaoRef = useRef<number | null>(null);
+
+  // A escolha e deste APARELHO (localStorage por conta), e vale nos dois apps: HiperVerso e HiperChat.
+  const { preferencias: prefsDoChat } = useHiperChatPreferences(currentUserId);
+  const reciboLigado = prefsDoChat.confirmacaoDeLeitura;
+  const lidaAtePeer = useMemo(() => {
+    if (!reciboLigado) return null;
+    if (lidaAteServidor === null) return lidaAteP2p;
+    if (lidaAteP2p === null) return lidaAteServidor;
+    return Math.max(lidaAteServidor, lidaAteP2p);
+  }, [reciboLigado, lidaAteServidor, lidaAteP2p]);
 
   const p2pSessionRef = useRef<P2pSessionController | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const shouldStickToBottom = useRef(true);
 
   const mergedMessages = useMemo(() => {
-    if (p2pMessages.length === 0) return messages;
-    return [...messages, ...p2pMessages].sort(
-      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
-    );
-  }, [messages, p2pMessages]);
+    const lista =
+      p2pMessages.length === 0
+        ? messages
+        : [...messages, ...p2pMessages].sort(
+            (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+          );
+
+    // A marca d'agua vira o `readAt` de cada mensagem SUA que ela cobre. Uma comparacao por balao, sem ouvinte por
+    // mensagem. O carimbo e o mesmo para todas as cobertas, entao a identidade dos objetos nao muda a cada render.
+    if (lidaAtePeer === null || !currentUserId) {
+      return lista.some((m) => m.readAt) ? lista.map((m) => (m.readAt ? { ...m, readAt: null } : m)) : lista;
+    }
+    const carimbo = new Date(lidaAtePeer).toISOString();
+    return lista.map((m) => {
+      const lida = m.senderId === currentUserId && foiLida({ criadaEm: m.createdAt, lidaAte: lidaAtePeer });
+      const novo = lida ? carimbo : null;
+      return (m.readAt ?? null) === novo ? m : { ...m, readAt: novo };
+    });
+  }, [messages, p2pMessages, lidaAtePeer, currentUserId]);
 
   const scrollToBottom = useCallback((behavior: 'smooth' | 'auto' = 'auto') => {
     const scrollEl = scrollContainerRef.current;
@@ -197,9 +240,20 @@ function ConversationPageContent() {
             }
             setConversation(conv);
             
-            // Mark conversation as read
+            // Zera o contador de nao lidas e, se a pessoa deixou a confirmacao ligada, avisa o outro lado na MESMA
+            // escrita (um campo a mais, nenhuma ida extra ao banco).
             if (conv.unreadCounts?.[currentUserId] > 0) {
-              await markConversationAsRead(conv.id, currentUserId);
+              const confirmar = deveEnviarRecibo({
+                ligado: reciboLigado,
+                conversaAberta: true,
+                ehGrupo: Boolean(conv.isGroup),
+                ehComigo: Boolean(conv.isSelf) || fetchedOtherUser.id === currentUserId,
+              });
+              if (confirmar) {
+                confirmadoAteRef.current = Date.now();
+                ultimaConfirmacaoRef.current = Date.now();
+              }
+              await markConversationAsRead(conv.id, currentUserId, { confirmarLeitura: confirmar });
               await refreshCurrentUser(); // Refresh context to update global unread count
             }
 
@@ -227,18 +281,31 @@ function ConversationPageContent() {
                     if(sender) {
                         let resolvedText = data.text || '';
                         if (data.e2ee) {
-                            const decrypted = await decryptDirectMessage(
-                                data.e2ee,
-                                currentUserId,
-                                data.senderId === currentUserId,
-                                isSelfChat ? undefined : fetchedOtherUser.e2eePublicKey,
-                            );
-                            resolvedText = decrypted.ok
-                                ? decrypted.text
-                                : decrypted.reason === 'missing-key' || decrypted.reason === 'key-not-in-keyring'
-                                    ? '🔒 Mensagem criptografada. A chave para abri-la não está neste aparelho: restaure seu backup em Configurações > P2P e E2EE.'
-                                    : '🔒 Mensagem criptografada que não pôde ser aberta (conteúdo inválido ou alterado).';
+                            try {
+                                const decrypted = await decryptDirectMessage(
+                                    data.e2ee,
+                                    currentUserId,
+                                    data.senderId === currentUserId,
+                                    isSelfChat ? undefined : fetchedOtherUser.e2eePublicKey,
+                                );
+                                resolvedText = decrypted.ok
+                                    ? decrypted.text
+                                    : decrypted.reason === 'missing-key' || decrypted.reason === 'key-not-in-keyring'
+                                        ? '🔒 Mensagem criptografada. A chave para abri-la não está neste aparelho: restaure seu backup em Configurações > P2P e E2EE.'
+                                        : '🔒 Mensagem criptografada que não pôde ser aberta (conteúdo inválido ou alterado).';
+                            } catch {
+                                resolvedText = '🔒 Mensagem criptografada que não pôde ser aberta neste aparelho.';
+                            }
                         }
+                        const toIsoSafe = (val: unknown, fallbackNow: boolean): string | null => {
+                            if (!val) return fallbackNow ? new Date().toISOString() : null;
+                            if (typeof (val as { toDate?: () => Date }).toDate === 'function') {
+                                return (val as { toDate: () => Date }).toDate().toISOString();
+                            }
+                            if (val instanceof Date) return val.toISOString();
+                            const parsed = new Date(val as string | number);
+                            return Number.isNaN(parsed.getTime()) ? (fallbackNow ? new Date().toISOString() : null) : parsed.toISOString();
+                        };
                         fetchedMessages.push({
                             ...data,
                             text: resolvedText,
@@ -247,8 +314,8 @@ function ConversationPageContent() {
                             // "Cannot read properties of undefined (reading 'indexOf')" ao montar a referência do Firestore.
                             conversationId: conv.id,
                             sender: sender,
-                            createdAt: (data.createdAt ? data.createdAt.toDate() : new Date()).toISOString(),
-                            readAt: data.readAt ? data.readAt.toDate().toISOString() : null,
+                            createdAt: toIsoSafe(data.createdAt, true) || new Date().toISOString(),
+                            readAt: toIsoSafe(data.readAt, false),
                         });
                     }
                 }
@@ -346,6 +413,7 @@ function ConversationPageContent() {
       onMessageUpdated: (updated) => {
         setP2pMessages((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
       },
+      onPeerRead: (ate) => setLidaAteP2p((anterior) => (anterior === null || ate > anterior ? ate : anterior)),
     });
     p2pSessionRef.current = controller;
 
@@ -380,7 +448,144 @@ function ConversationPageContent() {
     setReplyingTo(null);
   };
 
-  const handleSendMessage = async (data: { text?: string; fileUrl?: string; fileType?: DirectMessage['fileType'] }) => {
+  // ───── A fila do Zero DB ─────
+  // Com o Zero DB ligado, a mensagem não é gravada em lugar nenhum: fica guardada NESTE aparelho esperando o contato
+  // abrir o app. Se ele nunca abre, nada chega — e, até aqui, o único sinal disso era um selo repetido em cada balão.
+  // Agora a conversa diz quantas estão esperando, e oferece a saída: mandar pelo servidor, com E2EE.
+  // Um ouvinte de UM documento (a tela ja escutava so as mensagens). Desligou a confirmacao? Nem ouvinte existe:
+  // quem nao envia, nao ve -- e a economia e real, nao so visual.
+  useEffect(() => {
+    const convId = conversation?.id;
+    const peerId = otherUser?.id;
+    if (!convId || !peerId || !currentUserId || !reciboLigado || isSelfChat) {
+      setLidaAteServidor(null);
+      return;
+    }
+    const unsub = onSnapshot(
+      docRef(conversationsCollection, convId),
+      (snap) => setLidaAteServidor(lidaAteDe(snap.data()?.lastReadAt, peerId)),
+      () => setLidaAteServidor(null),
+    );
+    return () => unsub();
+  }, [conversation?.id, otherUser?.id, currentUserId, reciboLigado, isSelfChat]);
+
+  // O que o contato ja confirmou pelo tunel ficou guardado aqui: sem isto, reabrir o app apagaria as marcas do Zero DB.
+  useEffect(() => {
+    const convId = conversation?.id;
+    if (!convId || !currentUserId || !reciboLigado || typeof window === 'undefined') {
+      setLidaAteP2p(null);
+      return;
+    }
+    setLidaAteP2p(lerMarcaLocal(window.localStorage, currentUserId, convId));
+  }, [conversation?.id, currentUserId, reciboLigado]);
+
+  // Voltar para a frente conta como ler: a conversa ja estava montada, so estava escondida.
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const aoMudar = () => setTelaVisivel(document.visibilityState === 'visible');
+    aoMudar();
+    document.addEventListener('visibilitychange', aoMudar);
+    return () => document.removeEventListener('visibilitychange', aoMudar);
+  }, []);
+
+  // Mensagem nova com a conversa ABERTA na frente: a marca precisa avancar. Com teto de uma escrita por rajada.
+  useEffect(() => {
+    const convId = conversation?.id;
+    if (!convId || !currentUserId || !telaVisivel) return;
+    if (!deveEnviarRecibo({
+      ligado: reciboLigado,
+      conversaAberta: true,
+      ehGrupo: Boolean(conversation?.isGroup),
+      ehComigo: isSelfChat,
+    })) return;
+
+    let maior: number | null = null;
+    for (const lista of [messages, p2pMessages]) {
+      for (const m of lista) {
+        if (m.senderId === currentUserId) continue;
+        const t = instanteDe(m.createdAt);
+        if (t !== null && (maior === null || t > maior)) maior = t;
+      }
+    }
+    if (maior === null) return; // nada recebido: nao ha o que confirmar
+
+    const agora = Date.now();
+    if (!precisaConfirmar({
+      maiorRecebidaEm: maior,
+      confirmadoAte: confirmadoAteRef.current,
+      ultimaEscritaEm: ultimaConfirmacaoRef.current,
+      agora,
+    })) return;
+
+    confirmadoAteRef.current = maior;
+    ultimaConfirmacaoRef.current = agora;
+    // Pelo tunel (unico caminho no Zero DB) e pelo servidor. No Zero DB estrito nada vai ao banco.
+    p2pSessionRef.current?.confirmarLeitura(maior);
+    if (!zeroDbOnly) void confirmarLeituraDaConversa(convId, currentUserId);
+  }, [messages, p2pMessages, conversation?.id, conversation?.isGroup, currentUserId, reciboLigado, isSelfChat, telaVisivel, zeroDbOnly]);
+
+  const filaPendente = useMemo(
+    () => p2pMessages.filter((m) => m.senderId === currentUserId && m.p2pStatus === 'queued'),
+    [p2pMessages, currentUserId],
+  );
+  const [enviandoFila, setEnviandoFila] = useState(false);
+
+  const enviarFilaPeloServidor = async () => {
+    if (!conversation || !currentUserId || enviandoFila || filaPendente.length === 0) return;
+    const fila = [...filaPendente].sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
+    setEnviandoFila(true);
+    let enviadas = 0;
+    let puladas = 0;
+    try {
+      for (const pendente of fila) {
+        const texto = pendente.text?.trim();
+        // Sem texto legível (a chave não está neste aparelho) não há o que reenviar: mandar o aviso seria mandar lixo.
+        if (!texto || texto === ENCRYPTED_PLACEHOLDER) {
+          puladas += 1;
+          continue;
+        }
+
+        let cifrado = null;
+        if (otherUser && !otherUser.id.startsWith('ap_') && otherUser.e2eePublicKey) {
+          const identidade = await getE2eeStatus(currentUserId);
+          if (identidade.status === 'ready') {
+            cifrado = await encryptDirectMessage(texto, currentUserId, otherUser.e2eePublicKey);
+            if (!cifrado) throw new UserFacingSendError('Não foi possível proteger uma das mensagens, então ela não foi enviada.');
+          }
+        }
+
+        const nova = await sendDirectMessage(conversation.id, currentUserId, {
+          text: texto,
+          ...(cifrado ? { e2ee: cifrado } : {}),
+        });
+        if (!nova) throw new Error('O servidor não confirmou o envio.');
+
+        // Só apaga a cópia local DEPOIS da confirmação do servidor. Se cair no meio, o que sobrou continua na fila.
+        deleteLocalP2pMessage(currentUserId, conversation.id, pendente.id);
+        setP2pMessages((prev) => prev.filter((m) => m.id !== pendente.id));
+        enviadas += 1;
+      }
+
+      setZeroDbOnly(false);
+      toast({
+        title: enviadas === 1 ? '1 mensagem enviada' : `${enviadas} mensagens enviadas`,
+        description: puladas > 0
+          ? `O modo Zero DB foi desligado. ${puladas} ficaram na fila por falta da chave neste aparelho.`
+          : 'Foram pelo servidor, protegidas, e o modo Zero DB foi desligado.',
+      });
+    } catch (e) {
+      const motivo = e instanceof Error ? e.message : 'Erro inesperado.';
+      toast({
+        title: enviadas > 0 ? `${enviadas} enviadas, o resto ficou na fila` : 'Não deu para enviar',
+        description: motivo,
+        variant: 'destructive',
+      });
+    } finally {
+      setEnviandoFila(false);
+    }
+  };
+
+  const handleSendMessage = async (data: { text?: string; fileUrl?: string; fileType?: DirectMessage['fileType']; mediaE2ee?: import('@/lib/types').E2eeMessagePayload | null }) => {
     if (!conversation || !currentUserId) {
        toast({ title: "Login obrigatório", description: "Faça login para enviar mensagens.", variant: "destructive" });
        router.push(`/${locale}/login`);
@@ -407,12 +612,8 @@ function ConversationPageContent() {
       if (sentP2p) {
         setP2pMessages((prev) => (prev.some((m) => m.id === sentP2p.id) ? prev : [...prev, sentP2p]));
         setReplyingTo(null);
-        if (sentP2p.p2pStatus === 'queued') {
-          toast({
-            title: 'Mensagem P2P na fila',
-            description: `Será entregue direto para @${otherUser?.username || 'contato'} assim que o dispositivo conectar.`,
-          });
-        }
+        // Sem aviso em bolha por mensagem: quem manda sete seguidas levava sete avisos iguais. O estado da fila
+        // agora mora na barra acima do compositor, que diz quantas estão esperando e oferece a saída.
         return;
       }
     }
@@ -472,18 +673,73 @@ function ConversationPageContent() {
     }
   };
   
-  const handleFileUpload = async (file: File) => {
+  const handleFileUpload = async (file: File, aoProgredir?: (p: number) => void) => {
     if (!currentUserId) {
       toast({ title: "Login obrigatório", description: "Você deve estar logado para enviar arquivos.", variant: "destructive" });
       throw new Error("Usuário não logado");
     }
     const { uploadFileToStorage, directMessageMediaPathFactory, isLikelyVideoFile } = await import('@/lib/services/mediaUploadService');
-    const result = await uploadFileToStorage(currentUserId, file, directMessageMediaPathFactory);
     const fileType: DirectMessage['fileType'] = file.type.startsWith('image/') ? 'image'
                    : isLikelyVideoFile(file) ? 'video'
                    : file.type.startsWith('audio/') ? 'audio'
                    : 'file';
-    return { url: result.downloadURL, type: fileType };
+
+    let fileToUpload = file;
+    let mediaE2ee = null;
+    if (otherUser && !otherUser.id.startsWith('ap_') && (isSelfChat || otherUser.e2eePublicKey)) {
+      const { encryptMediaFileForDm } = await import('@/lib/crypto/e2eeMedia');
+      const recipientKey = isSelfChat ? (e2eeStatus?.status === 'ready' ? e2eeStatus.publicKeyJson : null) : otherUser.e2eePublicKey;
+
+      // Acima do teto da rota comum, o arquivo vai CIFRADO EM PEDAÇOS por um caminho próprio (até 200 MB). Cifrar
+      // tudo de uma vez poria o arquivo duas vezes na memória, e o bloco cifrado — que é opaco — perderia o caminho
+      // de vídeo e morreria nos 5 MB da rota comum. Era exatamente por isso que vídeo aqui nunca saía.
+      const { avaliarAnexo } = await import('@/lib/messages/anexoPolitica');
+      const veredito = avaliarAnexo(file, { cifrada: true });
+      if (veredito.ok && veredito.caminho === 'protegido-grande') {
+        if (!recipientKey) {
+          throw new UserFacingSendError(
+            'Este aparelho não tem a chave desta conversa. Restaure o backup em Configurações para enviar arquivos aqui.',
+          );
+        }
+        const { enviarMidiaProtegida, ErroDeMidiaProtegida } = await import('@/lib/services/encryptedMediaService');
+        try {
+          const envio = await enviarMidiaProtegida({
+            arquivo: file,
+            remetenteId: currentUserId,
+            chavePublicaDoDestinatario: recipientKey,
+            aoProgredir: aoProgredir,
+          });
+          return {
+            url: envio.fileUrl,
+            type: fileType,
+            mediaE2ee: envio.mediaE2ee,
+            ...(envio.posterUrl ? { posterUrl: envio.posterUrl } : {}),
+          };
+        } catch (e) {
+          // O motivo vai para a tela como está: "passa de 200 MB", "a conexão caiu", e não um código.
+          throw new UserFacingSendError(
+            e instanceof ErroDeMidiaProtegida ? e.message : 'Não deu para enviar este arquivo protegido. Tente de novo.',
+          );
+        }
+      }
+
+      const encrypted = await encryptMediaFileForDm(file, currentUserId, recipientKey);
+      // NUNCA cair para texto claro em silêncio. Esta conversa é protegida; se a proteção do arquivo falhar e a
+      // gente subisse assim mesmo, a foto ficaria legível no servidor enquanto a tela segue mostrando o cadeado.
+      // O texto já se recusa a sair sem proteção — o anexo passa a se recusar também, dizendo o motivo.
+      if (!encrypted) {
+        throw new UserFacingSendError(
+          recipientKey
+            ? 'Não deu para proteger este arquivo neste aparelho, e aqui nada sai sem proteção. Tente de novo.'
+            : 'Este aparelho não tem a chave desta conversa. Restaure o backup em Configurações para enviar arquivos aqui.',
+        );
+      }
+      fileToUpload = encrypted.encryptedFile;
+      mediaE2ee = encrypted.mediaE2ee;
+    }
+
+    const result = await uploadFileToStorage(currentUserId, fileToUpload, directMessageMediaPathFactory, aoProgredir);
+    return { url: result.downloadURL, type: fileType, ...(mediaE2ee ? { mediaE2ee } : {}) };
   };
 
   const handleLeaveConversation = async () => {
@@ -553,6 +809,8 @@ function ConversationPageContent() {
     );
   }
 
+  const conversaCifrada = Boolean(otherUser && !otherUser.id.startsWith('ap_') && (otherUser.e2eePublicKey || otherUser.id === currentUserId));
+
   return (
     <>
       <AlertDialog open={showLeaveConfirm} onOpenChange={setShowLeaveConfirm}>
@@ -574,6 +832,7 @@ function ConversationPageContent() {
       </AlertDialog>
 
       <div className="flex h-full w-full min-w-0 flex-col overflow-hidden bg-background">
+        {/* Conta remota (ap_) não tem E2EE: nada de prometer sigilo onde ele não existe. */}
         <header className="flex min-w-0 items-center p-3 sm:p-4 border-b border-border sticky top-0 bg-background z-10">
           <Button variant="ghost" size="icon" onClick={() => router.push(`/${locale}/messages`)} className="mr-2 min-[800px]:hidden">
             <ArrowLeft className="h-5 w-5" />
@@ -581,8 +840,8 @@ function ConversationPageContent() {
           </Button>
           <Link href={`/${locale}/profile/${otherUser.id}`} className="group flex min-w-0 flex-1 items-center space-x-3">
               <Avatar className="h-9 w-9 sm:h-10 sm:w-10">
-                <AvatarImage src={otherUser.avatarUrl} alt={otherUser.name} data-ai-hint={otherUser["data-ai-hint"] || "person avatar"}/>
-                <AvatarFallback>{otherUser.name.substring(0,1)}</AvatarFallback>
+                <AvatarImage src={otherUser.avatarUrl} alt={otherUser.name || otherUser.username || 'Usuário'} data-ai-hint={otherUser["data-ai-hint"] || "person avatar"}/>
+                <AvatarFallback>{(otherUser.name || otherUser.username || 'U').substring(0, 1).toUpperCase()}</AvatarFallback>
               </Avatar>
               <div className="min-w-0">
                   <div className="flex items-center gap-1.5">
@@ -603,7 +862,7 @@ function ConversationPageContent() {
                         className="inline-flex items-center gap-0.5 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-500 shrink-0"
                       >
                         <Loader2 className="h-2.5 w-2.5 animate-spin" />
-                        P2P...
+                        Conectando
                       </span>
                     ) : !otherUser.id.startsWith('ap_') && (otherUser.e2eePublicKey || otherUser.id === currentUserId) ? (
                       <span
@@ -632,17 +891,21 @@ function ConversationPageContent() {
           {!otherUser.id.startsWith('ap_') && otherUser.id !== currentUserId && (
             <Button
               type="button"
-              variant={zeroDbOnly ? 'default' : 'outline'}
+              variant="outline"
               size="sm"
               onClick={() => setZeroDbOnly((v) => !v)}
+              aria-pressed={zeroDbOnly}
               title={zeroDbOnly ? 'Somente P2P (Zero DB): nunca grava mensagens no banco' : 'Ativar modo estrito Zero DB (somente P2P)'}
               className={cn(
                 'mr-1 h-7 rounded-full px-2.5 text-[11px] font-medium shrink-0',
-                zeroDbOnly && 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                zeroDbOnly
+                  ? 'border-emerald-500/60 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 dark:text-emerald-400'
+                  : 'text-muted-foreground'
               )}
             >
-              {zeroDbOnly ? <Wifi className="mr-1 h-3 w-3" /> : <WifiOff className="mr-1 h-3 w-3" />}
+              {zeroDbOnly ? <Wifi className="sm:mr-1 h-3 w-3" /> : <WifiOff className="sm:mr-1 h-3 w-3" />}
               <span className="hidden sm:inline">Zero DB</span>
+              <span className="sr-only">{zeroDbOnly ? 'Zero DB ligado' : 'Zero DB desligado'}</span>
             </Button>
           )}
           <DropdownMenu>
@@ -693,21 +956,60 @@ function ConversationPageContent() {
                 key={msg.id} 
                 message={msg} 
                 isCurrentUserSender={currentUserId ? msg.senderId === currentUserId : false}
+                peerPublicKey={otherUser.e2eePublicKey}
                 onDeleteMessage={handleDeleteMessage}
                 onReply={handleReply}
               />
             ))}
              {mergedMessages.length === 0 && !isLoading && (
-                <p className="text-center text-muted-foreground py-10">
-                    Nenhuma mensagem ainda. Inicie a conversa!
-                </p>
+                <div className="flex flex-col items-center gap-2 px-6 py-16 text-center">
+                    <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                      {conversaCifrada ? <Lock className="h-5 w-5" /> : <Wifi className="h-5 w-5" />}
+                    </span>
+                    <p className="text-sm font-medium text-foreground">Conversa nova</p>
+                    <p className="max-w-[17rem] text-xs text-muted-foreground">
+                      {conversaCifrada
+                        ? 'Escreva a primeira mensagem. Só vocês dois leem.'
+                        : 'Escreva a primeira mensagem. Ela sai daqui pelo Fediverso.'}
+                    </p>
+                </div>
             )}
           </div>
         </div>
 
+        {filaPendente.length > 0 && (
+          <div className="shrink-0 border-t border-amber-500/30 bg-amber-500/10 px-3 py-2.5">
+            <div className="flex items-start gap-2.5">
+              <Clock className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-foreground">
+                  {filaPendente.length === 1
+                    ? '1 mensagem ainda não chegou'
+                    : `${filaPendente.length} mensagens ainda não chegaram`}
+                </p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  No modo Zero DB nada fica no servidor: elas esperam @{otherUser.username} abrir o app. Pelo servidor
+                  chegam agora, protegidas.
+                </p>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={enviarFilaPeloServidor}
+                  disabled={enviandoFila}
+                  className="mt-2 h-8 rounded-full text-xs"
+                >
+                  {enviandoFila && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+                  Mandar pelo servidor
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
         <MessageInputArea 
             onSendMessage={handleSendMessage} 
             onFileUpload={handleFileUpload}
+            conversaCifrada={conversaCifrada}
             disabled={!currentUserId}
             replyingTo={replyingTo}
             onCancelReply={handleCancelReply}

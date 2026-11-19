@@ -13,8 +13,9 @@ import type { Post } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import TopNewsItem from '@/components/trending/TopNewsItem';
 import { useLocale, useTranslations } from 'next-intl';
-import AdClientComponent from '../shared/AdClientComponent';
-import { linkifyHashtagsInHtml } from '@/lib/utils/textUtils'; // Importar a função
+import { linkifyHashtagsInHtml, linkifyMentionsInHtml } from '@/lib/utils/textUtils'; // Importar a função
+import ArticleHoverOverlay from './ArticleHoverOverlay';
+import { lookupUsersByUsername } from '@/lib/services/mentionLookup';
 import { sanitizeHtml } from '@/lib/security/sanitizeHtml';
 import { useCurrentUserSelector } from '@/contexts/CurrentUserContext';
 import { Button } from '@/components/ui/button';
@@ -22,6 +23,7 @@ import PostPoll from './PostPoll';
 import YoutubeEmbed from '@/components/shared/YoutubeEmbed';
 import PlatformVideo from '@/components/shared/PlatformVideo';
 import SensitiveMediaCover from '@/components/shared/SensitiveMediaCover';
+import ContentWarningGate from '@/components/shared/ContentWarningGate';
 import TranslateActionLine from '@/components/shared/TranslateActionLine';
 import { useTextTranslation } from '@/hooks/useTextTranslation';
 import { useRouter } from 'next/navigation';
@@ -31,7 +33,7 @@ import { buildMixedMediaQueue, findStartIndex, videoQueueMemory, type QueueEntry
 import { PROFILE_MEDIA_CONTEXT, useVideoQueueSource } from '@/contexts/VideoQueueContext';
 
 // O teatro de vídeo só é baixado quando alguém abre um (não pesa em nenhum feed).
-const ExeLulaVideoTheater = dynamic(() => import('@/components/shared/theater/ExeLulaVideoTheater'), { ssr: false });
+const HiperVersoVideoTheater = dynamic(() => import('@/components/shared/theater/HiperVersoVideoTheater'), { ssr: false });
 import LinkPreviewCard, { extractFirstUrlFromText } from '@/components/shared/LinkPreviewCard';
 import { extractYoutubeVideoInfo } from '@/lib/utils/youtubeLinks';
 
@@ -115,6 +117,7 @@ function MediaAltBadge({
     );
   }
 
+  /* Funcionalidade de pedir Alt Text entre usuários desativada temporariamente:
   if (canRequestAltText && onRequestAltText) {
     return (
       <button
@@ -148,6 +151,7 @@ function MediaAltBadge({
       </button>
     );
   }
+  */
 
   return null;
 }
@@ -173,7 +177,8 @@ export default function PostCardContent({
   const viewerId = currentUserId !== undefined ? currentUserId : viewerIdFromCtx;
   const isAuthor = Boolean(viewerId && post.userId === viewerId);
   const isLocalPost = !post.id.startsWith('ap_') && Boolean(post.userId) && !post.userId.startsWith('ap_');
-  const canRequestAltText = isLocalPost && !isAuthor;
+  // const canRequestAltText = isLocalPost && !isAuthor;
+  const canRequestAltText = false;
   const articleBodyRef = useRef<HTMLDivElement>(null);
   const locale = useLocale();
   const router = useRouter();
@@ -316,6 +321,39 @@ export default function PostCardContent({
   }, [post?.category, post?.headline, rawPostText, displayPostText]);
 
   const translation = useTextTranslation(post && !post.isDeleted ? translatableArticleText : null);
+  const [articleMentionIds, setArticleMentionIds] = React.useState<Map<string, string>>(() => new Map());
+
+  React.useEffect(() => {
+    if (post?.category !== 'news' || !post.text) return;
+    const stripped = post.text.replace(/<[^>]+>/g, ' ');
+    const localMatches = stripped.match(/(?:^|[^&\w./])@([a-zA-Z0-9_]+)(?!@[a-zA-Z0-9.-]+)/g);
+    if (!localMatches || localMatches.length === 0) return;
+
+    const usernames = Array.from(
+      new Set(
+        localMatches
+          .map((m) => m.slice(m.indexOf('@') + 1).trim())
+          .filter(Boolean),
+      ),
+    );
+    if (usernames.length === 0) return;
+
+    let cancelled = false;
+    void lookupUsersByUsername(usernames)
+      .then((found) => {
+        if (cancelled) return;
+        const next = new Map<string, string>();
+        found.forEach((user, key) => {
+          if (user?.id) next.set(key.toLowerCase(), user.id);
+        });
+        if (next.size > 0) setArticleMentionIds(next);
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [post?.category, post?.text]);
 
   if (!post) return null;
 
@@ -341,13 +379,20 @@ export default function PostCardContent({
     if (!post.text) return null;
     // Primeiro higieniza o HTML do autor (sem isso um artigo podia rodar script no navegador de quem lê); depois
     // acrescenta os links das hashtags, que são nossos.
-    const processedHtml = linkifyHashtagsInHtml(sanitizeHtml(post.text), locale);
+    const processedHtml = linkifyMentionsInHtml(
+      linkifyHashtagsInHtml(sanitizeHtml(post.text), locale),
+      locale,
+      articleMentionIds,
+    );
     return (
+      <>
         <div 
           ref={articleBodyRef} 
           className="prose prose-sm dark:prose-invert max-w-none mb-3"
           dangerouslySetInnerHTML={{ __html: processedHtml }}
         />
+        <ArticleHoverOverlay containerRef={articleBodyRef} locale={locale} />
+      </>
     );
   };
 
@@ -357,6 +402,7 @@ export default function PostCardContent({
         <TopNewsItem newsItem={post} />
       ) : (
         <>
+          <ContentWarningGate warning={post.contentWarning} contentKey={post.id}>
           {post.category === 'news' && post.headline && !translation.isTranslated && (
             <h2 className={cn("text-xl font-semibold text-foreground mb-1", isSinglePostView && "text-2xl")}>
               {post.headline}
@@ -381,6 +427,7 @@ export default function PostCardContent({
               </p>
             )
           )}
+          </ContentWarningGate>
 
           <TranslateActionLine
             canTranslate={translation.canTranslate}
@@ -421,7 +468,7 @@ export default function PostCardContent({
 
           {post.media && post.media.length > 0 && (
             <>
-              <SensitiveMediaCover sensitive={post.sensitive === true} contentKey={post.id} className="mt-2">
+              <SensitiveMediaCover sensitive={post.sensitive === true} warning={post.contentWarning} contentKey={post.id} className="mt-2">
                 {(hideSensitive) => (
                   <div className={cn(
                       'grid gap-0.5',
@@ -523,7 +570,7 @@ export default function PostCardContent({
                 )}
               </SensitiveMediaCover>
               {theater && (
-                <ExeLulaVideoTheater entries={theater.entries} startIndex={theater.start} onClose={closeTheater} />
+                <HiperVersoVideoTheater entries={theater.entries} startIndex={theater.start} onClose={closeTheater} />
               )}
             </>
           )}

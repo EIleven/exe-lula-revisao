@@ -1,35 +1,57 @@
 // src/lib/services/searchService.ts
-import type { User, Post, Comment } from '@/lib/types';
+import type { User, Post } from '@/lib/types';
 import { searchUsers } from './userService';
 import { getTopHashtags } from './hashtagService';
-import { searchPosts, searchComments, getComparableTime } from './postReadService';
+import { getPostById } from './postReadService';
+import type { ResultadoDaBusca } from '@/app/api/search/route';
 
 export interface SearchResult {
   users: User[];
   hashtags: string[];
 }
 
-export interface SearchResultWithCounts {
-  top: (Post | Comment)[];
-  latest: (Post | Comment)[];
+/**
+ * O que a tela de busca recebe.
+ *
+ * Duas coisas mudaram em relacao a versao anterior, e as duas sao a correcao do mesmo bug:
+ *
+ * 1. Comentario NAO vem mais misturado com post. Ele tem tipo proprio e cartao proprio. Antes os dois iam juntos
+ *    para a lista do feed, que espera post.
+ * 2. As contagens sao o tamanho DAS LISTAS QUE A TELA VAI DESENHAR, calculadas depois de tudo o que pode remover
+ *    um item. Era ai que nascia a aba com numero e lista vazia: o numero vinha do servico, e a lista ainda passava
+ *    por filtros depois dele (idioma do feed, posts ocultos, item apagado no meio do caminho).
+ */
+export interface ResultadosDaBusca {
+  top: Post[];
+  latest: Post[];
+  articles: Post[];
+  comments: ResultadoDaBusca[];
   people: User[];
   feeds: { tag: string; count: number }[];
-  articles: Post[];
   counts: {
     top: number;
     latest: number;
+    articles: number;
+    comments: number;
     people: number;
     feeds: number;
-    articles: number;
   };
+  /** Termos ja normalizados, para a tela destacar. */
+  termos: string[];
 }
 
-/**
- * Performs a global search for users and hashtags for the search popover.
- * @param query The search query string.
- * @param activeUserId The ID of the currently logged-in user.
- * @returns A promise that resolves to a SearchResult object.
- */
+const VAZIO: ResultadosDaBusca = {
+  top: [],
+  latest: [],
+  articles: [],
+  comments: [],
+  people: [],
+  feeds: [],
+  counts: { top: 0, latest: 0, articles: 0, comments: 0, people: 0, feeds: 0 },
+  termos: [],
+};
+
+/** Busca do campo do topo (pessoas e hashtags), para o resultado aparecer enquanto se digita. */
 export const performGlobalSearch = async (
   query: string,
   activeUserId: string | null = null
@@ -41,84 +63,98 @@ export const performGlobalSearch = async (
   const lowerCaseQuery = query.toLowerCase();
 
   try {
-    // Search for users
     const userPromise = searchUsers(query, activeUserId);
-
-    // Search for hashtags
     const hashtagPromise = getTopHashtags(50).then(allHashtags =>
       allHashtags
         .filter(ht => ht.tag.toLowerCase().includes(lowerCaseQuery))
         .map(ht => ht.tag)
-        .slice(0, 5) // Limit to 5 matching hashtags
+        .slice(0, 5)
     );
 
     const [users, hashtags] = await Promise.all([userPromise, hashtagPromise]);
-
     return { users, hashtags };
   } catch (error) {
     console.error("Error in performGlobalSearch:", error);
-    return { users: [], hashtags: [] }; // Return empty on error
+    return { users: [], hashtags: [] };
   }
 };
 
+interface RespostaDaApi {
+  consulta?: { termos?: string[] };
+  resultados?: {
+    posts?: ResultadoDaBusca[];
+    artigos?: ResultadoDaBusca[];
+    comentarios?: ResultadoDaBusca[];
+  };
+}
+
 /**
- * Performs a comprehensive search across all categories and returns results and counts.
- * @param query The search query string.
- * @param activeUserId The ID of the currently logged-in user.
- * @returns A promise that resolves to a SearchResultWithCounts object.
+ * A busca completa da pagina /search.
+ *
+ * O ranking e a varredura acontecem no SERVIDOR (/api/search). Antes isso rodava no navegador: baixava 200 posts e
+ * 200 comentarios e fazia mais uma leitura por item -- cerca de 800 operacoes por busca, no aparelho de quem usa.
+ * Agora o servidor devolve a lista ja ordenada, e aqui so se busca o conteudo completo do que a tela vai desenhar.
  */
 export const getSearchResultsWithCounts = async (
   query: string,
-  activeUserId: string | null = null
-): Promise<Partial<SearchResultWithCounts>> => {
-  if (!query.trim()) return {};
+  activeUserId: string | null = null,
+  opcoes?: { mostrarSensivel?: boolean }
+): Promise<ResultadosDaBusca> => {
+  const consulta = (query || '').trim();
+  if (consulta.length < 2) return VAZIO;
+  // O padrao e ESCONDER o sensivel. Quem quiser ver escolhe ver, nao o contrario.
+  const sensivel = opcoes?.mostrarSensivel ? '&sensivel=mostrar' : '';
 
   try {
-    const [
-        searchedPosts, 
-        searchedComments, 
-        people, 
-        feeds
-    ] = await Promise.all([
-      searchPosts(query, activeUserId, 'latest'), // using 'latest' to get a base set of posts.
-      searchComments(query, activeUserId),
-      searchUsers(query, activeUserId),
-      getTopHashtags(100).then(allHashtags =>
-        allHashtags.filter(ht =>
-          ht.tag.toLowerCase().includes(query.toLowerCase().replace('#', ''))
-        )
-      ),
+    const [respostaApi, people, feeds] = await Promise.all([
+      fetch(`/api/search?q=${encodeURIComponent(consulta)}${sensivel}`)
+        .then((r) => (r.ok ? (r.json() as Promise<RespostaDaApi>) : null))
+        .catch(() => null),
+      // Pessoas continuam vindo por aqui porque o cartao de pessoa precisa do objeto completo (botao de seguir).
+      searchUsers(consulta, activeUserId).catch(() => [] as User[]),
+      getTopHashtags(100)
+        .then((todas) => todas.filter((ht) => ht.tag.toLowerCase().includes(consulta.toLowerCase().replace('#', ''))))
+        .catch(() => [] as { tag: string; count: number }[]),
     ]);
 
-    const allContent: (Post|Comment)[] = [...searchedPosts, ...searchedComments];
+    const ordenados = respostaApi?.resultados;
+    const comments = ordenados?.comentarios ?? [];
+    const idsDePost = [...(ordenados?.posts ?? []), ...(ordenados?.artigos ?? [])];
 
-    // De-duplicate content. A post and a comment could have same ID if something is wrong.
-    const uniqueContent = Array.from(new Map(allContent.map(item => [item.id, item])).values());
-    
-    // Sort for 'Top' tab (by likes)
-    const topContent = [...uniqueContent].sort((a, b) => (b.likes || 0) - (a.likes || 0));
-    // Sort for 'Latest' tab (by creation date)
-    const latestContent = [...uniqueContent].sort((a, b) => getComparableTime(b.createdAt) - getComparableTime(a.createdAt));
-    
-    // Filter for 'Articles' tab
-    const articles = searchedPosts.filter(p => p.category === 'news');
+    // Uma leitura por item que REALMENTE vai aparecer (dezenas), em vez de uma por candidato (centenas).
+    const hidratados = await Promise.all(
+      idsDePost.map((r) => getPostById(r.id, activeUserId).catch(() => undefined)),
+    );
+    const posicao = new Map(idsDePost.map((r, i) => [r.id, i]));
+    const posts = hidratados.filter((p): p is Post => p !== undefined && !p.isDeleted);
+
+    // A ordem do servidor e a de relevancia; aqui ela e so preservada.
+    const top = [...posts].sort((a, b) => (posicao.get(a.id) ?? 0) - (posicao.get(b.id) ?? 0));
+    const latest = [...posts].sort(
+      (a, b) => new Date(b.createdAt as string).getTime() - new Date(a.createdAt as string).getTime(),
+    );
+    const articles = top.filter((p) => p.category === 'news');
 
     return {
-      top: topContent,
-      latest: latestContent,
-      people: people,
-      feeds: feeds,
-      articles: articles,
+      top,
+      latest,
+      articles,
+      comments,
+      people,
+      feeds,
+      // Contagem = o que foi mesmo montado para a tela. Nunca uma estimativa de outro lugar.
       counts: {
-        top: topContent.length,
-        latest: latestContent.length,
+        top: top.length,
+        latest: latest.length,
+        articles: articles.length,
+        comments: comments.length,
         people: people.length,
         feeds: feeds.length,
-        articles: articles.length,
       },
+      termos: respostaApi?.consulta?.termos ?? [],
     };
   } catch (error) {
     console.error("Error getting search results with counts:", error);
-    throw new Error("Failed to retrieve search results.");
+    return VAZIO;
   }
 };

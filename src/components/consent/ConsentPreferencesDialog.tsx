@@ -2,7 +2,8 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { useTranslations } from 'next-intl';
+import Link from 'next/link';
+import { useLocale, useTranslations } from 'next-intl';
 import {
   Dialog,
   DialogContent,
@@ -26,17 +27,16 @@ import { useConsent } from '@/hooks/features/consent/useConsent';
  */
 export default function ConsentPreferencesDialog() {
   const t = useTranslations('Consent');
-  const { isPreferencesOpen, closePreferences, decide, analytics, marketing } = useConsent();
+  const locale = useLocale();
+  const { isPreferencesOpen, closePreferences, decide, analytics } = useConsent();
   const [wantsAnalytics, setWantsAnalytics] = useState(analytics);
-  const [wantsMarketing, setWantsMarketing] = useState(marketing);
 
   // Ao abrir, os interruptores mostram o que vale hoje (e não o que ficou de uma abertura anterior sem salvar).
   useEffect(() => {
     if (isPreferencesOpen) {
       setWantsAnalytics(analytics);
-      setWantsMarketing(marketing);
     }
-  }, [isPreferencesOpen, analytics, marketing]);
+  }, [isPreferencesOpen, analytics]);
 
   return (
     <Dialog open={isPreferencesOpen} onOpenChange={(open) => !open && closePreferences()}>
@@ -71,16 +71,16 @@ export default function ConsentPreferencesDialog() {
             <p className="mt-1 text-sm text-muted-foreground">{t('categories.analytics.description')}</p>
           </div>
 
-          <div className="rounded-lg border p-4">
+          <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-4">
             <div className="flex items-center justify-between gap-4">
-              <Label htmlFor="consent-marketing" className="text-base">
-                {t('categories.marketing.title')}
-              </Label>
-              <Switch
-                id="consent-marketing"
-                checked={wantsMarketing}
-                onCheckedChange={setWantsMarketing}
-              />
+              <Label className="text-base">{t('categories.marketing.title')}</Label>
+              <Link
+                href={`/${locale}/profile/qdnRsBvLG8NdwrLv9GwiHDa1xi42?pix=1`}
+                onClick={closePreferences}
+                className="shrink-0 text-xs font-semibold text-emerald-500 hover:underline"
+              >
+                {t('supportPix')}
+              </Link>
             </div>
             <p className="mt-1 text-sm text-muted-foreground">{t('categories.marketing.description')}</p>
           </div>
@@ -96,7 +96,7 @@ export default function ConsentPreferencesDialog() {
           </Button>
           <Button
             className="flex-1"
-            onClick={() => decide({ analytics: wantsAnalytics, marketing: wantsMarketing })}
+            onClick={() => decide({ analytics: wantsAnalytics, marketing: false })}
           >
             {t('preferences.save')}
           </Button>

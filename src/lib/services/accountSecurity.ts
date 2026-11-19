@@ -34,7 +34,7 @@ const emailLocale = (locale?: string) => normalizeLocale(locale ?? localeFromPat
 const actionSettings = (locale: string | undefined, destination: AuthorizedDestination) =>
   buildActionCodeSettings(emailLocale(locale), destination, siteConfig.officialOrigin);
 
-const ISSUER = 'Exe. Lula';
+const ISSUER = 'HiperVerso';
 
 const requireUser = (): FirebaseUser => {
   const user = auth.currentUser;
@@ -44,10 +44,39 @@ const requireUser = (): FirebaseUser => {
 
 /** Envia o link de nova senha. Não diz se o e-mail tem conta (a resposta é a mesma), para não revelar quem usa a rede. */
 export async function requestPasswordReset(email: string, locale?: string): Promise<void> {
+  const cleanEmail = email.trim();
+  const resolvedLocale = emailLocale(locale);
+
+  // Tenta enviar primeiro pelo remetente próprio (HiperVerso@hiperverso.app via SMTP configurado).
   try {
-    auth.languageCode = emailLocale(locale);
+    const res = await fetch('/api/auth/send-password-reset', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: cleanEmail, locale: resolvedLocale }),
+    });
+    if (res.status === 400) {
+      throw new Error('E-mail inválido.');
+    }
+    if (res.status === 429) {
+      throw new Error('Muitas tentativas. Tente de novo mais tarde.');
+    }
+    if (res.ok) {
+      const data = (await res.json()) as { sent?: boolean };
+      if (data.sent) return;
+    }
+  } catch (err) {
+    if (
+      err instanceof Error &&
+      (err.message === 'E-mail inválido.' || err.message === 'Muitas tentativas. Tente de novo mais tarde.')
+    ) {
+      throw err;
+    }
+  }
+
+  try {
+    auth.languageCode = resolvedLocale;
     // O link volta para /{idioma}/auth/action no domínio oficial, e de lá para o login.
-    await sendPasswordResetEmail(auth, email.trim(), actionSettings(locale, 'login'));
+    await sendPasswordResetEmail(auth, cleanEmail, actionSettings(resolvedLocale, 'login'));
   } catch (error) {
     const code = (error as { code?: string }).code;
     if (code === 'auth/user-not-found') return;
@@ -61,9 +90,35 @@ export async function sendAccountVerificationEmail(
   locale?: string,
   destination: AuthorizedDestination = 'home',
 ): Promise<void> {
+  const user = requireUser();
+  const resolvedLocale = emailLocale(locale);
+
+  // Tenta enviar primeiro pelo remetente próprio (HiperVerso@hiperverso.app via SMTP configurado).
+  // Se o SMTP ainda não estiver configurado no servidor, cai com segurança para o envio padrão do Firebase.
   try {
-    auth.languageCode = emailLocale(locale);
-    await sendEmailVerification(requireUser(), actionSettings(locale, destination));
+    const idToken = await user.getIdToken();
+    const res = await fetch('/api/auth/send-verification', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${idToken}`,
+      },
+      body: JSON.stringify({ locale: resolvedLocale, destination }),
+    });
+    if (res.status === 429) {
+      throw new Error('Já enviamos um e-mail há pouco. Confira a caixa de entrada e o spam.');
+    }
+    if (res.ok) {
+      const data = (await res.json()) as { sent?: boolean; alreadyVerified?: boolean };
+      if (data.sent || data.alreadyVerified) return;
+    }
+  } catch (err) {
+    if (err instanceof Error && err.message.includes('há pouco')) throw err;
+  }
+
+  try {
+    auth.languageCode = resolvedLocale;
+    await sendEmailVerification(user, actionSettings(resolvedLocale, destination));
   } catch (error) {
     if ((error as { code?: string }).code === 'auth/too-many-requests') {
       throw new Error('Já enviamos um e-mail há pouco. Confira a caixa de entrada e o spam.');

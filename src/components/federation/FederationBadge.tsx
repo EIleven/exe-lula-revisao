@@ -91,10 +91,10 @@ export default function FederationBadge({
         <p className="text-muted-foreground leading-relaxed">
           {isRemote ? (
             <>
-              Conteúdo federado{cleanHandle ? <> de <strong className="text-foreground">@{cleanHandle}</strong></> : null} conectado ao Exe. Lula via protocolo aberto ActivityPub.
+              Conteúdo federado{cleanHandle ? <> de <strong className="text-foreground">@{cleanHandle}</strong></> : null} conectado ao HiperVerso via protocolo aberto ActivityPub.
             </>
           ) : (
-            'Este post circula no Fediverso (Mastodon, Misskey e outros servidores abertos conectados ao Exe. Lula).'
+            'Este post circula no Fediverso (Mastodon, Misskey e outros servidores abertos conectados ao HiperVerso).'
           )}
         </p>
         <div className="rounded-md bg-muted/60 px-2.5 py-2 text-[11px] leading-relaxed text-foreground">
@@ -105,7 +105,7 @@ export default function FederationBadge({
             </span>
           ) : (
             <span>
-              Você também pode ativar seu <strong className="text-primary">@usuario@exercitodolula.app</strong> e escolher quando federar seus posts.
+              Você também pode ativar seu <strong className="text-primary">@usuario@hiperverso.social</strong> e escolher quando federar seus posts.
             </span>
           )}
         </div>

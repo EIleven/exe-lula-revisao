@@ -101,7 +101,7 @@ export async function POST(request: NextRequest) {
         homeserverUrl,
         accessToken: effectiveToken,
         roomId,
-        text: `Conexão Matrix ativada no Exe. Lula para ${matrixHandle}.`,
+        text: `Conexão Matrix ativada no HiperVerso para ${matrixHandle}.`,
       });
       testEventId = result.eventId;
     } catch (err) {

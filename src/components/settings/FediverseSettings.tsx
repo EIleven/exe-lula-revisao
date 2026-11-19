@@ -5,19 +5,18 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
-import { Check, Copy, Globe, Link2, Loader2, Pause, Play, Plus, Power, ShieldAlert, Trash2 } from 'lucide-react';
+import { Check, Copy, Globe, Loader2, Pause, Play, Power, ShieldAlert } from 'lucide-react';
 import { useCurrentUser } from '@/contexts/CurrentUserContext';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { FederationApiError, changeFederation, getFederationStatus, updateFederationAliases } from '@/lib/federation/client';
+import { FederationApiError, changeFederation, getFederationStatus } from '@/lib/federation/client';
 import { invalidateFederationAvailability } from '@/lib/federation/useFederationAvailability';
 import type { FederationStatus } from '@/lib/federation/client';
 import FediverseDeliveries from '@/components/settings/FediverseDeliveries';
@@ -32,10 +31,9 @@ export default function FediverseSettings() {
   const { toast } = useToast();
   const [status, setStatus] = useState<FederationStatus | null>(null);
   const [loadError, setLoadError] = useState(false);
-  const [busy, setBusy] = useState<Acao | 'aliases' | null>(null);
+  const [busy, setBusy] = useState<Acao | null>(null);
   const [confirmando, setConfirmando] = useState<'enable' | 'disable' | null>(null);
   const [copiado, setCopiado] = useState(false);
-  const [aliasInput, setAliasInput] = useState('');
 
   const load = useCallback(async () => {
     if (!firebaseUser) return;
@@ -72,29 +70,6 @@ export default function FediverseSettings() {
       setCopiado(true);
       setTimeout(() => setCopiado(false), 2000);
     } catch { /* sem permissão da área de transferência: o endereço continua visível */ }
-  };
-
-  const salvarAliases = async (novos: string[]) => {
-    if (!firebaseUser) return;
-    setBusy('aliases');
-    try {
-      const updated = await updateFederationAliases(firebaseUser, novos);
-      setStatus(updated);
-      setAliasInput('');
-      toast({ title: 'Contas vinculadas atualizadas.' });
-    } catch (erro) {
-      const codigo = erro instanceof FederationApiError ? erro.code : 'erro-desconhecido';
-      const msg = codigo === 'alias-nao-encontrado'
-        ? 'Não foi possível localizar essa conta no Fediverso. Confira o @usuario@instancia ou a URL HTTPS.'
-        : codigo === 'alias-invalido'
-          ? 'Endereço inválido. Use @usuario@instancia.com ou uma URL HTTPS externa.'
-          : codigo === 'muitos-aliases'
-            ? 'Limite máximo de 5 contas vinculadas atingido.'
-            : t.has(`errors.${codigo}`) ? t(`errors.${codigo}`) : t('errors.erro-desconhecido');
-      toast({ title: t('errorTitle'), description: msg, variant: 'destructive' });
-    } finally {
-      setBusy(null);
-    }
   };
 
   if (!status && !loadError) {
@@ -240,51 +215,6 @@ export default function FediverseSettings() {
             <Power className="mr-2 h-4 w-4" />{t('disable')}
           </Button>
         </div>
-      </section>
-
-      <section className="space-y-3 p-6">
-        <div className="flex items-center gap-2">
-          <Link2 className="h-4 w-4 text-muted-foreground" />
-          <h2 className="font-semibold">Vincular ou migrar conta externa (alsoKnownAs)</h2>
-        </div>
-        <p className="text-xs sm:text-sm text-muted-foreground">
-          Já tem conta no Mastodon, Misskey ou outro servidor? Informe seu <span className="font-mono">@usuario@instancia</span> abaixo para vincular as identidades. Para trazer seus seguidores de lá para cá, após vincular aqui, inicie a migração nas configurações da sua conta antiga apontando para <span className="font-mono">@{status.acct}</span>.
-        </p>
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <Input
-            placeholder="@exelula@mastodon.social ou https://..."
-            value={aliasInput}
-            onChange={(e) => setAliasInput(e.target.value)}
-            disabled={busy !== null}
-            className="flex-1"
-          />
-          <Button
-            variant="secondary"
-            disabled={busy !== null || !aliasInput.trim()}
-            onClick={() => void salvarAliases([...(status.alsoKnownAs || []), aliasInput.trim()])}
-          >
-            {busy === 'aliases' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
-            Vincular
-          </Button>
-        </div>
-        {status.alsoKnownAs && status.alsoKnownAs.length > 0 && (
-          <ul className="divide-y rounded-md border">
-            {status.alsoKnownAs.map((uri) => (
-              <li key={uri} className="flex items-center justify-between gap-2 px-3 py-2">
-                <span className="truncate font-mono text-xs text-muted-foreground">{uri}</span>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  disabled={busy !== null}
-                  onClick={() => void salvarAliases(status.alsoKnownAs.filter((x) => x !== uri))}
-                  title="Desvincular conta"
-                >
-                  <Trash2 className="h-4 w-4 text-muted-foreground" />
-                </Button>
-              </li>
-            ))}
-          </ul>
-        )}
       </section>
 
       <section className="p-6">

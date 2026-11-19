@@ -131,7 +131,7 @@ export async function resolveRemoteProfile(
     return { ok: false, status: 403, error: 'instancia-bloqueada' };
   }
 
-  const userAgent = `ExeLula/1.0 (+${f.origin})`;
+  const userAgent = `HiperVerso/1.0 (+${f.origin})`;
   const wfUrl = `https://${domain}/.well-known/webfinger?resource=${encodeURIComponent(`acct:${user}@${domain}`)}`;
   const wfRes = await safeFetchText(wfUrl, {
     timeoutMs: 6000,

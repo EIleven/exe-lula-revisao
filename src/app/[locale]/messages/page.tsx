@@ -19,20 +19,36 @@ export default function MessagesPage() {
 
   if (!currentUserId) {
     return (
-      <div className="container mx-auto max-w-3xl py-8 text-center">
-        <Card className="shadow-lg inline-block">
-          <CardHeader>
-            <CardTitle className="flex items-center justify-center text-2xl">
-              <MessageSquare className="mr-3 h-7 w-7 text-primary" />
-              Mensagens
+      <div className="container mx-auto flex min-h-[70vh] max-w-md items-center justify-center px-4 py-8">
+        <Card className="w-full rounded-2xl border-border/80 shadow-xl">
+          <CardHeader className="text-center space-y-3 pb-3">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-primary/30 bg-primary/15 text-lg font-black tracking-tight text-primary">
+              HV
+            </div>
+            <CardTitle className="text-2xl font-bold tracking-tight">
+              HiperChat
             </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-destructive mb-4">
-              Por favor, faça login para ver suas mensagens.
+            <p className="text-sm text-muted-foreground">
+              Mensagens diretas e em grupo sem rastreamento nem anúncios. Entre com sua conta HiperVerso ou pelo seu <span className="font-mono text-foreground">@</span> do Fediverso BR.
             </p>
-            <Button onClick={() => router.push(`/${locale}/login`)}>
-              <LogIn className="mr-2 h-4 w-4" /> Login
+            <div className="flex flex-wrap items-center justify-center gap-1.5 pt-1">
+              <span className="rounded-full border border-primary/25 bg-primary/10 px-2.5 py-0.5 text-[11px] font-medium text-primary">
+                Zero venda de dados
+              </span>
+              <span className="rounded-full border border-primary/25 bg-primary/10 px-2.5 py-0.5 text-[11px] font-medium text-primary">
+                Grupos até 1.000
+              </span>
+              <span className="rounded-full border border-primary/25 bg-primary/10 px-2.5 py-0.5 text-[11px] font-medium text-primary">
+                Modo P2P &amp; Fediverso
+              </span>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-2.5 pt-2">
+            <Button onClick={() => router.push(`/${locale}/login`)} className="w-full rounded-full font-semibold">
+              <LogIn className="mr-2 h-4 w-4" /> Entrar na minha conta
+            </Button>
+            <Button variant="outline" onClick={() => router.push(`/${locale}/register`)} className="w-full rounded-full">
+              Criar conta gratuita
             </Button>
           </CardContent>
         </Card>

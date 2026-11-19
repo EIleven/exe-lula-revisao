@@ -12,7 +12,7 @@
 //   remove os vínculos. NÃO garante que os outros servidores obedeçam, e a interface diz isso.
 import { generateActorKeyPair, openSecret, sealSecret } from './keys.ts';
 import type { MasterKeyring } from './keys.ts';
-import { normalizeHandle, buildAcct, domainOfUrl } from './identity.ts';
+import { normalizeHandle, buildAcct } from './identity.ts';
 import type { AccountRecord, FederationStore, HandleRecord, OutboundJob } from './store.ts';
 
 export type AccountDeps = {
@@ -32,7 +32,7 @@ export type FederationStatus = {
   acct: string | null;
   eligibleSince: number | null;
   followers: number;
-  alsoKnownAs: string[];
+  // `alsoKnownAs` saiu do estado: nao e mais gravado nem exibido (o que houver em documentos antigos fica so no banco).
   movedTo: string | null;
 };
 
@@ -44,9 +44,7 @@ export type AccountFailure =
   | 'handle-indisponivel'
   | 'conta-removida'
   | 'nao-ativada'
-  | 'ja-ativada'
-  | 'alias-invalido'
-  | 'muitos-aliases';
+  | 'ja-ativada';
 
 export type AccountResult = { ok: true; account: AccountRecord } | { ok: false; reason: AccountFailure };
 
@@ -63,7 +61,6 @@ export async function getFederationStatus(deps: Pick<AccountDeps, 'store' | 'own
     acct: conta?.handle ? buildAcct(conta.handle, deps.ownHost) : null,
     eligibleSince: conta?.enabled ? conta.eligibleSince : null,
     followers: seguidores,
-    alsoKnownAs: conta?.alsoKnownAs ?? [],
     movedTo: conta?.movedTo ?? null,
   };
 }
@@ -132,6 +129,7 @@ export async function enableFederation(deps: AccountDeps, uid: string, contexto:
     enabledAtMs: agora,
     publicKeyPem: handle.publicKeyPem,
     updatedAtMs: agora,
+    // Retrocompatibilidade: o que ja estava gravado e PRESERVADO como esta (nunca acrescentado, nunca publicado).
     alsoKnownAs: atual?.alsoKnownAs ?? [],
     movedTo: null,
   };
@@ -188,36 +186,13 @@ export async function disableFederation(deps: AccountDeps, uid: string): Promise
   return { ok: true, account: nova };
 }
 
-/** Atualiza a lista `alsoKnownAs` da conta (até 5 URIs HTTPS externas) para vínculo/migração no Fediverso. */
-export async function setAlsoKnownAs(deps: AccountDeps, uid: string, aliases: string[]): Promise<AccountResult> {
-  const { store } = deps;
-  const plataforma = await store.getPlatform();
-  if (!plataforma.enabled || plataforma.killSwitch) return falha('plataforma-desligada');
-  const conta = await store.getAccount(uid);
-  if (!conta?.enabled) return falha('nao-ativada');
-
-  const proprio = deps.ownHost.toLowerCase();
-  const limpos: string[] = [];
-  const vistos = new Set<string>();
-  for (const bruto of aliases) {
-    const trimmed = typeof bruto === 'string' ? bruto.trim() : '';
-    if (!trimmed) continue;
-    const dom = domainOfUrl(trimmed);
-    if (!dom || dom === proprio || dom.endsWith(`.${proprio}`)) return falha('alias-invalido');
-    if (!trimmed.startsWith('https://')) return falha('alias-invalido');
-    if (!vistos.has(trimmed)) {
-      vistos.add(trimmed);
-      limpos.push(trimmed);
-    }
-  }
-  if (limpos.length > 5) return falha('muitos-aliases');
-
-  const agora = deps.now();
-  const nova: AccountRecord = { ...conta, alsoKnownAs: limpos, updatedAtMs: agora };
-  await store.saveAccount(nova);
-  await store.audit({ atMs: agora, kind: 'account', decision: 'aliases-atualizados', reason: String(limpos.length), uid });
-  return { ok: true, account: nova };
-}
+/**
+ * NAO existe mais um `setAlsoKnownAs`. Declarar `alsoKnownAs` publicava, no ator aberto a qualquer um, a lista de
+ * identidades da mesma pessoa em outros servidores: um mapa pronto de identidades cruzadas para raspagem, e um pedido
+ * de resolucao a mais, por URI, para cada instancia que lesse o ator. Quem migra para ca declara o vinculo no servidor
+ * de ORIGEM, que e o lado que a migracao consulta. O campo em `AccountRecord` segue existindo so para LER documentos
+ * antigos sem quebra-los.
+ */
 
 /**
  * Conta apagada: igual a desligar, mas o handle passa a `deleting` (nunca mais reativável) e a chave ganha prazo

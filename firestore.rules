@@ -20,7 +20,7 @@ service cloud.firestore {
     // deste helper.
     function isVerifiedMember() {
       return isAuthenticated()
-        && request.auth.token.get('email_verified', false) == true
+        && (request.auth.token.get('email_verified', false) == true || request.auth.token.get('federatedVerified', false) == true)
         && request.auth.token.get('member', false) == true;
     }
 
@@ -104,7 +104,7 @@ service cloud.firestore {
     // Dados pessoais NUNCA ficam no perfil público (vão para users/{uid}/private/account).
     function privateUserFields() {
       return ['email', 'dateOfBirth', 'notificationPreferences', 'mutedWords', 'displaySensitiveContent',
-              'tabPreferences', 'totalUnreadMessages'];
+              'tabPreferences', 'totalUnreadMessages', 'translationPreferences', 'recommendationPreferences'];
     }
 
     match /users/{userId} {
@@ -124,8 +124,8 @@ service cloud.firestore {
       function canUpdateUserProfile() {
         let diff = request.resource.data.diff(resource.data);
         let allowedKeys = [
-          'name', 'name_lowercase', 'bio', 'avatarUrl', 'data-ai-hint', 'pinnedPostId',
-          'coverImageUrl', 'cover-image-ai-hint', 'updatedAt',
+          'name', 'name_lowercase', 'bio', 'avatarUrl', 'avatarAlt', 'data-ai-hint', 'pinnedPostId',
+          'coverImageUrl', 'coverImageAlt', 'cover-image-ai-hint', 'updatedAt',
           'dmPreference', 'profileVisibility', 'allowTagging', 'allowReposts', 'replyPermission',
           // "username" fica de fora: a troca passa pela Function updateUserUsername, que garante que o nome é único
           // (gravado direto, duas pessoas podiam ficar com o mesmo @).
@@ -134,10 +134,16 @@ service cloud.firestore {
         let hasPermissions = isOwner(userId) && isVerifiedMember()
           && diff.affectedKeys().hasOnly(allowedKeys);
         let isNameValid = !('name' in diff.affectedKeys()) || (request.resource.data.name is string && request.resource.data.name.size() > 0);
+        let isAvatarAltValid = !('avatarAlt' in diff.affectedKeys())
+          || request.resource.data.avatarAlt == null
+          || (request.resource.data.avatarAlt is string && request.resource.data.avatarAlt.size() <= 300);
+        let isCoverAltValid = !('coverImageAlt' in diff.affectedKeys())
+          || request.resource.data.coverImageAlt == null
+          || (request.resource.data.coverImageAlt is string && request.resource.data.coverImageAlt.size() <= 300);
         let isAccentColorValid = !('accentColor' in diff.affectedKeys())
           || request.resource.data.accentColor == null
           || (request.resource.data.accentColor is string && request.resource.data.accentColor.matches('^#[0-9a-fA-F]{6}$'));
-        return hasPermissions && isNameValid && isAccentColorValid;
+        return hasPermissions && isNameValid && isAvatarAltValid && isCoverAltValid && isAccentColorValid;
       }
 
       // followersCount, followingCount e postsCount são gravados só pelas Functions (antes qualquer usuário logado somava
@@ -326,10 +332,19 @@ service cloud.firestore {
         let me = request.auth.uid;
         let changed = request.resource.data.diff(resource.data).affectedKeys();
         let unread = request.resource.data.get('unreadCounts', {});
-        return changed.hasOnly(['unreadCounts', 'userLeftAt'])
+        let lidas = request.resource.data.get('lastReadAt', {});
+        return changed.hasOnly(['unreadCounts', 'userLeftAt', 'lastReadAt'])
           && unread.diff(resource.data.get('unreadCounts', {})).affectedKeys().hasOnly([me])
           && (!(me in unread) || unread[me] == 0)
-          && request.resource.data.get('userLeftAt', {}).diff(resource.data.get('userLeftAt', {})).affectedKeys().hasOnly([me]);
+          && request.resource.data.get('userLeftAt', {}).diff(resource.data.get('userLeftAt', {})).affectedKeys().hasOnly([me])
+          // Confirmacao de leitura: cada pessoa so mexe na PROPRIA chave e so com a hora do SERVIDOR -- nao da para
+          // forjar "ela leu", nem antedatar, nem apagar a marca de outra pessoa. Apagar a propria e permitido (quem
+          // desliga a confirmacao pode limpar o que deixou). O teste do valor so vale quando o campo foi mexido:
+          // sem essa guarda, zerar o contador de nao lidas (inclusive em lote, pela lista) passaria a ser recusado.
+          && (!changed.hasAny(['lastReadAt']) || (
+               lidas.diff(resource.data.get('lastReadAt', {})).affectedKeys().hasOnly([me])
+               && (!(me in lidas) || lidas[me] == request.time)
+             ));
       }
 
       // Admins do grupo podem adicionar/remover participantes (até 1000), promover/rebaixar admins e renomear o grupo.
@@ -341,7 +356,7 @@ service cloud.firestore {
         let newName = request.resource.data.get('groupName', '');
         return resource.data.get('isGroup', false) == true
           && me in resource.data.get('adminIds', [])
-          && changed.hasOnly(['participantIds', 'adminIds', 'groupName'])
+          && changed.hasOnly(['participantIds', 'adminIds', 'groupName', 'unreadCounts', 'userLeftAt', 'participantsInfo'])
           && newIds is list
           && newIds.size() >= 1
           && newIds.size() <= 1000
@@ -519,13 +534,13 @@ service cloud.firestore {
       }
 
       // O alcance de fora nunca é maior que a visibilidade de dentro: público e não listado exigem perfil público;
-      // só-seguidores serve aos dois. Aceita eco original ou citação, sem enquete.
+      // só-seguidores serve aos dois. Aceita eco original, citação ou artigo/notícia, sem enquete.
       function hasValidFederation(d, author) {
         let alcance = d.get('federation', 'local');
         return alcance == 'local'
           || (alcance in ['public', 'unlisted', 'followers']
               && d.get('type', 'original') in ['original', 'quote']
-              && d.get('category', 'echo') == 'echo'
+              && d.get('category', 'echo') in ['echo', 'news']
               && d.get('poll', null) == null
               && (alcance == 'followers' || visibilityForAuthor(author) == 'public')
               && federationOptIn(request.auth.uid));
@@ -708,6 +723,9 @@ service cloud.firestore {
             && d.get('repostsCount', 0) == 0
             && d.get('isDeleted', false) == false
             && (d.get('text', '') is string && d.get('text', '').size() <= 300)
+            && d.get('sensitive', false) is bool
+            && (d.get('sensitive', false) == false
+                || (d.get('media', null) is list && d.media.size() > 0))
             && post.get('isDeleted', false) == false
             && !isBlockedBy(post.userId)
             && canReplyTo(post);
@@ -719,12 +737,15 @@ service cloud.firestore {
         function isEditingComment() {
           return isDataOwner(resource)
             && request.resource.data.diff(resource.data).affectedKeys()
-                 .hasOnly(['text', 'media', 'youtubeVideoId', 'hasMedia', 'hashtags', 'isEdited', 'editCount', 'updatedAt']);
+                 .hasOnly(['text', 'media', 'youtubeVideoId', 'hasMedia', 'hashtags', 'isEdited', 'editCount', 'updatedAt', 'sensitive'])
+            && request.resource.data.get('sensitive', false) is bool
+            && (request.resource.data.get('sensitive', false) == false
+                || (request.resource.data.get('media', null) is list && request.resource.data.media.size() > 0));
         }
         function isTombstoningComment() {
           return (isDataOwner(resource) || isOwner(getPostOwnerId(postId)))
             && request.resource.data.diff(resource.data).affectedKeys()
-                 .hasOnly(['text', 'media', 'youtubeVideoId', 'isDeleted', 'hasMedia', 'quotedPostObject'])
+                 .hasOnly(['text', 'media', 'youtubeVideoId', 'isDeleted', 'hasMedia', 'quotedPostObject', 'sensitive'])
             && request.resource.data.isDeleted == true;
         }
         allow update: if (isVerifiedMember() && isEditingComment()) || isTombstoningComment();

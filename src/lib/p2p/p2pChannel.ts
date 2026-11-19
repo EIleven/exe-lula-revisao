@@ -5,8 +5,9 @@
 // Realtime Database (só para a sinalização efêmera), ao RTCPeerConnection real e ao histórico local. A API pública continua a
 // mesma (`createP2pSession`, `loadLocalP2pMessages`...) para as telas; a lógica de negociação, tentativas e validação está
 // no motor e no protocolo.
-import { get, getDatabase, onChildAdded, onDisconnect, onValue, push, ref, remove, serverTimestamp, set } from 'firebase/database';
+import { get, onChildAdded, onDisconnect, onValue, push, ref, remove, serverTimestamp, set } from 'firebase/database';
 import { auth } from '@/lib/firebase';
+import { getRtdb } from '@/lib/rtdbClient';
 import type { DirectMessage, E2eeMessagePayload, User } from '@/lib/types';
 import { decryptDirectMessage, encryptDirectMessage, ensureUserE2eeKeyPair } from '@/lib/crypto/e2ee';
 import { MAX_TEXT_CHARS, toIceServers, type IceConfig, type WireMessage } from './p2pProtocol';
@@ -18,6 +19,7 @@ import {
   type RtcPeerLike,
 } from './p2pSession';
 import { deleteMessage, loadConversation, saveMessage, updateMessageStatus, type StorageLike, type StoredP2pMessage } from './p2pLocalStore';
+import { salvarMarcaLocal } from '@/lib/messages/recibos';
 
 export type { P2pConnectionState, P2pFailureReason };
 
@@ -26,7 +28,7 @@ export type LocalP2pMessage = DirectMessage & {
   p2pStatus?: 'queued' | 'sent';
 };
 
-const ENCRYPTED_PLACEHOLDER = '🔒 Mensagem P2P criptografada (chave indisponível neste dispositivo)';
+export const ENCRYPTED_PLACEHOLDER = '🔒 Mensagem P2P criptografada (chave indisponível neste dispositivo)';
 
 const localStore = (): StorageLike | null => {
   try {
@@ -40,30 +42,57 @@ const localStore = (): StorageLike | null => {
 
 const ICE_CACHE_MS = 10 * 60_000;
 let iceCache: { at: number; value: IceConfig } | null = null;
+let iceInFlight: Promise<IceConfig | null> | null = null;
 
 /** STUN e, se o servidor tiver TURN configurado, um relay com credencial temporária. Qualquer falha cai para só STUN. */
 async function loadIceConfig(): Promise<IceConfig | null> {
   if (iceCache && Date.now() - iceCache.at < ICE_CACHE_MS) return iceCache.value;
-  try {
-    const token = await auth.currentUser?.getIdToken();
-    if (!token) return null;
-    const controller = new AbortController();
-    const timer = window.setTimeout(() => controller.abort(), 3_000);
-    const res = await fetch('/api/p2p/ice', { headers: { Authorization: `Bearer ${token}` }, signal: controller.signal, cache: 'no-store' });
-    window.clearTimeout(timer);
-    if (!res.ok) return null;
-    const body = (await res.json()) as { stun?: unknown; turn?: { urls?: unknown; username?: unknown; credential?: unknown } | null };
-    const cfg: IceConfig = {
-      stun: Array.isArray(body.stun) ? body.stun.filter((u): u is string => typeof u === 'string') : [],
-      turn:
-        body.turn && Array.isArray(body.turn.urls) && typeof body.turn.username === 'string' && typeof body.turn.credential === 'string'
-          ? { urls: body.turn.urls.filter((u): u is string => typeof u === 'string'), username: body.turn.username, credential: body.turn.credential }
-          : null,
-    };
-    iceCache = { at: Date.now(), value: cfg };
-    return cfg;
-  } catch {
-    return null;
+  if (iceInFlight) return iceInFlight;
+  iceInFlight = (async () => {
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) return null;
+      const controller = new AbortController();
+      const timer = window.setTimeout(() => controller.abort(), 900);
+      const res = await fetch('/api/p2p/ice', {
+        headers: { Authorization: `Bearer ${token}` },
+        signal: controller.signal,
+        cache: 'no-store',
+      });
+      window.clearTimeout(timer);
+      if (!res.ok) return null;
+      const body = (await res.json()) as {
+        stun?: unknown;
+        turn?: { urls?: unknown; username?: unknown; credential?: unknown } | null;
+      };
+      const cfg: IceConfig = {
+        stun: Array.isArray(body.stun) ? body.stun.filter((u): u is string => typeof u === 'string') : [],
+        turn:
+          body.turn &&
+          Array.isArray(body.turn.urls) &&
+          typeof body.turn.username === 'string' &&
+          typeof body.turn.credential === 'string'
+            ? {
+                urls: body.turn.urls.filter((u): u is string => typeof u === 'string'),
+                username: body.turn.username,
+                credential: body.turn.credential,
+              }
+            : null,
+      };
+      iceCache = { at: Date.now(), value: cfg };
+      return cfg;
+    } catch {
+      return null;
+    } finally {
+      iceInFlight = null;
+    }
+  })();
+  return iceInFlight;
+}
+
+export function prewarmP2pIceConfig(): void {
+  if (typeof window !== 'undefined') {
+    void loadIceConfig();
   }
 }
 
@@ -88,7 +117,10 @@ const toLocalMessage = (
   text,
   e2ee: m.e2ee,
   createdAt: m.createdAt,
-  readAt: m.createdAt,
+  // Nasceu lida? Não. `readAt = createdAt` fazia o ✓✓ azul e o "Lida às 15:40" aparecerem em toda
+  // mensagem P2P, sem ninguém ter lido nada. Enquanto não houver confirmação de verdade vinda do outro
+  // aparelho, isto fica nulo e a tela diz só o que sabemos: saiu daqui / chegou lá.
+  readAt: null,
   parentMessageId: m.parentMessageId,
   parentMessageText: m.parentMessageText,
   parentMessageSenderName: m.parentMessageSenderName,
@@ -130,7 +162,8 @@ export async function syncP2pHistoryToOwnDevices(
   if (!store || !currentUserId || !conversationId) return;
   try {
     const guardadas = loadConversation(store, currentUserId, conversationId).slice(-100);
-    const db = getDatabase();
+    const db = getRtdb();
+    if (!db) return;
     const res = await ensureUserE2eeKeyPair(currentUserId);
     if (res?.publicKeyJson) {
       const payload = await encryptDirectMessage(JSON.stringify(guardadas), currentUserId, res.publicKeyJson);
@@ -139,13 +172,8 @@ export async function syncP2pHistoryToOwnDevices(
           e2ee: payload,
           updatedAt: Date.now(),
         });
-        return;
       }
     }
-    await set(ref(db, `p2pDeviceSync/${currentUserId}/${conversationId}`), {
-      items: guardadas,
-      updatedAt: Date.now(),
-    });
   } catch {
     // silencioso se não estiver autenticado no RTDB
   }
@@ -193,15 +221,17 @@ export async function loadP2pHistoryFromOwnDevices(
   const store = localStore();
   if (!store || !currentUserId || !conversationId) return [];
   try {
-    const db = getDatabase();
-    const snap = await get(ref(db, `p2pDeviceSync/${currentUserId}/${conversationId}`));
-    if (snap.exists()) {
-      await applyDeviceSyncSnapshot(
-        store,
-        currentUserId,
-        conversationId,
-        snap.val() as { e2ee?: E2eeMessagePayload; items?: StoredP2pMessage[] } | null,
-      );
+    const db = getRtdb();
+    if (db) {
+      const snap = await get(ref(db, `p2pDeviceSync/${currentUserId}/${conversationId}`));
+      if (snap.exists()) {
+        await applyDeviceSyncSnapshot(
+          store,
+          currentUserId,
+          conversationId,
+          snap.val() as { e2ee?: E2eeMessagePayload; items?: StoredP2pMessage[] } | null,
+        );
+      }
     }
   } catch {
     // fallback para histórico local já salvo
@@ -218,7 +248,8 @@ export function watchOwnDevicesP2pHistory(
 ): () => void {
   const store = localStore();
   if (!store || !currentUserId || !conversationId) return () => {};
-  const db = getDatabase();
+  const db = getRtdb();
+  if (!db) return () => {};
   const syncRef = ref(db, `p2pDeviceSync/${currentUserId}/${conversationId}`);
   return onValue(syncRef, (snap) => {
     if (!snap.exists()) return;
@@ -246,6 +277,11 @@ export interface P2pSessionController {
       parentMessageSenderName?: string | null;
     },
   ) => Promise<LocalP2pMessage | null>;
+  /**
+   * Avisa o contato, pelo tunel, que voce leu ate `ate`. Devolve `false` se o tunel nao estava aberto -- nesse caso
+   * nao ha fila: a confirmacao e descartavel, e a proxima (quando a conversa reabrir) diz a mesma coisa, mais atual.
+   */
+  confirmarLeitura: (ate: number) => boolean;
   reconnect: () => void;
   destroy: () => void;
 }
@@ -266,21 +302,28 @@ export function createP2pSession(params: {
   onStateDetail?: (state: P2pConnectionState, reason: P2pFailureReason | null) => void;
   onMessage: (message: LocalP2pMessage) => void;
   onMessageUpdated?: (message: LocalP2pMessage) => void;
+  /** O contato confirmou que leu ate este instante (ms). No Zero DB e a unica fonte da marca d'agua. */
+  onPeerRead?: (ate: number) => void;
 }): P2pSessionController {
-  const { conversationId, currentUserId, otherUser, currentUser, onStateChange, onStateDetail, onMessage, onMessageUpdated } = params;
+  const { conversationId, currentUserId, otherUser, currentUser, onStateChange, onStateDetail, onMessage, onMessageUpdated, onPeerRead } = params;
   const otherUserId = otherUser.id;
 
   if (typeof window === 'undefined' || currentUserId === otherUserId || otherUserId.startsWith('ap_')) {
     onStateChange('offline');
-    return { sendText: async () => null, reconnect: () => {}, destroy: () => {} };
+    return { sendText: async () => null, confirmarLeitura: () => false, reconnect: () => {}, destroy: () => {} };
   }
   if (typeof RTCPeerConnection === 'undefined') {
     onStateChange('unsupported');
     onStateDetail?.('unsupported', null);
-    return { sendText: async () => null, reconnect: () => {}, destroy: () => {} };
+    return { sendText: async () => null, confirmarLeitura: () => false, reconnect: () => {}, destroy: () => {} };
   }
 
-  const db = getDatabase();
+  const db = getRtdb();
+  if (!db) {
+    onStateChange('offline');
+    onStateDetail?.('offline', null);
+    return { sendText: async () => null, confirmarLeitura: () => false, reconnect: () => {}, destroy: () => {} };
+  }
   const mySlot = ref(db, `p2pSignals/${conversationId}/${currentUserId}`);
   const peerSlot = ref(db, `p2pSignals/${conversationId}/${otherUserId}`);
   const peerPresence = ref(db, `status/${otherUserId}/connections`);
@@ -399,12 +442,27 @@ export function createP2pSession(params: {
     }
   };
 
+  let autoRetryTimer: number | null = null;
+  const clearAutoRetry = () => {
+    if (autoRetryTimer !== null) {
+      window.clearTimeout(autoRetryTimer);
+      autoRetryTimer = null;
+    }
+  };
+
   const core = createP2pCore({
     me: currentUserId,
     peer: otherUserId,
     signaling,
     presence,
     ready,
+    config: {
+      connectTimeoutMs: 8_000,
+      disconnectGraceMs: 2_000,
+      offerCooldownMs: 600,
+      helloCooldownMs: 600,
+      maxAttempts: 6,
+    },
     createPeer: () =>
       new RTCPeerConnection({
         iceServers,
@@ -422,19 +480,55 @@ export function createP2pSession(params: {
       onStateChange(state);
       onStateDetail?.(state, reason);
       if (state === 'connected') {
+        clearAutoRetry();
         void flushQueued();
+      } else if (state === 'failed') {
+        clearAutoRetry();
+        autoRetryTimer = window.setTimeout(() => {
+          autoRetryTimer = null;
+          core.reconnect();
+        }, 6_000);
+      } else if (state === 'peer-offline' || state === 'offline') {
+        clearAutoRetry();
       }
     },
-    onMessage: (wire) => void handleIncoming(wire),
+    onMessage: (wire) => {
+      // Confirmacao de leitura nao vira mensagem: so move a marca d'agua (e nunca retrocede, ver recibos.ts).
+      if (wire.kind === 'read') {
+        const marca = salvarMarcaLocal(localStore(), currentUserId, conversationId, wire.upTo);
+        if (marca !== null) onPeerRead?.(marca);
+        return;
+      }
+      void handleIncoming(wire);
+    },
     log: (event, data) => {
       if (process.env.NODE_ENV !== 'production') console.debug('[P2P]', event, data ?? '');
     },
   });
 
-  const onVisibility = () => {
-    if (document.visibilityState === 'visible') core.notifyVisible();
+  const onResumeSignal = () => {
+    if (document.visibilityState !== 'visible') return;
+    const { state } = core.getState();
+    if (state === 'failed') {
+      clearAutoRetry();
+      core.reconnect();
+    } else {
+      core.notifyVisible();
+    }
   };
-  document.addEventListener('visibilitychange', onVisibility);
+  const onNetworkBack = () => {
+    const { state } = core.getState();
+    if (state === 'failed' || state === 'offline') {
+      clearAutoRetry();
+      core.reconnect();
+    } else {
+      core.notifyVisible();
+    }
+  };
+  document.addEventListener('visibilitychange', onResumeSignal);
+  window.addEventListener('focus', onResumeSignal);
+  window.addEventListener('pageshow', onResumeSignal);
+  window.addEventListener('online', onNetworkBack);
 
   return {
     sendText: async (text, replyMeta) => {
@@ -477,11 +571,30 @@ export function createP2pSession(params: {
       };
       if (store) saveMessage(store, currentUserId, conversationId, registro);
       void syncP2pHistoryToOwnDevices(currentUserId, conversationId);
+      // Aviso efêmero para o destinatário (mesmo fora da tela de Mensagens) abrir o túnel P2P e receber a notificação.
+      // Não envia nome/username em texto claro ao RTDB.
+      void set(ref(db, `p2pInbox/${otherUserId}/${currentUserId}`), {
+        conversationId,
+        fromId: currentUserId,
+        msgId: id,
+        ts: serverTimestamp(),
+      }).catch(() => {});
       return toLocalMessage(registro, conversationId, text, true, { currentUser, otherUser });
     },
-    reconnect: () => core.reconnect(),
+    confirmarLeitura: (ate: number) => {
+      if (!Number.isFinite(ate)) return false;
+      return core.sendWire({ v: 1, kind: 'read', senderId: currentUserId, upTo: new Date(ate).toISOString() });
+    },
+    reconnect: () => {
+      clearAutoRetry();
+      core.reconnect();
+    },
     destroy: () => {
-      document.removeEventListener('visibilitychange', onVisibility);
+      clearAutoRetry();
+      document.removeEventListener('visibilitychange', onResumeSignal);
+      window.removeEventListener('focus', onResumeSignal);
+      window.removeEventListener('pageshow', onResumeSignal);
+      window.removeEventListener('online', onNetworkBack);
       stopOffset();
       core.destroy();
     },

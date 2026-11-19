@@ -25,6 +25,7 @@ const idt = await import('../src/lib/activitypub/identity.ts');
 const gate = await import('../src/lib/activitypub/gate.ts');
 const del = await import('../src/lib/activitypub/delivery.ts');
 const act = await import('../src/lib/activitypub/activity.ts');
+const inb = await import('../src/lib/activitypub/inbox.ts');
 
 const RAIZ = fileURLToPath(new URL('..', import.meta.url));
 let falhas = 0;
@@ -590,6 +591,20 @@ confere('deliveryId é hex de 64 caracteres', /^[0-9a-f]{64}$/.test(del.delivery
   confere('seguidores do mesmo servidor viram UMA entrega no inbox compartilhado',
     alvos.length === 3 && alvos.find((t) => t.inbox === 'https://a.org/inbox')?.followers === 3, JSON.stringify(alvos));
   confere('sem inbox compartilhado, cada um tem o seu', alvos.filter((t) => t.domain === 'b.org').length === 2, 'agrupou o que não podia');
+
+  // SÓ DE SEGUIDORES: o destinatário é a coleção de seguidores, que o outro servidor não consegue abrir. Entregue no inbox
+  // compartilhado, ele não sabe a quem entregar (Misskey e Pleroma descartam). Vai no inbox PESSOAL de cada um.
+  const soSeguidores = del.groupTargets([
+    { inbox: 'https://a.org/u/1/inbox', sharedInbox: 'https://a.org/inbox', domain: 'a.org' },
+    { inbox: 'https://a.org/u/2/inbox', sharedInbox: 'https://a.org/inbox', domain: 'a.org' },
+    { inbox: 'https://b.org/u/1/inbox', sharedInbox: 'https://b.org/inbox', domain: 'b.org' },
+  ], { allowSharedInbox: false });
+  confere('só-de-seguidores: uma entrega por PESSOA, nenhuma no inbox compartilhado',
+    soSeguidores.length === 3 && soSeguidores.every((x) => x.inbox.includes('/u/')) && !soSeguidores.some((x) => x.inbox.endsWith('.org/inbox')),
+    JSON.stringify(soSeguidores));
+  confere('público/não listado continuam agrupando (o padrão não mudou)',
+    del.groupTargets([{ inbox: 'https://a.org/u/1/inbox', sharedInbox: 'https://a.org/inbox', domain: 'a.org' }])[0].inbox === 'https://a.org/inbox',
+    'o padrão deixou de agrupar');
 }
 confere('disjuntor: sem efeito nas primeiras falhas', del.domainCooldownSeconds(0) === 0 && del.domainCooldownSeconds(2) === 0, 'esfriou cedo');
 confere('disjuntor: cresce e tem teto', del.domainCooldownSeconds(3) > 0 && del.domainCooldownSeconds(6) > del.domainCooldownSeconds(3) && del.domainCooldownSeconds(500) <= 6 * 3600, 'sem teto');
@@ -636,9 +651,95 @@ confere('ator: não exige aprovação manual na v1 (e diz isso)', ator.manuallyA
 confere('ator: caixa de entrada compartilhada declarada', ator.endpoints.sharedInbox === `${ORIGEM}/ap/inbox`, 'sem sharedInbox');
 confere('ator: ícone usa a URL de mídia própria', ator.icon.url.startsWith('https://media.exercitodolula.app/m/'), 'expôs outro host');
 confere('ator: sem e-mail, sem data de nascimento', !/email|birth|nascimento|dateOfBirth/i.test(JSON.stringify(ator)), 'dado pessoal no actor');
-confere('ator: alsoKnownAs e movedTo só quando existem', !('alsoKnownAs' in ator) && !('movedTo' in ator)
-  && act.buildActor({ ...{ id: ACTOR, handle: 'ana', name: 'A', summaryHtml: '', profileUrl: 'u', inbox: 'i', outbox: 'o', followers: 'f', following: 'g', sharedInbox: 's', keyId: 'k', publicKeyPem: 'p', publishedIso: 'x' }, alsoKnownAs: ['https://x.org/u/a'] }).alsoKnownAs.length === 1,
-  'campos de migração fora de hora');
+confere('ator: movedTo só quando existe', !('movedTo' in ator), 'campo de migração fora de hora');
+// `alsoKnownAs` liga, no ator que qualquer um lê sem autenticação, a conta daqui a outras identidades da MESMA pessoa.
+// Como lista que a pessoa preenchia, virava um mapa de identidades cruzadas para raspagem (removida em 2026-11-17).
+// O que sobrou é SÓ o auto-alias da migração de domínio, que a rota monta com o nosso endereço anterior.
+const BASE_ATOR = { id: ACTOR, handle: 'ana', name: 'A', summaryHtml: '', profileUrl: 'u', inbox: 'i', outbox: 'o', followers: 'f', following: 'g', sharedInbox: 's', keyId: 'k', publicKeyPem: 'p', publishedIso: 'x' };
+confere('ator: sem alias nenhum, o campo não aparece', !('alsoKnownAs' in act.buildActor(BASE_ATOR)) && !('alsoKnownAs' in act.buildActor({ ...BASE_ATOR, alsoKnownAs: [] })),
+  JSON.stringify(act.buildActor(BASE_ATOR)).slice(0, 120));
+{
+  const comAlias = act.buildActor({ ...BASE_ATOR, alsoKnownAs: ['https://exercitodolula.app/ap/users/ana'] });
+  confere('ator: o auto-alias da migração SAI (é o que o Mastodon exige para aceitar o Move)',
+    JSON.stringify(comAlias.alsoKnownAs) === JSON.stringify(['https://exercitodolula.app/ap/users/ana']),
+    JSON.stringify(comAlias.alsoKnownAs));
+  confere('ator: e o @context declara o termo, senão o destino descarta o campo',
+    JSON.stringify(act.AP_CONTEXT).includes('as:alsoKnownAs'), JSON.stringify(act.AP_CONTEXT).slice(0, 120));
+}
+
+// ───────────────────────── Artigo federado: vai inteiro, limpo e seguro ─────────────────────────
+{
+  const artigoHtml = '<h1>Apresentação</h1><p>Somos a rede <strong>soberana</strong> &amp; livre.</p>'
+    + '<p>Com <a href="https://exercitodolula.app" style="color:red" onclick="x()">link</a> e <em>ênfase</em>.</p>'
+    + '<ul><li>Um</li><li>Outro</li></ul><blockquote>Citação.</blockquote><p>Linha um<br>Linha dois</p>'
+    + '<script>alert(1)</script><img src="x" onerror="y()"><p><a href="javascript:evil()">perigoso</a></p>';
+  const saida = act.articleBodyToHtml(artigoHtml);
+
+  confere('ARTIGO: o corpo vai INTEIRO, sem corte nem reticências',
+    !saida.includes('...') && saida.includes('Linha dois') && saida.includes('Citação.') && saida.includes('Outro'),
+    saida.slice(0, 160));
+  confere('ARTIGO: parágrafos preservados (não vira um bloco só)', (saida.match(/<p>/g) ?? []).length >= 4, saida);
+  confere('ARTIGO: título do corpo vira parágrafo em negrito (o Mastodon descarta h1-h6)',
+    saida.startsWith('<p><strong>Apresentação</strong></p>') && !/<h[1-6]/i.test(saida), saida.slice(0, 80));
+  confere('ARTIGO: lista e citação ficam como BLOCO, nunca dentro de um <p>',
+    saida.includes('</p><ul><li>Um</li><li>Outro</li></ul>') && saida.includes('<blockquote>Citação.</blockquote>'),
+    saida);
+  confere('ARTIGO: link http(s) sobrevive, com rel de segurança, e sem estilo nem onclick',
+    saida.includes('<a href="https://exercitodolula.app" rel="nofollow noopener noreferrer" target="_blank">')
+    && !/style=|onclick=/i.test(saida), saida);
+  confere('ARTIGO: script, img e javascript: NUNCA saem — e o </a> do link descartado não fica órfão',
+    !/script|onerror|javascript:|<img/i.test(saida) && !saida.includes('</a></p>') && saida.includes('<p>perigoso</p>'),
+    saida);
+  confere('ARTIGO: entidade do editor não é escapada duas vezes (&amp; continua &amp;)',
+    saida.includes('soberana</strong> &amp; livre') && !saida.includes('&amp;amp;'), saida);
+  confere('ARTIGO: corpo gigante é limitado, e o limite é respeitado de verdade',
+    act.articleBodyToHtml('<p>' + 'palavra '.repeat(20000) + '</p>').length <= act.ARTICLE_HTML_MAX,
+    String(act.articleBodyToHtml('<p>' + 'palavra '.repeat(20000) + '</p>').length));
+  confere('ARTIGO: vazio não vira nota vazia', act.articleBodyToHtml('') === '' && act.articleBodyToHtml('<p></p>') === '' && act.articleBodyToHtml(null) === '', 'devolveu algo');
+}
+
+// ───────────────────────── aviso de conteúdo (CW) e menções ─────────────────────────
+
+confere('CW: texto do aviso é lido do summary, sem HTML e sem entidade solta',
+  inb.extractContentWarning({ summary: '<p>relato de  viol&ecirc;ncia &amp; abuso</p>' }) === 'relato de viol&ecirc;ncia & abuso'
+  && inb.extractContentWarning({ summary: '   ' }) === null && inb.extractContentWarning({}) === null,
+  JSON.stringify(inb.extractContentWarning({ summary: '<p>relato de  viol&ecirc;ncia &amp; abuso</p>' })));
+confere('CW: aviso em post SEM mídia marca sensível (era o furo: o texto passava aberto)',
+  inb.extractSensitiveFlag({ summary: 'spoiler' }) === true && inb.extractSensitiveFlag({ sensitive: true }) === true,
+  'aviso sem mídia ainda é ignorado');
+confere('CW: sem aviso e sem marca, nada de sensível',
+  inb.extractSensitiveFlag({}) === false && inb.extractSensitiveFlag({ summary: '' }) === false && inb.extractSensitiveFlag({ sensitive: false }) === false,
+  'marcou sem motivo');
+
+confere('MENÇÃO: só o formato completo @usuario@dominio, em minúsculas e sem repetir',
+  JSON.stringify(act.mencoesDoTexto('oi @Ana@Mastodon.Social e @ana@mastodon.social e @fulano', 'exercitodolula.app')) === JSON.stringify(['ana@mastodon.social']),
+  JSON.stringify(act.mencoesDoTexto('oi @Ana@Mastodon.Social e @ana@mastodon.social e @fulano', 'exercitodolula.app')));
+confere('MENÇÃO: quem é daqui não vira menção federada',
+  act.mencoesDoTexto('oi @breno@exercitodolula.app', 'exercitodolula.app').length === 0,
+  'mencionou alguém da própria casa como se fosse de fora');
+confere('MENÇÃO: e-mail no meio do texto não vira menção',
+  act.mencoesDoTexto('escreva para contato@exercito.org por favor', 'exercitodolula.app').length === 0,
+  JSON.stringify(act.mencoesDoTexto('escreva para contato@exercito.org por favor', 'exercitodolula.app')));
+
+{
+  const base = {
+    id: 'https://exercitodolula.app/ap/notes/P1', actorId: ACTOR, contentHtml: '<p>oi</p>', publishedIso: '2026-01-01T00:00:00Z',
+    to: [gate.AS_PUBLIC], cc: [FOLLOWERS], url: 'u', sensitive: false, attachments: [], hashtags: [],
+  };
+  const comMencao = act.buildNote({ ...base, mentions: [{ href: 'https://mastodon.social/users/ana', acct: 'ana@mastodon.social' }] });
+  confere('MENÇÃO: vira tag Mention no Note, com o href do ator e o @ completo',
+    comMencao.tag.some((x) => x.type === 'Mention' && x.href === 'https://mastodon.social/users/ana' && x.name === '@ana@mastodon.social'),
+    JSON.stringify(comMencao.tag));
+  confere('MENÇÃO: o endereço entra no cc (é o que faz o servidor de lá avisar a pessoa)',
+    comMencao.cc.includes('https://mastodon.social/users/ana') && comMencao.cc.includes(FOLLOWERS),
+    JSON.stringify(comMencao.cc));
+  confere('MENÇÃO: sem menção, nada muda no cc nem nas tags',
+    JSON.stringify(act.buildNote(base).cc) === JSON.stringify([FOLLOWERS]) && act.buildNote(base).tag.length === 0,
+    JSON.stringify(act.buildNote(base).cc));
+  confere('MENÇÃO: endereço repetido no cc não é duplicado',
+    act.buildNote({ ...base, cc: [FOLLOWERS, 'https://mastodon.social/users/ana'], mentions: [{ href: 'https://mastodon.social/users/ana', acct: 'ana@mastodon.social' }] }).cc.filter((x) => x === 'https://mastodon.social/users/ana').length === 1,
+    'duplicou o destinatário');
+}
 
 const nota = act.buildNote({
   id: `${ORIGEM}/ap/notes/P1`, actorId: ACTOR, contentHtml: '<p>oi</p>', publishedIso: '2026-11-12T12:00:00Z',

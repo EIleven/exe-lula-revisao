@@ -26,7 +26,6 @@ import GlobalSearch from './GlobalSearch';
 import RightSidebar from './RightSidebar';
 import AppHeader from './AppHeader';
 import ScrollChrome from './ScrollChrome';
-import PwaInstallBanner from '@/components/pwa/PwaInstallBanner';
 import DeviceLoginApprover from '@/components/auth/DeviceLoginApprover';
 import GlobalP2pListener from '@/components/messages/GlobalP2pListener';
 import { VisitorWelcomeTour, MemberWelcomeTour } from '@/components/onboarding/QuickTourDialog';
@@ -34,6 +33,10 @@ import ManageFeedsDialog from '@/components/feed/ManageFeedsDialog';
 import { applyDocumentAccentColor, HIGH_CONTRAST_THEME } from '@/lib/utils/themeColor';
 import { useDynamicOfficialColor } from '@/hooks/useDynamicOfficialColor';
 import { useTheme } from 'next-themes';
+import { useHiperChatMode } from '@/hooks/useHiperChatMode';
+import HiperChatShell from './HiperChatShell';
+import { useHiperChatPreferences } from '@/hooks/useHiperChatPreferences';
+import { useAvisoSonoro } from '@/hooks/useAvisoSonoro';
 
 const AppLayoutContentSkeleton: React.FC = () => (
   <div className="w-full min-w-0">
@@ -85,7 +88,7 @@ const AppLayout = ({ children }: AppLayoutProps) => {
     { href: `/${locale}/explore`, label: t('nav.explore'), icon: Search, requiresAuth: false, showBadge: false },
     { href: `/${locale}/messages`, label: t('nav.messages'), icon: MessageSquare, requiresAuth: true, authHref: () => `/${locale}/messages`, showBadge: true },
     { href: `/${locale}/notifications`, label: t('nav.notifications'), icon: Bell, requiresAuth: true, authHref: () => `/${locale}/notifications`, showBadge: true },
-    { href: `/${locale}/breaknews`, label: 'BreakNews', icon: Newspaper, requiresAuth: true, showBadge: false },
+    { href: `/${locale}/breaknews`, label: 'Leitura limpa', icon: Newspaper, requiresAuth: true, showBadge: false },
     { href: `/${locale}/keys`, label: 'Identidade P2P', icon: KeyRound, requiresAuth: true, showBadge: false },
   ];
 
@@ -166,13 +169,55 @@ const AppLayout = ({ children }: AppLayoutProps) => {
   const shouldShowFab = clientHasMounted && isMobile && currentUser && canCreateContent
     && !fabHiddenPaths.some((path) => pathname.startsWith(path));
   
-  const showMobileNav = clientHasMounted && isMobile;
+  // Dentro de uma conversa, no celular, a barra de abas sai de cena: ela é fixa no rodapé e disputava o mesmo lugar do
+  // compositor com o teclado aberto — o botão de enviar ficava atrás dela. A conversa já tem cabeçalho com Voltar.
+  const emConversaAberta =
+    pathname.startsWith(`/${locale}/messages/user/`) || pathname.startsWith(`/${locale}/messages/group/`);
+  const showMobileNav = clientHasMounted && isMobile && !emConversaAberta;
   // Mensagens são uma tarefa focada: no desktop a conversa usa a área central inteira, sem tendências e artigos ao lado.
   const isMessagesRoute = pathname.startsWith(`/${locale}/messages`);
   const isAuthRoute =
     pathname.startsWith(`/${locale}/login`) ||
     pathname.startsWith(`/${locale}/register`) ||
     pathname.startsWith(`/${locale}/auth`);
+  const isHiperChat = useHiperChatMode();
+  // O som é do HiperChat porque o botão que o desliga mora lá. No HiperVerso nada apita, como antes.
+  const { preferencias: prefsDoChat } = useHiperChatPreferences(currentUser?.id);
+  useAvisoSonoro(unreadMessagesCount, Boolean(isHiperChat && prefsDoChat.som));
+  const isAllowedHiperChatRoute =
+    isMessagesRoute ||
+    isAuthRoute ||
+    pathname.startsWith(`/${locale}/settings`);
+
+  useEffect(() => {
+    if (!clientHasMounted || !isHiperChat) return;
+    if (!isAllowedHiperChatRoute) {
+      router.replace(`/${locale}/messages`);
+    }
+  }, [clientHasMounted, isHiperChat, isAllowedHiperChatRoute, router, locale]);
+
+  if (clientHasMounted && isHiperChat) {
+    return (
+      <>
+        {currentUser && <GlobalP2pListener currentUser={currentUser} />}
+        <HiperChatShell
+          locale={locale}
+          pathname={pathname}
+          currentUser={currentUser}
+          unreadMessages={unreadMessagesCount}
+          isMobile={isMobile}
+          onLogout={handleLogout}
+        >
+          {!isAuthRoute && isLoadingCurrentUser && !currentUser ? (
+            <AppLayoutContentSkeleton />
+          ) : (
+            childrenWithProps
+          )}
+        </HiperChatShell>
+        <DeviceLoginApprover />
+      </>
+    );
+  }
 
   return (
     <>
@@ -196,7 +241,18 @@ const AppLayout = ({ children }: AppLayoutProps) => {
         </>
       )}
       <VisitorWelcomeTour isGuest={clientHasMounted && !isLoadingCurrentUser && !currentUser} />
-      <div className="min-h-screen bg-background">
+      <div
+        data-hv-conversa={emConversaAberta ? 'aberta' : undefined}
+        data-hv-recibos={prefsDoChat.confirmacaoDeLeitura ? 'on' : 'off'}
+        className={cn(
+          'bg-background',
+          // Numa conversa no celular a tela é toda da conversa: altura exata do que se vê, sem rolagem de página.
+          // (min-h-screen sozinho mede a tela COM a barra do navegador escondida, e sobrava faixa vazia no rodapé.)
+          emConversaAberta
+            ? 'min-h-screen max-[799px]:h-[100dvh] max-[799px]:min-h-0 max-[799px]:overflow-hidden'
+            : 'min-h-screen',
+        )}
+      >
         <SidebarProvider forceCollapsed={isMessagesRoute}>
           <div className="flex w-full max-w-[1400px] mx-auto justify-center px-0 min-[801px]:px-4">
             <DesktopSidebar
@@ -219,7 +275,10 @@ const AppLayout = ({ children }: AppLayoutProps) => {
             
             <main className={cn('w-full min-w-0', isMessagesRoute ? 'flex-1 max-w-[1200px]' : 'max-w-[600px]')}>
               <AppHeader />
+              {/* Dentro de uma conversa a tela tem altura exata: um aviso a mais aqui empurraria o compositor para fora
+                  da área visível. O aviso continua em todas as outras telas, inclusive na lista de conversas. */}
               {clientHasMounted && firebaseUser && !firebaseUser.emailVerified && !isFederatedLoginAccount
+                && !emConversaAberta
                 && !pathname.startsWith(`/${locale}/auth/verify-email`) && (
                 <div className="border-b border-amber-500/30 bg-amber-500/10 p-3 text-sm">
                   Confirme seu e-mail para publicar e interagir.{' '}
@@ -265,7 +324,7 @@ const AppLayout = ({ children }: AppLayoutProps) => {
           )}
         </SidebarProvider>
       </div>
-      <PwaInstallBanner />
+      {/* Banner flutuante de instalação PWA removido para evitar poluição visual (download acessível em /download). */}
       <DeviceLoginApprover />
     </>
   );

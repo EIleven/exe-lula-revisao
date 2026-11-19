@@ -10,7 +10,7 @@
 //   o protocolo não nos dá como provar quem pede).
 import {
   AP_CONTEXT, buildActor, buildCountOnlyCollection, buildCreate, buildNote, buildOrderedCollection, buildOrderedPage,
-  hashtagsDoTexto, plainTextToHtml,
+  articleBodyToHtml, escapeHtml, hashtagsDoTexto, mencoesDoTexto, plainTextToHtml,
 } from './activity.ts';
 import type { NoteAttachment } from './activity.ts';
 import { addressingFor } from './gate.ts';
@@ -43,8 +43,22 @@ const sem = (origin: string) => origin.replace(/\/+$/, '');
 
 // ───────────────────────── Ator ─────────────────────────
 
-export async function renderActor(deps: RenderDeps, handleBruto: string): Promise<Rendered> {
-  const { store, origin } = deps;
+/** Como servir o ator: pelo host canônico (padrão) ou por um host ANTIGO desta instância. */
+export type ActorRenderOptions = {
+  /**
+   * Servir pelo host antigo: TUDO é montado com ele (id, caixas, chave), e o ator ganha `movedTo` apontando para o
+   * canônico. Um documento que declara `id` de outro host é recusado como falsificação pelo Mastodon e pelo nosso
+   * próprio `validateFetchedActor` — foi o que deixou a identidade antiga quebrada quando o domínio mudou.
+   */
+  legacyOrigin?: string | null;
+  /** Auto-alias da migração, só no ator canônico: o endereço desta mesma conta no domínio anterior. */
+  alsoKnownAs?: readonly string[];
+};
+
+export async function renderActor(deps: RenderDeps, handleBruto: string, opcoes: ActorRenderOptions = {}): Promise<Rendered> {
+  const { store } = deps;
+  // A origem desta resposta: o host antigo, quando o pedido veio por ele; senão o canônico.
+  const origin = opcoes.legacyOrigin ?? deps.origin;
   const plataforma = await store.getPlatform();
   if (!plataforma.enabled || plataforma.killSwitch) return { status: 404, body: null };
 
@@ -78,24 +92,36 @@ export async function renderActor(deps: RenderDeps, handleBruto: string): Promis
       keyId: keyIdUrl(origin, reserva.handle),
       publicKeyPem: reserva.publicKeyPem,
       avatarUrl: imagemDePerfil(deps, perfil.avatarUrl),
+      avatarAlt: perfil.avatarAlt ?? null,
       coverUrl: imagemDePerfil(deps, perfil.coverUrl),
+      coverAlt: perfil.coverUrlAlt ?? null,
       // Descoberta e indexação começam DESLIGADAS para qualquer pessoa. A conta institucional da casa existe para ser
       // encontrada (diretório e busca de outras instâncias), e `isOfficial` só quem administra a rede grava.
       discoverable: perfil.isOfficial === true,
       indexable: perfil.isOfficial === true,
       publishedIso: ISO(reserva.createdAtMs),
-      alsoKnownAs: conta.alsoKnownAs,
-      movedTo: conta.movedTo,
+      // `conta.alsoKnownAs` (o campo antigo, que a pessoa preenchia) continua FORA. O único alias que sai é o da
+      // migração de domínio, montado pela rota e passado aqui.
+      alsoKnownAs: opcoes.legacyOrigin ? [] : [...(opcoes.alsoKnownAs ?? [])],
+      // Pedido pelo host antigo: o ator diz para onde a conta se mudou. Pelo canônico, vale o que a conta tiver.
+      movedTo: opcoes.legacyOrigin ? actorUrl(deps.origin, reserva.handle) : conta.movedTo,
       website: perfil.website && /^https?:\/\//i.test(perfil.website) ? perfil.website : null,
       location: perfil.location,
     }),
   };
 }
 
+const EXTRA_OWN_MEDIA_ORIGINS = [
+  'https://media.hiperverso.app',
+  'https://media.hiperverso.social',
+  'https://media.exercitodolula.app',
+];
+
 /** A mídia só sai se for da NOSSA URL pública. */
 export function nossaMidia(deps: Pick<RenderDeps, 'mediaOrigin'>, url: string | null | undefined): string | null {
   if (!url) return null;
-  return url.startsWith(`${sem(deps.mediaOrigin)}/m/`) ? url : null;
+  if (url.startsWith(`${sem(deps.mediaOrigin)}/m/`)) return url;
+  return EXTRA_OWN_MEDIA_ORIGINS.some((origin) => url.startsWith(`${origin}/m/`)) ? url : null;
 }
 
 // Arquivo ESTÁTICO do próprio site (`public/`), gravado como caminho a partir da raiz: sem `//`, sem `..`, e fora das rotas
@@ -127,16 +153,24 @@ async function anexosDe(deps: RenderDeps, post: LocalPost): Promise<NoteAttachme
   return anexos;
 }
 
-/** O texto como vai no `content`: o do post, mais o link do YouTube (e link do post citado, se houver). */
+/**
+ * O texto do post em TEXTO PURO. Serve de base para as hashtags e de alternativa quando não há HTML.
+ *
+ * No Artigo, vem o título mais o corpo INTEIRO, com os parágrafos preservados. Não corta em 360 caracteres (quem lia no
+ * Mastodon via reticências e tinha de abrir o site) e não enfia o endereço no meio do texto: o endereço canônico é o campo
+ * `url` da nota.
+ */
 export function contentTextOf(post: LocalPost, origin?: string): string {
   if (post.category === 'news') {
-    const plainBody = (post.text || '')
-      .replace(/<[^>]+>/g, ' ')
-      .replace(/\s+/g, ' ')
+    const corpo = (post.text || '')
+      .replace(/<\/p\s*>|<br\s*\/?>|<\/h[1-6]\s*>|<\/li\s*>/gi, '\n')
+      .replace(/<[^>]+>/g, '')
+      .replace(/&nbsp;/gi, ' ')
+      .replace(/&amp;/gi, '&')
+      .replace(/[ \t]+/g, ' ')
+      .replace(/\n{3,}/g, '\n\n')
       .trim();
-    const summary = plainBody.length > 360 ? `${plainBody.slice(0, 357).trim()}...` : plainBody;
-    const articleUrl = origin ? postPageUrl(origin, DEFAULT_LOCALE, post.id) : '';
-    return [post.headline?.trim(), summary, articleUrl].filter(Boolean).join('\n\n');
+    return [post.headline?.trim(), corpo].filter(Boolean).join('\n\n');
   }
   let texto = post.youtubeVideoId ? `${post.text}\n\nhttps://www.youtube.com/watch?v=${post.youtubeVideoId}`.trim() : post.text;
   if (post.type === 'quote') {
@@ -146,6 +180,37 @@ export function contentTextOf(post: LocalPost, origin?: string): string {
     }
   }
   return texto;
+}
+
+/**
+ * O `content` da nota, em HTML.
+ *
+ * Artigo: título em negrito e o corpo inteiro convertido do editor (`articleBodyToHtml`), para ser lido de ponta a ponta
+ * dentro do Mastodon, Misskey, Pleroma ou Organica, sem sair de lá. Post comum: o texto puro virando parágrafos, como sempre.
+ */
+function contentHtmlOf(post: LocalPost, origin: string, texto: string): string {
+  const tagHref = (tag: string) => hashtagPageUrl(origin, DEFAULT_LOCALE, tag);
+  if (post.category !== 'news') return plainTextToHtml(texto, { tagHref });
+  const titulo = post.headline?.trim();
+  const corpo = articleBodyToHtml(post.text || '');
+  // Sem HTML aproveitável (artigo só com mídia, ou corpo vazio), cai no caminho comum em vez de publicar nota vazia.
+  if (!corpo) return plainTextToHtml(texto, { tagHref });
+  return `${titulo ? `<p><strong>${escapeHtml(titulo)}</strong></p>` : ''}${corpo}`;
+}
+
+/**
+ * Resolve `@usuario@dominio` do texto para o endereço do ator, usando só quem este servidor já conhece. Quem nunca passou
+ * por aqui fica de fora: inventar um endereço mandaria a nota para o servidor errado.
+ */
+async function mencoesResolvidas(deps: Pick<RenderDeps, 'store' | 'ownHost'>, texto: string): Promise<{ href: string; acct: string }[]> {
+  const handles = mencoesDoTexto(texto, deps.ownHost);
+  if (handles.length === 0 || !deps.store.findRemoteActorByHandle) return [];
+  const achados = await Promise.all(handles.map((h) => deps.store.findRemoteActorByHandle!(h).catch(() => null)));
+  const saida: { href: string; acct: string }[] = [];
+  achados.forEach((ator, i) => {
+    if (ator?.actorId) saida.push({ href: ator.actorId, acct: handles[i] });
+  });
+  return saida;
 }
 
 export async function noteFor(deps: RenderDeps, handle: string, post: LocalPost, scope: FederationScope) {
@@ -159,7 +224,7 @@ export async function noteFor(deps: RenderDeps, handle: string, post: LocalPost,
   return buildNote({
     id: noteUrl(origin, post.id),
     actorId: ator,
-    contentHtml: plainTextToHtml(texto, { tagHref: (t) => hashtagPageUrl(origin, DEFAULT_LOCALE, t) }),
+    contentHtml: contentHtmlOf(post, origin, texto),
     publishedIso: ISO(post.createdAtMs),
     updatedIso: post.updatedAtMs ? ISO(post.updatedAtMs) : null,
     to,
@@ -171,6 +236,7 @@ export async function noteFor(deps: RenderDeps, handle: string, post: LocalPost,
     // As hashtags vêm do TEXTO que vai no corpo (hashtagsDoTexto), não de `post.hashtags`: o app guarda aquela lista com o `#` e
     // o `tag` saía `##Lula`. Assim `tag` e links do corpo concordam, e uma hashtag só do resumo cortado não vira tag invisível.
     hashtags: hashtagsDoTexto(texto).map((name) => ({ name, href: hashtagPageUrl(origin, DEFAULT_LOCALE, name) })),
+    mentions: await mencoesResolvidas(deps, texto),
   });
 }
 
@@ -185,6 +251,16 @@ export function commentNoteFor(deps: Pick<RenderDeps, 'origin'>, handle: string,
   const inReplyTo = comment.parentCommentId
     ? commentNoteUrl(origin, comment.postId, comment.parentCommentId)
     : noteUrl(origin, comment.postId);
+  const attachments: NoteAttachment[] = Array.isArray(comment.media)
+    ? comment.media
+        .slice(0, 4)
+        .filter((m) => Boolean(m?.url && /^https:\/\//i.test(m.url)))
+        .map((m) => ({
+          url: m.url,
+          mediaType: m.type === 'video' ? 'video/mp4' : 'image/jpeg',
+          alt: m.alt ?? null,
+        }))
+    : [];
   return buildNote({
     id: commentNoteUrl(origin, comment.postId, comment.id),
     actorId: ator,
@@ -195,7 +271,7 @@ export function commentNoteFor(deps: Pick<RenderDeps, 'origin'>, handle: string,
     url: postPageUrl(origin, DEFAULT_LOCALE, comment.postId),
     sensitive: comment.sensitive,
     inReplyTo,
-    attachments: [],
+    attachments,
     hashtags: hashtagsDoTexto(comment.text).map((name) => ({ name, href: hashtagPageUrl(origin, DEFAULT_LOCALE, name) })),
   });
 }
@@ -283,8 +359,15 @@ export async function renderOutbox(deps: RenderDeps, handleBruto: string, pagina
 
 // ───────────────────────── Descoberta ─────────────────────────
 
-export async function renderWebfinger(deps: RenderDeps, handleBruto: string): Promise<Rendered> {
-  const { store, origin, ownHost } = deps;
+export async function renderWebfinger(
+  deps: RenderDeps,
+  handleBruto: string,
+  /** Pedido por um host antigo: a resposta aponta para o ator DELE, que é quem tem `movedTo`. */
+  opcoes: { legacyOrigin?: string | null; legacyHost?: string | null } = {},
+): Promise<Rendered> {
+  const { store } = deps;
+  const origin = opcoes.legacyOrigin ?? deps.origin;
+  const ownHost = opcoes.legacyHost ?? deps.ownHost;
   const plataforma = await store.getPlatform();
   if (!plataforma.enabled || plataforma.killSwitch) return { status: 404, body: null };
   const reserva = await store.getHandle(handleBruto);
@@ -339,7 +422,16 @@ export async function renderNodeInfo(deps: RenderDeps): Promise<Rendered> {
       services: { inbound: [], outbound: [] },
       openRegistrations: false,
       usage: { users: { total: metricas.accounts }, localPosts: metricas.publicObjects },
-      metadata: { nodeName: 'Exe. Lula' },
+      metadata: {
+        nodeName: 'HiperVerso',
+        nodeDescription:
+          'Comunidade brasileira independente e rede ActivityPub autoral em Next.js/TypeScript com WebRTC P2P e E2EE (sem vinculo institucional partidario ou governamental).',
+        maintainer: 'Breno Ramos',
+        homepageUrl: 'https://hiperverso.app/pt-BR/about',
+        repositoryUrl: 'https://github.com/EIleven/exe-lula-revisao',
+        devPortalUrl: 'https://hiperverso.app/pt-BR/dev',
+        softwareStack: 'Codigo proprio em TypeScript/Next.js + ActivityPub nativo (nao e fork de Misskey)',
+      },
     },
     headers: { 'Content-Type': 'application/json; profile="http://nodeinfo.diaspora.software/ns/schema/2.1#"' },
   };

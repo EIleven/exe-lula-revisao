@@ -6,7 +6,7 @@ import type { PaginatedPostsOptions } from '@/lib/services/postReadService';
 import { useCurrentUserId } from '@/contexts/CurrentUserContext';
 import { useFeedActions, useFeedState, initialFeedState } from '@/contexts/FeedContext';
 import { cacheService } from '@/lib/services/cacheService';
-import { getFeedActivityMillis, uniqueFeedItems } from '@/lib/feedUtils';
+import { getFeedActivityMillis, sortAndDedupeFeedItems } from '@/lib/feedUtils';
 
 export type FetchPostsFunction<C = FirestoreTimestamp | string | number | null> = (
   cursor: C | null,
@@ -103,7 +103,7 @@ export function useInfiniteFeed<C = FirestoreTimestamp | string | number | null>
       // A leitura da rede substitui a primeira página em cache. Assim posts apagados, autores removidos de um feed e
       // permissões revogadas não ficam misturados com um resultado atual.
       const combined = isInitialLoad ? result.posts : [...currentState.posts, ...result.posts];
-      const uniquePosts = uniqueFeedItems(combined);
+      const uniquePosts = sortAndDedupeFeedItems(combined);
       setFeedState(feedId, {
         viewerKey,
         queryKey,
@@ -156,7 +156,7 @@ export function useInfiniteFeed<C = FirestoreTimestamp | string | number | null>
         setFeedState(feedId, {
           viewerKey,
           queryKey,
-          posts: uniqueFeedItems(cachedPosts),
+          posts: sortAndDedupeFeedItems(cachedPosts),
           newestPostTimestamp: newestActivity(cachedPosts),
           isLoading: true,
         });
@@ -172,7 +172,7 @@ export function useInfiniteFeed<C = FirestoreTimestamp | string | number | null>
     if (!newItems || newItems.length === 0) return;
     const rawState = getFeedState(feedId);
     const currentItems = rawState.viewerKey === viewerKey && rawState.queryKey === queryKey ? rawState.posts : [];
-    const uniquePosts = uniqueFeedItems([...newItems, ...currentItems]);
+    const uniquePosts = sortAndDedupeFeedItems([...newItems, ...currentItems]);
     setFeedState(feedId, {
       viewerKey,
       queryKey,

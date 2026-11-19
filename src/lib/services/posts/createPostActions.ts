@@ -24,6 +24,7 @@ import {
     extractYoutubeVideoInfo,
     extractHashtagsFromString,
 } from '@/lib/utils/textUtils';
+import { tokensDoDocumento } from '@/lib/search/indiceDeTexto';
 import { getUser } from '@/lib/services/userService';
 import { getPostById } from '@/lib/services/postReadService';
 import { postsCollection } from '@/lib/services/postService';
@@ -160,6 +161,15 @@ export const createPost = async (data: {
     isDeleted: false, // Ensure this is always set
     isLikedBy: {}, // For Firestore document structure
     hashtags: hashtags.length > 0 ? hashtags : null,
+    // Termos para a BUSCA alcancar este post pelo banco, e nao so dentro da janela dos mais recentes. Sem isto a
+    // busca por palavra so enxerga as ultimas horas da rede. Ver src/lib/search/indiceDeTexto.ts.
+    searchTokens: tokensDoDocumento({
+      titulo: headlineForPost,
+      texto: textForPost,
+      autorNome: authorDetailsToEmbed?.name,
+      autorHandle: authorDetailsToEmbed?.username,
+      hashtags,
+    }),
     text: (textForPost && textForPost.trim() !== '') ? textForPost : null,
     youtubeVideoId: detectedYoutubeVideoId || null,
     media: finalMedia || null,
@@ -262,8 +272,9 @@ const createQuoteInteraction = async ( type: 'quote', originalPostId: string, ac
         isEdited: updatedOriginalPost.isEdited || false,
         editCount: updatedOriginalPost.editCount || 0,
         hasMedia: updatedOriginalPost.hasMedia || false,
+        sensitive: updatedOriginalPost.sensitive === true,
     };
-    
+
     if (interactionData.quotedPostObject) {
        const op = interactionData.quotedPostObject;
         detailsToEmbed = {
@@ -279,6 +290,7 @@ const createQuoteInteraction = async ( type: 'quote', originalPostId: string, ac
           visibility: op.visibility,
           category: op.category,
           headline: op.headline || null,
+          sensitive: op.sensitive === true,
         } as OriginalPostDetails;
     }
 
@@ -305,7 +317,7 @@ const createQuoteInteraction = async ( type: 'quote', originalPostId: string, ac
         visibility: postVisibilityFor(actorUser),
         federation: interactionData.federation ?? 'local',
         location: interactionData.location || null,
-        sensitive: interactionData.sensitive === true,
+        sensitive: Boolean(interactionData.sensitive && newMedia && newMedia.length > 0),
         category: 'echo', // A quote or repost is always an 'echo'
         isLikedBy: {},
         isEdited: false,
@@ -422,7 +434,7 @@ export const quoteComment = async (
       visibility: postVisibilityFor(quoterUser),
       federation: options?.federation ?? 'local',
       location: options?.location || null,
-      sensitive: options?.sensitive === true,
+      sensitive: Boolean(options?.sensitive && newMedia && newMedia.length > 0),
       category: 'echo',
       isLikedBy: {},
       isEdited: false,

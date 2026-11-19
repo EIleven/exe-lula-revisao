@@ -111,6 +111,15 @@
           }
         }
       }
+    },
+    "p2pInbox": {
+      "$toUid": {
+        ".read": "auth != null && auth.uid == $toUid",
+        ".write": "auth != null && auth.uid == $toUid",
+        "$fromUid": {
+          ".write": "auth != null && auth.uid == $fromUid"
+        }
+      }
     }
   }
 }

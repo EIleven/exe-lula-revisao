@@ -48,10 +48,10 @@ export default function MediaGrid({ media, fallbackAlt, onImageClick, singleMaxH
           );
           if (isVideo) {
             return (
-              <div key={`${item.url}-${index}`} className={tileClass} data-interactive="true">
+              <div key={`${item.url}-${index}`} className={cn(tileClass, 'bg-black flex items-center justify-center')} data-interactive="true">
                 <PlatformVideo
                   src={item.url}
-                  className={cn('w-full object-cover', single ? cn('h-auto', singleMaxHeightClass) : 'h-full')}
+                  className={cn('w-full object-contain bg-black', single ? 'h-auto max-h-[65vh]' : 'h-full')}
                   controls
                   preload="metadata"
                   playsInline

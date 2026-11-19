@@ -1,5 +1,5 @@
 // src/app/api/post-image/[postId]/route.tsx
-// Imagem do post no visual do Exe. Lula, para a prévia do link nas outras redes (X, Bluesky, WhatsApp, Telegram...) e
+// Imagem do post no visual do HiperVerso, para a prévia do link nas outras redes (X, Bluesky, WhatsApp, Telegram...) e
 // para compartilhar no Instagram (feed e story). Gerada no servidor, sem login: por isso só monta a imagem de post
 // PÚBLICO — post só para seguidores devolve a imagem genérica da marca, senão o conteúdo restrito vazaria para
 // qualquer pessoa com o endereço.
@@ -10,6 +10,7 @@
 import { ImageResponse } from 'next/og';
 import { getPostById } from '@/lib/services/postReadService';
 import { siteConfig } from '@/config/site';
+import { assertSafeUrl } from '@/lib/security/safe-fetch';
 import { htmlToPlainText } from '@/lib/security/sanitizeHtml';
 
 export const runtime = 'nodejs';
@@ -27,27 +28,40 @@ type Formato = keyof typeof FORMATOS;
 const limitar = (texto: string, maximo: number) =>
   texto.length > maximo ? `${texto.slice(0, maximo - 1).trimEnd()}…` : texto;
 
-export async function GET(request: Request, { params }: { params: { postId: string } }) {
+const safePublicMediaUrl = (raw?: string | null): string | null => {
+  if (!raw || !/^https?:\/\//i.test(raw)) return null;
+  try {
+    return assertSafeUrl(raw).toString();
+  } catch {
+    return null;
+  }
+};
+
+export async function GET(request: Request, { params }: { params: Promise<{ postId: string }> }) {
+  const { postId } = await params;
   const url = new URL(request.url);
+  if (!postId || !/^[a-zA-Z0-9._-]{1,128}$/.test(postId)) {
+    return Response.redirect(`${url.origin}/exe-lula-og.png`, 307);
+  }
   const pedido = url.searchParams.get('formato');
   const formato: Formato = pedido === 'quadrado' || pedido === 'story' ? pedido : 'og';
   const { largura, altura } = FORMATOS[formato];
   const alto = formato === 'story';
 
   // Sem login: só post público. Qualquer falha cai na imagem da marca.
-  const post = await getPostById(params.postId, null).catch(() => undefined);
+  const post = await getPostById(postId, null).catch(() => undefined);
   if (!post || post.isDeleted) {
     return Response.redirect(`${url.origin}/exe-lula-og.png`, 307);
   }
 
   const autor = post.user;
-  const nome = autor?.name ?? 'Exe. Lula';
+  const nome = autor?.name ?? 'HiperVerso';
   const arroba = autor?.username ? `@${autor.username}` : '';
-  const avatar = autor?.avatarUrl && /^https?:\/\//.test(autor.avatarUrl) ? autor.avatarUrl : null;
+  const avatar = safePublicMediaUrl(autor?.avatarUrl);
   const ehArtigo = post.category === 'news' && !!post.headline;
   const titulo = ehArtigo ? limitar(post.headline ?? '', 140) : '';
   const corpo = limitar(htmlToPlainText(post.text ?? '').replace(/\s+/g, ' ').trim(), alto ? 420 : 280);
-  const imagem = post.media?.find((m) => m.type === 'image')?.url ?? null;
+  const imagem = safePublicMediaUrl(post.media?.find((m) => m.type === 'image')?.url);
   // Do PRÓPRIO servidor que está respondendo (e não do endereço oficial): assim a imagem também sai certa em teste.
   const marca = `${url.origin}/brand/lula.png`;
 
@@ -75,7 +89,7 @@ export async function GET(request: Request, { params }: { params: { postId: stri
           color: '#fff',
         }}
       >
-        {/* Cartão do post, como ele aparece no Exe. Lula */}
+        {/* Cartão do post, como ele aparece no HiperVerso */}
         <div
           style={{
             display: 'flex',

@@ -13,7 +13,7 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Download, Share2, ArrowLeft } from 'lucide-react';
+import { Download, Share2, ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils';
@@ -38,6 +38,7 @@ interface ImageViewerProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   imageUrl: string | null;
+  images?: string[];
   postUrl?: string; // URL of the post containing the image for sharing
 }
 
@@ -54,10 +55,18 @@ export default function ImageViewer({
   isOpen,
   onOpenChange,
   imageUrl,
+  images,
   postUrl,
 }: ImageViewerProps) {
   const { toast } = useToast();
   const t = useTranslations('ImageViewer');
+  const gallery = React.useMemo(() => {
+    const list = (images && images.length > 0 ? images : imageUrl ? [imageUrl] : []).filter(Boolean);
+    return Array.from(new Set(list));
+  }, [images, imageUrl]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const activeImageUrl = gallery[currentIndex] ?? imageUrl;
+  const hasCarousel = gallery.length > 1;
   const [zoom, setZoom] = useState<ZoomState>(IDENTITY);
   const [dragY, setDragY] = useState(0); // puxar para fechar (só no tamanho original)
   const [animating, setAnimating] = useState(false); // transição suave ao soltar (nunca enquanto o dedo está na tela)
@@ -91,6 +100,22 @@ export default function ImageViewer({
     return { x: clientX - (rect.left + rect.width / 2), y: clientY - (rect.top + rect.height / 2) };
   }, []);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const idx = imageUrl ? gallery.indexOf(imageUrl) : 0;
+    setCurrentIndex(idx >= 0 ? idx : 0);
+  }, [isOpen, imageUrl, gallery]);
+
+  const goPrev = useCallback(() => {
+    if (!hasCarousel) return;
+    setCurrentIndex((i) => (i - 1 + gallery.length) % gallery.length);
+  }, [hasCarousel, gallery.length]);
+
+  const goNext = useCallback(() => {
+    if (!hasCarousel) return;
+    setCurrentIndex((i) => (i + 1) % gallery.length);
+  }, [hasCarousel, gallery.length]);
+
   // Cada imagem começa no tamanho original.
   useEffect(() => {
     setZoom(IDENTITY);
@@ -98,7 +123,7 @@ export default function ImageViewer({
     pointers.current.clear();
     gesture.current = null;
     lastTap.current = null;
-  }, [imageUrl, isOpen]);
+  }, [activeImageUrl, isOpen]);
 
   const beginGesture = useCallback(() => {
     const points = [...pointers.current.values()];
@@ -198,7 +223,15 @@ export default function ImageViewer({
         lastTap.current = { at: now, point };
       }
     } else if (g.startZoom.scale <= 1) {
+      const dx = point.x - g.startPoint.x;
       const dy = point.y - g.startPoint.y;
+      if (hasCarousel && Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.2) {
+        if (dx < 0) goNext();
+        else goPrev();
+        setDragY(0);
+        gesture.current = null;
+        return;
+      }
       if (shouldDismiss(dy, g.velocityY)) {
         haptics.tap();
         onOpenChange(false);
@@ -222,7 +255,7 @@ export default function ImageViewer({
     });
   };
 
-  // Teclado: + − ampliam, 0 volta (Esc fecha, pelo próprio diálogo).
+  // Teclado: + − ampliam, 0 volta, setas esquerda/direita navegam no carrossel (Esc fecha, pelo próprio diálogo).
   useEffect(() => {
     if (!isOpen) return;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -230,13 +263,15 @@ export default function ImageViewer({
       if (event.key === '+' || event.key === '=') setZoom((z) => settle(clampState({ ...z, scale: clampScale(z.scale * 1.5) }, size), size));
       else if (event.key === '-' || event.key === '_') setZoom((z) => settle(clampState({ ...z, scale: clampScale(z.scale / 1.5) }, size), size));
       else if (event.key === '0') setZoom(IDENTITY);
+      else if (event.key === 'ArrowLeft') goPrev();
+      else if (event.key === 'ArrowRight') goNext();
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [isOpen, sizeOf]);
+  }, [isOpen, sizeOf, goPrev, goNext]);
 
   const handleShare = async () => {
-    if (!imageUrl) return;
+    if (!activeImageUrl) return;
 
     const shareData: ShareData = {
       title: t('shareTitle'),
@@ -248,7 +283,7 @@ export default function ImageViewer({
       if (navigator.share && navigator.canShare(shareData)) {
         await navigator.share(shareData);
       } else {
-        await navigator.clipboard.writeText(shareData.url || imageUrl);
+        await navigator.clipboard.writeText(shareData.url || activeImageUrl);
         toast({
           title: t('linkCopiedTitle'),
           description: t('linkCopiedBody'),
@@ -267,11 +302,11 @@ export default function ImageViewer({
   };
 
   const handleDownload = () => {
-    if (!imageUrl) return;
+    if (!activeImageUrl) return;
     try {
       const a = document.createElement('a');
-      a.href = imageUrl;
-      const fileName = imageUrl.split('/').pop()?.split('?')[0] || 'exe-lula-image.jpg';
+      a.href = activeImageUrl;
+      const fileName = activeImageUrl.split('/').pop()?.split('?')[0] || 'exe-lula-image.jpg';
       a.download = fileName;
       document.body.appendChild(a);
       a.click();
@@ -287,7 +322,7 @@ export default function ImageViewer({
         description: t('downloadFailedBody'),
         variant: 'destructive',
       });
-      window.open(imageUrl, '_blank');
+      window.open(activeImageUrl, '_blank');
     }
   };
 
@@ -321,10 +356,16 @@ export default function ImageViewer({
             </DialogClose>
           </div>
 
-          {imageUrl && (
+          {hasCarousel && (
+            <div className="fixed z-50 top-4 right-4 rounded-full bg-black/60 px-3 py-1 text-xs font-semibold text-white">
+              {currentIndex + 1} / {gallery.length}
+            </div>
+          )}
+
+          {activeImageUrl && (
             <div
               ref={frameRef}
-              className="relative w-full h-full max-h-[calc(100vh-8rem)] overflow-hidden select-none"
+              className="relative w-full h-full max-h-[calc(100vh-10rem)] overflow-hidden select-none"
               style={{ touchAction: 'none' }}
               onPointerDown={onPointerDown}
               onPointerMove={onPointerMove}
@@ -334,7 +375,7 @@ export default function ImageViewer({
               data-testid="image-viewer-frame"
             >
               <img
-                src={imageUrl}
+                src={activeImageUrl}
                 alt={t('imageAlt')}
                 draggable={false}
                 className="absolute inset-0 h-full w-full object-contain pointer-events-none"
@@ -348,15 +389,61 @@ export default function ImageViewer({
             </div>
           )}
 
-          <div className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent flex justify-center items-center gap-4">
-            <Button variant="secondary" onClick={handleDownload}>
-              <Download className="mr-2 h-4 w-4" />
-              {t('save')}
-            </Button>
-            <Button variant="secondary" onClick={handleShare}>
-              <Share2 className="mr-2 h-4 w-4" />
-              {t('share')}
-            </Button>
+          {hasCarousel && (
+            <>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={goPrev}
+                aria-label="Imagem anterior"
+                className="fixed left-3 sm:left-5 top-1/2 -translate-y-1/2 z-50 h-11 w-11 rounded-full bg-black/60 text-white hover:bg-black/80"
+              >
+                <ChevronLeft className="h-6 w-6" />
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={goNext}
+                aria-label="Próxima imagem"
+                className="fixed right-3 sm:right-5 top-1/2 -translate-y-1/2 z-50 h-11 w-11 rounded-full bg-black/60 text-white hover:bg-black/80"
+              >
+                <ChevronRight className="h-6 w-6" />
+              </Button>
+            </>
+          )}
+
+          <div className="fixed bottom-0 left-0 right-0 p-3 sm:p-4 bg-gradient-to-t from-black/85 to-transparent flex flex-col items-center gap-2.5">
+            {hasCarousel && (
+              <div className="flex items-center gap-1.5 overflow-x-auto max-w-full px-2">
+                {gallery.map((url, idx) => (
+                  <button
+                    key={`${url}-${idx}`}
+                    type="button"
+                    onClick={() => setCurrentIndex(idx)}
+                    aria-label={`Ver imagem ${idx + 1}`}
+                    className={cn(
+                      'h-11 w-11 rounded-md overflow-hidden border-2 shrink-0 transition-all',
+                      idx === currentIndex ? 'border-primary scale-105' : 'border-white/25 opacity-65 hover:opacity-100',
+                    )}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={url} alt="" className="h-full w-full object-cover" />
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="flex justify-center items-center gap-4">
+              <Button variant="secondary" onClick={handleDownload}>
+                <Download className="mr-2 h-4 w-4" />
+                {t('save')}
+              </Button>
+              <Button variant="secondary" onClick={handleShare}>
+                <Share2 className="mr-2 h-4 w-4" />
+                {t('share')}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </DialogPortal>

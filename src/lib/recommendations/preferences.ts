@@ -61,3 +61,4 @@ export function persistLocalRecommendationPreferences(prefs: RecommendationPrefe
   }
   window.dispatchEvent(new CustomEvent<RecommendationPreferences>(REC_PREFS_EVENT, { detail: prefs }));
 }
+

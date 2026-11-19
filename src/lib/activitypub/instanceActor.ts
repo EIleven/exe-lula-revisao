@@ -3,7 +3,7 @@
 // o perfil, a caixa de saída e as listas de um servidor que exige "Authorized Fetch" (Mastodon em modo seguro, por exemplo).
 //
 // Antes essas buscas eram assinadas com a chave privada do PRIMEIRO handle ativo (hoje `alexandre`): todo servidor do Fediverso
-// via as consultas do Exe. Lula como se fossem dele, e a chave privada de uma pessoa ficava decifrada na memória do processo,
+// via as consultas do HiperVerso como se fossem dele, e a chave privada de uma pessoa ficava decifrada na memória do processo,
 // em cache, para sempre. O ator da instância é o que o Mastodon faz (`/actor`, tipo Application): uma chave só da casa, que
 // não pertence a ninguém. Fica em `/ap/actor` e a chave é cifrada com a chave-mestra, como as das pessoas (AAD `@instance`,
 // que nenhum UID do Firebase pode ter).
@@ -60,8 +60,8 @@ export function renderInstanceActor(entrada: { origin: string; ownHost: string; 
     id,
     type: 'Application',
     preferredUsername: entrada.ownHost,
-    name: 'Exe. Lula',
-    summary: 'Conta técnica do servidor: assina as buscas que o Exe. Lula faz em outros servidores do Fediverso. Ninguém publica por aqui.',
+    name: 'HiperVerso',
+    summary: 'Conta técnica do servidor: assina as buscas que o HiperVerso faz em outros servidores do Fediverso. Ninguém publica por aqui.',
     url: entrada.origin,
     inbox: sharedInboxUrl(entrada.origin),
     endpoints: { sharedInbox: sharedInboxUrl(entrada.origin) },

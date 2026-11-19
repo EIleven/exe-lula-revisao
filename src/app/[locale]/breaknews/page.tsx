@@ -2,11 +2,14 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
+import { useLocale } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Link as LinkIcon, Newspaper, Share2, Bookmark } from 'lucide-react';
+import { Loader2, Link as LinkIcon, Newspaper, Share2, Bookmark, Lock } from 'lucide-react';
 import Image from 'next/image';
 import { Dialog, DialogTrigger } from '@/components/ui/dialog';
 import CreateNewsDialogContent from '@/components/feed/CreateNewsDialogContent';
@@ -36,7 +39,8 @@ export default function BreakNewsPage() {
   const [isCreateNewsDialogOpen, setIsCreateNewsDialogOpen] = useState(false);
   const [attemptCount, setAttemptCount] = useState(0);
   const { toast } = useToast();
-  const { currentUser } = useCurrentUser();
+  const { currentUser, isLoading: isLoadingUser } = useCurrentUser();
+  const locale = useLocale();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -137,6 +141,41 @@ export default function BreakNewsPage() {
       });
   };
 
+  if (isLoadingUser) {
+    return (
+      <div className="container mx-auto max-w-3xl py-8 space-y-4">
+        <Skeleton className="h-10 w-56" />
+        <Skeleton className="h-36 w-full" />
+      </div>
+    );
+  }
+
+  if (!currentUser) {
+    return (
+      <div className="container mx-auto max-w-xl py-8 px-4">
+        <Card className="shadow-lg rounded-none">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-xl font-bold">
+              <Lock className="h-5 w-5 text-primary" />
+              Leitura limpa
+            </CardTitle>
+            <CardDescription>
+              Esta ferramenta é exclusiva para contas conectadas. Entre na sua conta para usar a leitura limpa.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-wrap gap-3">
+            <Button asChild>
+              <Link href={`/${locale}/login?redirect=/${locale}/breaknews`}>Entrar</Link>
+            </Button>
+            <Button variant="outline" asChild>
+              <Link href={`/${locale}`}>Voltar ao Feed</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <>
       {/* Dialog for creating a news article from the extracted content */}
@@ -160,10 +199,10 @@ export default function BreakNewsPage() {
           <CardHeader>
             <CardTitle className="flex items-center text-2xl font-bold">
               <Newspaper className="mr-3 h-6 w-6 text-primary" />
-              BreakNews
+              Leitura limpa
             </CardTitle>
             <CardDescription>
-              Cole a URL de um artigo para lê-lo aqui em um formato simplificado e limpo.
+              Ferramenta de extração de texto para leitura limpa de propagandas e popups excessivos.
             </CardDescription>
           </CardHeader>
           <CardContent>

@@ -14,6 +14,8 @@ export interface CustomFeed {
 export interface TabPreferences {
     hidden: ('following' | 'local_network' | 'explore' | 'articles')[];
     pinnedOrder: string[]; // array of custom feed IDs
+    /** Filtro estrito de idioma nos feeds ('all' ou código como 'pt', 'en', 'es', 'fr', 'de', 'it'). */
+    feedLanguageFilter?: string;
 }
 
 /** Motivo calculado no cliente para explicar por que uma conta foi sugerida. Nunca é persistido no perfil. */
@@ -201,8 +203,12 @@ export type Post = {
   customEmojis?: Record<string, string> | null;
   /** Cidade do post, escolhida pelo autor. */
   location?: PostLocation | null;
-  /** Aviso de conteúdo sensível nas mídias: ficam borradas até a pessoa tocar (ou ligar "exibir conteúdo sensível"). */
+  /** Conteúdo sensível: fica coberto até a pessoa tocar (ou ligar "exibir conteúdo sensível"). Vale com ou sem mídia. */
   sensitive?: boolean;
+  /** O aviso que o autor escreveu (`summary`/CW do Fediverso). Aparece ANTES do texto e da mídia. */
+  contentWarning?: string | null;
+  /** Idioma declarado pela origem, só em post do Fediverso. Post nosso não declara (a rede é em português). */
+  language?: string | null;
   poll?: PostPoll | null;
   /** IDs redundantes, mantidos no documento para as regras validarem votos sem confiar no cliente. */
   pollOptionIds?: string[] | null;
@@ -285,8 +291,10 @@ export type Comment = {
   hashtags?: string[] | null;
   /** Mapa de custom emojis do Fediverso (`:shortcode:` -> URL https) recebidos no Note. */
   customEmojis?: Record<string, string> | null;
-  /** Aviso de conteúdo sensível nas mídias do comentário (veja Post.sensitive). */
+  /** Conteúdo sensível no comentário (veja Post.sensitive). */
   sensitive?: boolean;
+  /** O aviso que o autor escreveu (`summary`/CW do Fediverso). */
+  contentWarning?: string | null;
   // Deprecated fields
   imageUrl?: string | null;
   "data-ai-hint"?: string | null;
@@ -367,6 +375,8 @@ export type DirectMessage = {
   fileUrl?: string;
   fileType?: 'image' | 'video' | 'audio' | 'file';
   mediaE2ee?: E2eeMessagePayload | null;
+  /** Capa cifrada de anexo grande protegido (feita no aparelho de quem envia; o servidor nao ve o video). */
+  posterUrl?: string | null;
   sharedPostId?: string; // Added to share posts
   sharedPost?: Post | null; // For client-side rendering
   createdAt: string;
@@ -397,6 +407,12 @@ export type Conversation = {
   createdAt: string;
   lastMessageAt: string;
   userLeftAt?: { [userId: string]: string | Timestamp }; // New field
+  /**
+   * Confirmacao de leitura: ate quando cada pessoa ja leu ("marca d'agua"), nao um registro por mensagem.
+   * So o dono da chave escreve a propria, e so com a hora do servidor (firestore.rules). Quem desliga a
+   * confirmacao nao escreve a sua e nao enxerga a dos outros (src/lib/messages/recibos.ts).
+   */
+  lastReadAt?: { [userId: string]: string | Timestamp };
   isSelf?: boolean;
   isGroup?: boolean;
   groupName?: string | null;

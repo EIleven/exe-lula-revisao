@@ -106,5 +106,6 @@ export const rotateE2eeKey = (userId: string) => identity().rotate(userId);
 export const createNewE2eeIdentity = (userId: string) => identity().createNewIdentity(userId);
 export const exportE2eeKeyring = (userId: string): Promise<Keyring | null> => identity().exportKeyring(userId);
 export const importE2eeKeyring = (userId: string, ring: Keyring) => identity().importKeyring(userId, ring);
+export const clearLocalE2eeKeyring = (userId: string) => identity().clearLocalKeys(userId);
 export const e2eeFingerprint = fingerprint;
 export const e2eeSafetyNumber = safetyNumber;

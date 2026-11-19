@@ -113,7 +113,7 @@ export function lastHapticAt(): number {
   return lastFiredAt;
 }
 
-const TAPPABLE = 'button, [role="button"], [role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"], [role="tab"], [role="switch"], [role="checkbox"], [role="radio"], summary, input[type="checkbox"], input[type="radio"], [data-haptic]';
+const TAPPABLE = 'button, a[href], [data-interactive="true"], [role="button"], [role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"], [role="tab"], [role="switch"], [role="checkbox"], [role="radio"], summary, input[type="checkbox"], input[type="radio"], [data-haptic]';
 
 /**
  * Tique leve em TODO toque num controle (botão, item de menu, aba, interruptor), como nos aplicativos nativos. Só toque e
@@ -138,9 +138,9 @@ export function installTapHaptics(): () => void {
     haptics.tap();
   };
   document.addEventListener('pointerdown', onDown, { capture: true, passive: true });
-  document.addEventListener('click', onClick);
+  document.addEventListener('click', onClick, { capture: true });
   return () => {
     document.removeEventListener('pointerdown', onDown, true);
-    document.removeEventListener('click', onClick);
+    document.removeEventListener('click', onClick, true);
   };
 }

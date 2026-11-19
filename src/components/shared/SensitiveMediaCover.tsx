@@ -31,6 +31,8 @@ export function useSensitiveMediaVisibility(sensitive?: boolean, contentKey?: st
 
 interface SensitiveMediaCoverProps {
   sensitive?: boolean;
+  /** Aviso escrito pelo AUTOR (`summary`/CW). Quando existe, aparece no lugar do texto genérico. */
+  warning?: string | null;
   contentKey?: string | null;
   compact?: boolean;
   className?: string;
@@ -45,6 +47,7 @@ interface SensitiveMediaCoverProps {
  */
 export default function SensitiveMediaCover({
   sensitive,
+  warning,
   contentKey,
   compact = false,
   className,
@@ -92,8 +95,9 @@ export default function SensitiveMediaCover({
         >
           <ShieldAlert className={compact ? 'h-4 w-4' : 'h-6 w-6'} aria-hidden="true" />
         </div>
-        <p className={cn('font-semibold text-foreground', compact ? 'text-xs' : 'text-sm')}>
-          {contentT('sensitiveWarning')}
+        <p className={cn('max-w-sm break-words font-semibold text-foreground', compact ? 'text-xs' : 'text-sm')}>
+          {/* O aviso do autor manda: só sem ele entra o texto genérico da casa. */}
+          {typeof warning === 'string' && warning.trim() ? warning.trim() : contentT('sensitiveWarning')}
         </p>
         {!compact && (
           <p className="max-w-sm text-xs text-muted-foreground">{contentT('sensitiveHint')}</p>

@@ -32,7 +32,11 @@ export default function FederationReachControl({ value, onChange, blockedReason 
 
   // Perfil privado: o alcance de fora nunca é maior que o de dentro (as regras do Firestore também exigem).
   const perfilPrivado = currentUser?.profileVisibility === 'private';
-  const efetivo: FederationReach = blockedReason ? 'local' : value;
+  const efetivo: FederationReach = blockedReason
+    ? 'local'
+    : perfilPrivado && (value === 'public' || value === 'unlisted')
+      ? 'followers'
+      : value;
 
   return (
     <Popover>

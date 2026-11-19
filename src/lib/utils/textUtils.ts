@@ -1,5 +1,4 @@
 // src/lib/utils/textUtils.ts
-import { lookupUsersByUsername } from '@/lib/services/mentionLookup';
 // Links de vídeo do YouTube moram em utils/youtubeLinks.ts (sem dependência do app, conferido por npm run e2e:youtube).
 import { youtubeThumbnailUrl } from './youtubeLinks';
 export { extractYoutubeVideoInfo, youtubeEmbedUrl, youtubeThumbnailUrl } from './youtubeLinks';
@@ -55,30 +54,6 @@ export const extractFirstMediaFromHtml = (html: string | null | undefined): stri
 
 
 /**
- * Finds @mentions in an HTML string and replaces them with links to user profiles.
- * @param html The HTML content.
- * @returns A Promise that resolves to the HTML string with mentions linkified.
- */
-export const linkifyMentionsInHtml = async (html: string): Promise<string> => {
-    if (!html) return html;
-    const mentionRegex = /@([a-zA-Z0-9_]+)/g;
-    const mentions = html.match(mentionRegex);
-    if (!mentions) return html;
-
-    const uniqueUsernames = [...new Set(mentions.map(m => m.substring(1)))];
-    
-    const userMap = await lookupUsersByUsername(uniqueUsernames); // @ em minúsculas -> perfil
-
-    return html.replace(mentionRegex, (match, username) => {
-        const userId = userMap.get(username.toLowerCase())?.id;
-        if (userId) {
-            return `<a href="/profile/${userId}" class="text-primary hover:underline" data-interactive="true" onclick="event.stopPropagation()">${match}</a>`;
-        }
-        return match; // Return the original mention if user not found
-    });
-};
-
-/**
  * Finds #hashtags in an HTML string and replaces them with links to tag pages.
  * It's designed to not linkify text within existing anchor tags.
  * @param html The HTML content.
@@ -101,6 +76,67 @@ export const linkifyHashtagsInHtml = (html: string, locale: string): string => {
         if (openLinks > 0) return part;
         // O clique no link não abre o post: o cartão ignora cliques em <a> e em [data-interactive].
         return part.replace(hashtagRegex, (_match, before: string, tagName: string) =>
-            `${before}<a href="/${locale}/tag/${encodeURIComponent(tagName)}" class="text-primary hover:underline" data-interactive="true">#${tagName}</a>`);
+            `${before}<a href="/${locale}/tag/${encodeURIComponent(tagName)}" class="text-primary hover:underline" data-interactive="true" data-hv-tag="${encodeURIComponent(tagName)}">#${tagName}</a>`);
+    }).join('');
+};
+
+const OWN_FEDIVERSE_DOMAINS = new Set([
+    'hiperverso.social',
+    'hiperverso.app',
+    'www.hiperverso.app',
+    'exercitodolula.app',
+    'www.exercitodolula.app',
+]);
+
+/**
+ * Monta a URL externa direta do perfil de outra rede (Mastodon, Misskey, Organica, GoToSocial, etc.).
+ */
+export const remoteMentionExternalUrl = (user: string, domain: string): string => {
+    const cleanUser = user.replace(/^@+/, '').trim();
+    const cleanDomain = domain.trim().toLowerCase();
+    return `https://${cleanDomain}/@${encodeURIComponent(cleanUser)}`;
+};
+
+/**
+ * Converte @menções (@usuario ou @usuario@instancia) em texto fora de tags HTML e fora de <a>...</a>
+ * em links clicáveis dentro de artigos. Menções de outras redes abrem diretamente a rede da pessoa.
+ */
+export const linkifyMentionsInHtml = (
+    html: string,
+    locale: string,
+    resolvedUserIds?: Map<string, string>,
+): string => {
+    if (!html) return html;
+
+    const mentionRegex = /(^|[^&\w./])@([a-zA-Z0-9._-]+)@([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})|(^|[^&\w./])@([a-zA-Z0-9_]+)/g;
+    let openLinks = 0;
+    return html.split(/(<[^>]*>)/g).map((part) => {
+        if (part.startsWith('<')) {
+            if (/^<a[\s>]/i.test(part)) openLinks++;
+            else if (/^<\/a\s*>/i.test(part)) openLinks = Math.max(0, openLinks - 1);
+            return part;
+        }
+        if (openLinks > 0) return part;
+        return part.replace(mentionRegex, (_match, rBefore, rUser, rDomain, lBefore, lUser) => {
+            if (rUser && rDomain) {
+                const domainLower = String(rDomain).toLowerCase();
+                if (OWN_FEDIVERSE_DOMAINS.has(domainLower)) {
+                    const uid = resolvedUserIds?.get(String(rUser).toLowerCase());
+                    const url = uid
+                        ? `/${locale}/profile/${encodeURIComponent(uid)}`
+                        : `/${locale}/search?q=${encodeURIComponent(`@${rUser}`)}`;
+                    const uidAttr = uid ? ` data-hv-local-uid="${encodeURIComponent(uid)}"` : '';
+                    return `${rBefore}<a href="${url}" class="text-primary hover:underline" data-interactive="true"${uidAttr} data-hv-local-handle="${encodeURIComponent(String(rUser))}">@${rUser}@${rDomain}</a>`;
+                }
+                const externalUrl = remoteMentionExternalUrl(rUser, rDomain);
+                return `${rBefore}<a href="${externalUrl}" target="_blank" rel="noopener noreferrer" class="text-primary hover:underline" data-interactive="true" data-hv-remote-acct="${encodeURIComponent(`${rUser}@${rDomain}`)}">@${rUser}@${rDomain}</a>`;
+            }
+            const uid = resolvedUserIds?.get(String(lUser).toLowerCase());
+            const url = uid
+                ? `/${locale}/profile/${encodeURIComponent(uid)}`
+                : `/${locale}/search?q=${encodeURIComponent(`@${lUser}`)}`;
+            const uidAttr = uid ? ` data-hv-local-uid="${encodeURIComponent(uid)}"` : '';
+            return `${lBefore}<a href="${url}" class="text-primary hover:underline" data-interactive="true"${uidAttr} data-hv-local-handle="${encodeURIComponent(String(lUser))}">@${lUser}</a>`;
+        });
     }).join('');
 };

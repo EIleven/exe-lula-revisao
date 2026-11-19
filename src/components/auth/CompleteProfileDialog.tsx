@@ -88,7 +88,7 @@ export default function CompleteProfileDialog({ user, onProfileComplete, onCance
               Finalize seu Perfil
           </DialogTitle>
           <DialogDescription>
-            Bem-vindo(a) ao Exe. Lula! Escolha seu nome de usuário e adicione sua data de nascimento para continuar.
+            Bem-vindo(a) ao HiperVerso! Escolha seu nome de usuário e adicione sua data de nascimento para continuar.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 pt-4">

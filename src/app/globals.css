@@ -26,7 +26,7 @@ body {
     --popover: 0 0% 1%;
     --popover-foreground: 0 0% 95%;
 
-    --primary: 228, 90%, 55%; /* Electric Blue #7DF9FF */
+    --primary: 228 90% 55%; /* Electric Blue #7DF9FF */
     --primary-foreground: 9 21% 86%;; /* Dark color for text on primary */
 
     --secondary: 0 0% 100%; 
@@ -35,7 +35,7 @@ body {
     --muted: 0 0% 10%;
     --muted-foreground: 0 0% 60%;
 
-    --accent: 228, 90%, 55%; /* Changed to Primary Blue */
+    --accent: 228 90% 55%; /* Changed to Primary Blue */
     --accent-foreground: 9 21% 86%;; /* Changed to Primary Foreground */
 
     --destructive: 0 70% 50%;
@@ -43,28 +43,34 @@ body {
 
     --border: 0 0% 10%; /* Darker, more subtle border */
     --input: 0 0% 1%;
-    --ring: 228, 90%, 55%; /* Primary color for rings */
+    --ring: 228 90% 55%; /* Primary color for rings */
     --radius: 0.5rem;
 
-    --chart-1: 228, 90%, 55%; /* Electric Blue (Primary) */
-    --chart-2: 283, 39%, 67%; /* Soft Purple */
-    --chart-3: 160, 100%, 35%; /* Teal */
-    --chart-4: 336, 84%, 60%; /* Pink */
-    --chart-5: 45, 90%, 55%; /* Gold */
+    --chart-1: 228 90% 55%; /* Electric Blue (Primary) */
+    --chart-2: 283 39% 67%; /* Soft Purple */
+    --chart-3: 160 100% 35%; /* Teal */
+    --chart-4: 336 84% 60%; /* Pink */
+    --chart-5: 45 90% 55%; /* Gold */
     
     --sidebar-background: 0 0% 1%; /* Even darker sidebar */
     --sidebar-foreground: 0 0% 90%;
-    --sidebar-primary: 228, 90%, 55%;
+    --sidebar-primary: 228 90% 55%;
     --sidebar-primary-foreground: 9 21% 86%;;
-    --sidebar-accent: 228, 90%, 55%; /* Changed to Primary Blue */
+    --sidebar-accent: 228 90% 55%; /* Changed to Primary Blue */
     --sidebar-accent-foreground: 9 21% 86%;; /* Changed to Primary Foreground */
     --sidebar-border: 0 0% 8%;
-    --sidebar-ring: 228, 90%, 55%;
+    --sidebar-ring: 228 90% 55%;
     --like: 336 84% 56%; /* Added like color #EC4899 */
     --repost: 145 63% 42%; /* Green color for repost */
 
     /* Responsive Layout Variables */
     --header-height: 48px; /* h-12 do cabeçalho; sobe para 3.5rem a partir de 640px (abaixo) */
+
+    /* A moldura em volta da conversa. Quem MONTA a moldura declara o que ela ocupa (AppLayout e HiperChatShell, nas
+       regras lá embaixo); a tela de Mensagens só desconta. Dentro de uma conversa no celular não sobra moldura
+       nenhuma: os dois viram 0 e o compositor encosta no teclado. */
+    --chat-chrome-top: var(--header-height); /* cabeçalho do app: é sticky, ocupa lugar no fluxo */
+    --chat-chrome-bottom: 3.5rem; /* barra de abas do celular: é fixa, não ocupa lugar, então precisa ser descontada */
     --sidebar-left-width: 280px; /* Default expanded */
     --sidebar-right-width: 380px; /* Default visible */
   }
@@ -90,6 +96,11 @@ body {
       --header-height: 56px; /* sm:h-14 do cabeçalho */
     }
   }
+  @media (min-width: 800px) {
+    :root {
+      --chat-chrome-bottom: 0px; /* a barra de abas é só do celular */
+    }
+  }
 
   .dark {
     --background: 0 0% 0%;
@@ -98,7 +109,7 @@ body {
     --card-foreground: 0 0% 95%;
     --popover: 0 0% 0%;
     --popover-foreground: 0 0% 95%;
-    --primary: 228, 90%, 55%;
+    --primary: 228 90% 55%;
     --primary-foreground: 9 21% 86%;;
     --secondary: 0 0% 100%;
     --secondary-foreground: 0 0% 10%;
@@ -110,24 +121,66 @@ body {
     --destructive-foreground: 0 0% 98%;
     --border: 0 0% 8%;
     --input: 0 0% 1%;
-    --ring: 228, 90%, 55%;
+    --ring: 228 90% 55%;
     
-    --chart-1: 228, 90%, 55%; /* Electric Blue (Primary) */
-    --chart-2: 283, 39%, 67%; /* Soft Purple */
-    --chart-3: 160, 100%, 35%; /* Teal */
-    --chart-4: 336, 84%, 60%; /* Pink */
-    --chart-5: 45, 90%, 55%; /* Gold */
+    --chart-1: 228 90% 55%; /* Electric Blue (Primary) */
+    --chart-2: 283 39% 67%; /* Soft Purple */
+    --chart-3: 160 100% 35%; /* Teal */
+    --chart-4: 336 84% 60%; /* Pink */
+    --chart-5: 45 90% 55%; /* Gold */
 
     --sidebar-background: 0 0% 0%;
     --sidebar-foreground: 0 0% 90%;
-    --sidebar-primary: 228, 90%, 55%;
+    --sidebar-primary: 228 90% 55%;
     --sidebar-primary-foreground: 9 21% 86%;;
-    --sidebar-accent: 228, 90%, 55%; /* Changed to Primary Blue */
+    --sidebar-accent: 228 90% 55%; /* Changed to Primary Blue */
     --sidebar-accent-foreground: 9 21% 86%;; /* Changed to Primary Foreground */
     --sidebar-border: 0 0% 8%;
-    --sidebar-ring: 228, 90%, 55%;
+    --sidebar-ring: 228 90% 55%;
     --like: 336 84% 56%; /* Added like color #EC4899 */
     --repost: 145 63% 42%; /* Green color for repost */
+  }
+
+  .light {
+    color-scheme: light;
+    --background: 210 20% 98%;
+    --foreground: 222 47% 11%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+
+    --primary: 228 85% 52%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 214 32% 94%;
+    --secondary-foreground: 222 47% 15%;
+
+    --muted: 214 25% 94%;
+    --muted-foreground: 215 16% 42%;
+
+    --accent: 214 32% 94%;
+    --accent-foreground: 222 47% 11%;
+
+    --destructive: 0 78% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 214 24% 88%;
+    --input: 214 24% 92%;
+    --ring: 228 85% 52%;
+
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 222 47% 15%;
+    --sidebar-primary: 228 85% 52%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 214 32% 94%;
+    --sidebar-accent-foreground: 222 47% 11%;
+    --sidebar-border: 214 24% 90%;
+    --sidebar-ring: 228 85% 52%;
+    --like: 336 84% 52%;
+    --repost: 145 63% 38%;
   }
 
   .high-contrast {
@@ -137,19 +190,19 @@ body {
     --card-foreground: 0 0% 100%;
     --popover: 0 0% 0%;
     --popover-foreground: 0 0% 100%;
-    --primary: 60, 100%, 50%; /* High-Vis Yellow */
+    --primary: 60 100% 50%; /* High-Vis Yellow */
     --primary-foreground: 0 0% 0%;
     --secondary: 240 100% 50%; /* High-Vis Blue */
     --secondary-foreground: 0 0% 100%;
     --muted: 0 0% 10%;
     --muted-foreground: 0 0% 80%;
-    --accent: 60, 100%, 50%;
+    --accent: 60 100% 50%;
     --accent-foreground: 0 0% 0%;
     --destructive: 0 100% 50%; /* High-Vis Red */
     --destructive-foreground: 0 0% 100%;
     --border: 0 0% 100%;
     --input: 0 0% 0%;
-    --ring: 60, 100%, 50%;
+    --ring: 60 100% 50%;
 
     --sidebar-background: 0 0% 0%;
     --sidebar-foreground: 0 0% 100%;
@@ -348,5 +401,73 @@ body {
   }
   .hover-bookmark:hover {
     @apply text-blue-500 bg-blue-500/10 rounded-full;
+  }
+}
+
+/*
+ * Tamanho do texto do HiperChat (Configurações > Só neste aparelho > Tamanho do texto).
+ * Só pega DENTRO de [data-hv-text], que existe apenas na moldura do HiperChat (HiperChatShell): no app HiperVerso a classe
+ * `hv-escala` não encontra esse ancestral e não muda nada. Dois seletores vencem o `text-sm` do Tailwind sem `!important`.
+ */
+[data-hv-text='pequeno'] .hv-escala {
+  font-size: 13px;
+  line-height: 1.45;
+}
+[data-hv-text='normal'] .hv-escala {
+  font-size: 14px;
+  line-height: 1.5;
+}
+[data-hv-text='grande'] .hv-escala {
+  font-size: 17px;
+  line-height: 1.55;
+}
+
+/* Marcas de entrega (✓ / ✓✓) nos balões. O HiperChat publica a escolha da pessoa em [data-hv-recibos] na sua
+   moldura; o HiperVerso nunca emite esse atributo, então a regra abaixo não existe lá. Assim a preferência vale
+   sem um gancho de React por balão — numa conversa com 200 mensagens isso seriam 200 leituras de localStorage. */
+[data-hv-recibos='off'] .hv-recibo {
+  display: none;
+}
+
+/* ------------------------------------------------------------------------------------------------------------------
+   ALTURA DA CONVERSA
+
+   A tela de conversa ocupa exatamente a área visível — nem um pixel a mais. Era aqui que nascia a faixa vazia entre o
+   compositor e o teclado: a altura descontava cabeçalho (48px) e barra de abas (56px) mesmo DEPOIS de os dois saírem de
+   cena dentro de uma conversa, e sobravam 104px de nada no rodapé. O desconto agora vem de quem monta a moldura, nas
+   variáveis --chat-chrome-top/--chat-chrome-bottom: um lugar só para a conta, impossível de ficar velho em um dos lados.
+
+   As duas declarações de `height` são de propósito: navegador que não conhece `dvh` fica com `svh`; quem conhece usa
+   `dvh`, que acompanha a barra do navegador e o teclado. No app Android nem isso é preciso — a janela já é
+   redimensionada (adjustResize) —, mas no navegador é o que cola o compositor no teclado.
+
+   Fora de um @layer de propósito: regra com seletor de atributo dentro de @layer components some na limpeza do Tailwind.
+   ------------------------------------------------------------------------------------------------------------------ */
+.altura-da-conversa {
+  height: calc(100svh - var(--chat-chrome-top, 3rem) - var(--chat-chrome-bottom, 0px));
+  height: calc(100dvh - var(--chat-chrome-top, 3rem) - var(--chat-chrome-bottom, 0px));
+}
+
+/* HiperChat com moldura: cabeçalho próprio (h-14) e abas mais altas (4.25rem, já reservadas no padding do <main>). */
+[data-hv-chat='moldura'] {
+  --chat-chrome-top: 3.5rem;
+  --chat-chrome-bottom: 4.25rem;
+}
+@media (min-width: 800px) {
+  [data-hv-chat='moldura'] {
+    --chat-chrome-bottom: 0px;
+  }
+}
+
+/* HiperChat dentro de uma conversa no celular: sem cabeçalho de app e sem abas. A conversa é a tela inteira. */
+[data-hv-chat='conversa'] {
+  --chat-chrome-top: 0px;
+  --chat-chrome-bottom: 0px;
+}
+
+/* HiperVerso dentro de uma conversa no celular: o cabeçalho continua, as abas saem. */
+@media (max-width: 799px) {
+  [data-hv-conversa='aberta'] {
+    --chat-chrome-bottom: 0px;
   }
 }

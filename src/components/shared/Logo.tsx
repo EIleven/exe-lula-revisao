@@ -2,30 +2,30 @@
 
 import type { SVGProps } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
 import { useLocale } from 'next-intl';
 import { cn } from '@/lib/utils';
 
-const Logo = (props: SVGProps<SVGSVGElement>) => {
+const Logo = (_props: SVGProps<SVGSVGElement>) => {
   const locale = useLocale();
   return (
-    <Link href={`/${locale}`} aria-label="Exe. Lula Home">
-    <div className="flex items-center gap-2 group">
-      <Image
-        src="/brand/lula-logo.svg"
-        alt="Exe. Lula Logo"
-        width={40}
-        height={40}
-        className="group-hover:opacity-80 transition-opacity"
-      />
-      <span className={cn(
-        "text-2xl font-bold text-foreground group-hover:text-primary transition-colors",
-        "hidden md:inline" // Hide text on mobile, show on medium screens and up
-      )}>
-        Exe. Lula
-      </span>
-    </div>
-  </Link>
+    <Link href={`/${locale}`} aria-label="HiperVerso Início">
+      <div className="flex items-center gap-2.5 group">
+        <span
+          aria-hidden="true"
+          className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-primary/15 text-primary border border-primary/30 font-black text-sm tracking-tight group-hover:bg-primary/20 transition-colors"
+        >
+          HV
+        </span>
+        <span
+          className={cn(
+            'text-xl font-bold tracking-tight text-foreground group-hover:text-primary transition-colors',
+            'hidden md:inline',
+          )}
+        >
+          HiperVerso
+        </span>
+      </div>
+    </Link>
   );
 };
 

@@ -18,7 +18,11 @@ import MessageInputArea from '@/components/messages/MessageInputArea';
 import P2pNoticeBanner from '@/components/messages/P2pNoticeBanner';
 import { GroupManagementDialog } from '@/components/messages/GroupManagementDialog';
 import { navigateBack } from '@/lib/backNavigation';
-import { getP2pPreferences } from '@/lib/p2p/p2pPreferences';
+import {
+  getGroupP2pMode,
+  setGroupP2pMode,
+  type GroupP2pMode,
+} from '@/lib/p2p/p2pPreferences';
 import type { LocalP2pMessage } from '@/lib/p2p/p2pChannel';
 import {
   createP2pGroupSession,
@@ -41,6 +45,8 @@ import {
   UserPlus,
   Wifi,
   WifiOff,
+  Check,
+  Database,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -104,7 +110,7 @@ function GroupConversationContent() {
   const [replyingTo, setReplyingTo] = useState<DirectMessage | null>(null);
   const [p2pMessages, setP2pMessages] = useState<LocalP2pMessage[]>([]);
   const [p2pConnectedCount, setP2pConnectedCount] = useState(0);
-  const [zeroDbOnly, setZeroDbOnly] = useState(false);
+  const [groupP2pMode, setGroupP2pModeState] = useState<GroupP2pMode>('hybrid');
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const shouldStickToBottom = useRef(true);
@@ -304,22 +310,43 @@ function GroupConversationContent() {
   const participantsById = useMemo(() => {
     const map: Record<string, User> = {};
     if (currentUser) map[currentUser.id] = currentUser;
-    for (const participant of conversation?.participantDetails || []) {
+    for (const participant of conversation?.participantsInfo || []) {
       if (participant?.id) {
         map[participant.id] = participant;
       }
     }
     return map;
-  }, [conversation?.participantDetails, currentUser]);
+  }, [conversation?.participantsInfo, currentUser]);
+
+  useEffect(() => {
+    if (!currentUserId || !conversation?.id) return;
+    setGroupP2pModeState(getGroupP2pMode(currentUserId, conversation.id));
+  }, [currentUserId, conversation?.id]);
+
+  const handleChangeGroupP2pMode = useCallback(
+    (nextMode: GroupP2pMode) => {
+      setGroupP2pModeState(nextMode);
+      if (currentUserId && conversation?.id) {
+        setGroupP2pMode(currentUserId, conversation.id, nextMode);
+      }
+      if (nextMode === 'off') {
+        toast({
+          title: 'P2P desativado neste grupo',
+          description: 'Mensagens enviadas e recebidas pelo banco (DB) para todos os participantes.',
+        });
+      } else {
+        toast({
+          title: 'P2P ativado neste grupo',
+          description: 'Entrega direto via P2P para conectados e via banco (DB) para quem está offline ou sem P2P.',
+        });
+      }
+    },
+    [currentUserId, conversation?.id, toast]
+  );
 
   useEffect(() => {
     if (!conversation?.id || !currentUser) return;
     let cancelled = false;
-
-    const prefs = getP2pPreferences(currentUser.id);
-    if (prefs.defaultZeroDbOnly) {
-      setZeroDbOnly(true);
-    }
 
     void loadGroupP2pHistory({
       conversationId: conversation.id,
@@ -331,7 +358,7 @@ function GroupConversationContent() {
       }
     });
 
-    if (!prefs.autoConnectP2p && !prefs.defaultZeroDbOnly && !zeroDbOnly) {
+    if (groupP2pMode === 'off') {
       p2pGroupRef.current?.destroy();
       p2pGroupRef.current = null;
       setP2pConnectedCount(0);
@@ -378,15 +405,34 @@ function GroupConversationContent() {
       }
       setP2pConnectedCount(0);
     };
-  }, [conversation?.id, currentUser, participantsById, zeroDbOnly]);
+  }, [conversation?.id, currentUser, participantsById, groupP2pMode]);
 
   const combinedMessages = useMemo(() => {
-    return [...messages, ...p2pMessages].sort((a, b) => {
+    const senderLookup = new Map<string, User>();
+    for (const [id, u] of Object.entries(participantsById)) {
+      if (u) senderLookup.set(id, u);
+    }
+    for (const m of messages) {
+      if (m.sender?.id) senderLookup.set(m.sender.id, m.sender);
+    }
+
+    const byId = new Map<string, DirectMessage>();
+    for (const m of messages) {
+      byId.set(m.id, m);
+    }
+    for (const p of p2pMessages) {
+      const resolvedSender = senderLookup.get(p.senderId) || p.sender;
+      const enriched = resolvedSender ? { ...p, sender: resolvedSender } : p;
+      if (!byId.has(enriched.id) || enriched.isP2p) {
+        byId.set(enriched.id, enriched);
+      }
+    }
+    return Array.from(byId.values()).sort((a, b) => {
       const ta = new Date(a.createdAt).getTime() || 0;
       const tb = new Date(b.createdAt).getTime() || 0;
       return ta - tb;
     });
-  }, [messages, p2pMessages]);
+  }, [messages, p2pMessages, participantsById]);
 
   const handleSendMessage = async (data: {
     text?: string;
@@ -401,41 +447,30 @@ function GroupConversationContent() {
             parentMessageId: replyingTo.id,
             parentMessageText:
               replyingTo.text || (replyingTo.fileUrl ? 'Arquivo anexado' : 'Post compartilhado'),
-            parentMessageSenderName: replyingTo.sender?.name || 'Participante',
+            parentMessageSenderName: replyingTo.sender?.name || 'Membro',
           }
         : {};
 
-      if (!data.fileUrl && data.text?.trim() && (p2pConnectedCount > 0 || zeroDbOnly)) {
-        if (!p2pGroupRef.current) {
-          toast({
-            title: 'Modo Zero DB iniciando',
-            description: 'Aguarde um instante enquanto a sessão P2P do grupo é inicializada.',
-          });
-          return;
+      const trimmedText = data.text?.trim() || '';
+      const otherMemberCount = conversation.participantIds.filter((id) => id !== currentUserId).length;
+      const allOthersConnectedViaP2p = otherMemberCount > 0 && p2pConnectedCount >= otherMemberCount;
+
+      if (groupP2pMode === 'hybrid' && !data.fileUrl && trimmedText && p2pConnectedCount > 0 && p2pGroupRef.current) {
+        const sent = await p2pGroupRef.current.sendText(trimmedText, replyData);
+        if (sent) {
+          setP2pMessages((prev) => (prev.some((m) => m.id === sent.id) ? prev : [...prev, sent]));
         }
-        const sent = await p2pGroupRef.current.sendText(data.text.trim(), replyData);
-        setP2pMessages((prev) => {
-          if (prev.some((m) => m.id === sent.id)) return prev;
-          return [...prev, sent];
-        });
+        // Em grupos, quem estiver offline ou com P2P desativado também recebe a mensagem pelo DB (mesmo ID, sem duplicar).
+        if (!allOthersConnectedViaP2p) {
+          await sendDirectMessage(conversation.id, currentUserId, {
+            ...data,
+            text: trimmedText,
+            ...replyData,
+            customMessageId: sent?.id,
+          });
+        }
         setReplyingTo(null);
         scrollToBottom('smooth');
-        if (sent.p2pStatus === 'queued') {
-          toast({
-            title: 'Na fila P2P (Zero DB)',
-            description:
-              'Nenhum participante conectado agora. A mensagem será entregue automaticamente quando alguém conectar e já sincroniza entre seus dispositivos.',
-          });
-        }
-        return;
-      }
-
-      if (zeroDbOnly) {
-        toast({
-          title: 'Modo Zero DB ativo',
-          description: 'Arquivos/mídias ainda usam envio padrão. Desative Zero DB para anexos.',
-          variant: 'destructive',
-        });
         return;
       }
 
@@ -454,13 +489,15 @@ function GroupConversationContent() {
   const handleDeleteMessage = async (messageId: string) => {
     if (!conversation || !currentUserId) return;
     try {
-      if (messageId.startsWith('p2p_')) {
+      const hasLocalP2p = p2pMessages.some((m) => m.id === messageId) || messageId.startsWith('p2p_');
+      const hasDbDoc = messages.some((m) => m.id === messageId) || !messageId.startsWith('p2p_');
+      if (hasLocalP2p) {
         deleteGroupLocalP2pMessage(currentUserId, conversation.id, messageId);
         setP2pMessages((prev) => prev.filter((m) => m.id !== messageId));
-        toast({ title: 'Mensagem P2P apagada localmente' });
-        return;
       }
-      await deleteDirectMessage(conversation.id, messageId);
+      if (hasDbDoc) {
+        await deleteDirectMessage(conversation.id, messageId);
+      }
       toast({ title: 'Mensagem apagada' });
     } catch {
       toast({
@@ -471,11 +508,11 @@ function GroupConversationContent() {
     }
   };
 
-  const handleFileUpload = async (file: File) => {
+  const handleFileUpload = async (file: File, aoProgredir?: (p: number) => void) => {
     if (!currentUserId) throw new Error('Usuário não logado');
     const { uploadFileToStorage, directMessageMediaPathFactory, isLikelyVideoFile } =
       await import('@/lib/services/mediaUploadService');
-    const result = await uploadFileToStorage(currentUserId, file, directMessageMediaPathFactory);
+    const result = await uploadFileToStorage(currentUserId, file, directMessageMediaPathFactory, aoProgredir);
     const fileType: DirectMessage['fileType'] = file.type.startsWith('image/')
       ? 'image'
       : isLikelyVideoFile(file)
@@ -597,7 +634,7 @@ function GroupConversationContent() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => navigateBack(router, `/${locale}/messages`)}
+            onClick={() => navigateBack(router, { fallbackUrl: `/${locale}/messages` })}
             className="mr-2 min-[800px]:hidden"
           >
             <ArrowLeft className="h-5 w-5" />
@@ -611,21 +648,15 @@ function GroupConversationContent() {
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary ring-1 ring-primary/30">
               <Users className="h-5 w-5" />
             </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-1.5">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5 min-w-0">
                 <p className="truncate text-sm sm:text-base font-semibold text-foreground">
                   {conversation.groupName || 'Grupo'}
                 </p>
                 {isCurrentUserAdmin && (
                   <span className="inline-flex items-center gap-0.5 rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-medium text-primary shrink-0">
                     <Shield className="h-2.5 w-2.5" />
-                    Admin
-                  </span>
-                )}
-                {p2pConnectedCount > 0 && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-medium text-emerald-500 border border-emerald-500/30 shrink-0">
-                    <Wifi className="h-3 w-3" />
-                    P2P · {p2pConnectedCount}
+                    <span className="hidden sm:inline">Admin</span>
                   </span>
                 )}
               </div>
@@ -635,16 +666,37 @@ function GroupConversationContent() {
             </div>
           </button>
           <Button
-            variant={zeroDbOnly ? 'default' : 'outline'}
+            variant="outline"
             size="sm"
-            onClick={() => setZeroDbOnly((v) => !v)}
-            title="Modo Zero DB: envia mensagens em texto direto via P2P (ou enfileira localmente e sincroniza entre seus dispositivos)"
-            className={`mr-1 h-8 gap-1.5 rounded-full px-2.5 text-xs shrink-0 ${
-              zeroDbOnly ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : ''
+            onClick={() => handleChangeGroupP2pMode(groupP2pMode === 'off' ? 'hybrid' : 'off')}
+            aria-label={
+              groupP2pMode === 'off'
+                ? 'Ativar P2P neste grupo'
+                : 'Desativar P2P neste grupo'
+            }
+            title={
+              groupP2pMode === 'hybrid'
+                ? 'P2P ativo (entrega direta via P2P e compatível via DB para quem está offline ou sem P2P). Clique para desativar.'
+                : 'P2P desativado neste grupo (usando DB). Clique para ativar P2P.'
+            }
+            className={`mr-1 h-8 gap-1.5 rounded-full px-2.5 text-[11px] sm:text-xs font-medium shrink-0 ${
+              groupP2pMode === 'hybrid'
+                ? 'border-emerald-500/45 bg-emerald-500/15 text-emerald-500 hover:bg-emerald-500/25'
+                : 'border-border/70 text-muted-foreground hover:text-foreground'
             }`}
           >
-            {zeroDbOnly ? <Wifi className="h-3.5 w-3.5" /> : <WifiOff className="h-3.5 w-3.5" />}
-            <span className="hidden sm:inline">Zero DB</span>
+            {groupP2pMode === 'off' ? (
+              <WifiOff className="h-3.5 w-3.5 shrink-0" />
+            ) : (
+              <Wifi className="h-3.5 w-3.5 shrink-0" />
+            )}
+            <span>
+              {groupP2pMode === 'hybrid'
+                ? p2pConnectedCount > 0
+                  ? `P2P · ${p2pConnectedCount}`
+                  : 'P2P Ativo'
+                : 'P2P Off'}
+            </span>
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -653,7 +705,17 @@ function GroupConversationContent() {
                 <span className="sr-only">Opções do grupo</span>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align="end" className="w-64">
+              <DropdownMenuItem onSelect={() => handleChangeGroupP2pMode('hybrid')}>
+                <Wifi className="mr-2 h-4 w-4 text-emerald-500" />
+                <span className="flex-1">Ativar P2P (Todos recebem)</span>
+                {groupP2pMode === 'hybrid' && <Check className="ml-2 h-4 w-4 text-emerald-500" />}
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => handleChangeGroupP2pMode('off')}>
+                <Database className="mr-2 h-4 w-4 text-muted-foreground" />
+                <span className="flex-1">Desativar P2P (Só DB)</span>
+                {groupP2pMode === 'off' && <Check className="ml-2 h-4 w-4 text-primary" />}
+              </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => setShowGroupManage(true)}>
                 <UserPlus className="mr-2 h-4 w-4" />
                 <span>{isCurrentUserAdmin ? 'Gerenciar grupo e admins' : 'Ver participantes'}</span>
@@ -679,10 +741,17 @@ function GroupConversationContent() {
               const isSender = currentUserId ? msg.senderId === currentUserId : false;
               return (
                 <div key={msg.id} className="space-y-1">
-                  {!isSender && msg.sender?.name && (
-                    <p className="px-1 text-[11px] font-medium text-muted-foreground">
-                      {msg.sender.name}
-                    </p>
+                  {!isSender && msg.sender && (
+                    <div className="flex items-center gap-1.5 px-1">
+                      <span className="text-[11px] font-semibold text-foreground/90">
+                        {msg.sender.name || msg.sender.username}
+                      </span>
+                      {msg.sender.username && msg.sender.username !== 'participante' && (
+                        <span className="text-[10px] text-muted-foreground">
+                          @{msg.sender.username}
+                        </span>
+                      )}
+                    </div>
                   )}
                   <MessageBubble
                     message={msg}
@@ -694,9 +763,15 @@ function GroupConversationContent() {
               );
             })}
             {combinedMessages.length === 0 && !isLoading && (
-              <p className="text-center text-muted-foreground py-10">
-                Nenhuma mensagem ainda. Diga olá para o grupo!
-              </p>
+              <div className="flex flex-col items-center gap-2 px-6 py-16 text-center">
+                <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                  <Users className="h-5 w-5" />
+                </span>
+                <p className="text-sm font-medium text-foreground">Grupo novo</p>
+                <p className="max-w-[17rem] text-xs text-muted-foreground">
+                  Diga olá. A primeira mensagem puxa a conversa.
+                </p>
+              </div>
             )}
           </div>
         </div>

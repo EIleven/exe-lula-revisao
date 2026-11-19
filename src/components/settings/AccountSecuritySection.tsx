@@ -2,12 +2,15 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { useLocale } from 'next-intl';
 import QRCode from 'qrcode';
 import type { MultiFactorResolver } from 'firebase/auth';
-import { CheckCircle2, KeyRound, Loader2, MailWarning, ShieldCheck, Smartphone } from 'lucide-react';
+import { CheckCircle2, Fingerprint, KeyRound, Loader2, MailWarning, ShieldCheck, Smartphone } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import {
   Dialog,
   DialogContent,
@@ -18,6 +21,7 @@ import {
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { useCurrentUser } from '@/contexts/CurrentUserContext';
+import { lerEscolha, salvarEscolha } from '@/lib/seguranca/travaDeTela';
 import TotpCodeDialog from '@/components/auth/TotpCodeDialog';
 import {
   describeSecondFactorError,
@@ -40,8 +44,11 @@ type PendingAction = 'enable' | 'disable';
 
 /** E-mail verificado e verificação em duas etapas por app autenticador (Configurações → Privacidade e Segurança). */
 export default function AccountSecuritySection() {
-  const { firebaseUser } = useCurrentUser();
+  const { firebaseUser, currentUser } = useCurrentUser();
+  const locale = useLocale();
   const { toast } = useToast();
+  const [hasPasskey, setHasPasskey] = useState(false);
+  const [travaLigada, setTravaLigada] = useState(false);
   const [emailVerified, setEmailVerified] = useState(!!firebaseUser?.emailVerified);
   const [totpOn, setTotpOn] = useState(isTotpEnrolled(firebaseUser));
   const [busy, setBusy] = useState<string | null>(null);
@@ -58,7 +65,13 @@ export default function AccountSecuritySection() {
   useEffect(() => {
     setEmailVerified(!!firebaseUser?.emailVerified);
     setTotpOn(isTotpEnrolled(firebaseUser));
-  }, [firebaseUser]);
+    if (typeof window !== 'undefined' && currentUser?.id) {
+      const temDigital = Boolean(localStorage.getItem(`idp2p_passkey_${currentUser.id}`));
+      setHasPasskey(temDigital);
+      // Quem tem digital cadastrada começa com as Mensagens trancadas; só fica destravado quem desligou.
+      setTravaLigada(temDigital && lerEscolha(localStorage, currentUser.id) !== false);
+    }
+  }, [firebaseUser, currentUser?.id]);
 
   useEffect(() => {
     if (!enrollment) {
@@ -279,6 +292,54 @@ export default function AccountSecuritySection() {
               </div>
             </div>
           </form>
+        )}
+      </div>
+
+      <div className="space-y-3 rounded-lg border p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="space-y-0.5">
+            <p className="flex items-center gap-2 text-base font-medium">
+              <Fingerprint className={hasPasskey ? 'h-4 w-4 text-green-600' : 'h-4 w-4 text-primary'} />
+              Biometria &amp; Passkey do App (Digital / IDP2P)
+            </p>
+            <p className="text-sm text-muted-foreground">
+              {hasPasskey
+                ? 'Digital registrada neste aparelho. Você pode usar sua biometria para entrar e aprovar sessões no HiperVerso e no futuro app exclusivo de Mensagens.'
+                : 'Use a digital ou reconhecimento facial do seu aparelho como chave soberana para entrar, aprovar acessos e desbloquear o app de Mensagens.'}
+            </p>
+          </div>
+          <Button variant={hasPasskey ? 'outline' : 'default'} size="sm" asChild>
+            <Link href={`/${locale}/keys`}>
+              {hasPasskey ? 'Gerenciar digital' : 'Configurar digital'}
+            </Link>
+          </Button>
+        </div>
+
+        {hasPasskey && (
+          <div className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-border/70 bg-background p-3">
+            <div className="min-w-0 space-y-0.5">
+              <p className="text-sm font-medium">Pedir digital para abrir as Mensagens</p>
+              <p className="text-xs text-muted-foreground">
+                Vale neste aparelho. A criptografia protege a mensagem no caminho; isto protege de quem pega o
+                celular na sua mão.
+              </p>
+            </div>
+            <Switch
+              checked={travaLigada}
+              onCheckedChange={(ligada) => {
+                if (!currentUser?.id) return;
+                salvarEscolha(localStorage, currentUser.id, ligada);
+                setTravaLigada(ligada);
+                toast({
+                  title: ligada ? 'Mensagens trancadas' : 'Trava desligada',
+                  description: ligada
+                    ? 'Vai pedir a digital para abrir as conversas neste aparelho.'
+                    : 'As conversas abrem direto neste aparelho.',
+                });
+              }}
+              aria-label="Pedir digital para abrir as Mensagens"
+            />
+          </div>
         )}
       </div>
 

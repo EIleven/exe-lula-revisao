@@ -1,8 +1,8 @@
 // src/components/messages/MessagesSidebar.tsx
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { collection, query, where, orderBy, onSnapshot, Unsubscribe } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { getCurrentUserId } from '@/lib/services/authService';
@@ -39,9 +39,14 @@ import {
   Check,
   MessageSquare,
   Inbox,
+  Pin,
 } from 'lucide-react';
+import { useHiperChatMode } from '@/hooks/useHiperChatMode';
+import { useHiperChatPins, useHiperChatPreferences } from '@/hooks/useHiperChatPreferences';
+import { estaFixada, separarFixadas, MAX_FIXADAS, type HiperChatFilter } from '@/lib/hiperchat/preferences';
+import { chatBadges, contarGruposNaoLidos } from '@/lib/hiperchat/badges';
 
-type FilterOption = 'all' | 'unread' | 'direct' | 'groups' | 'requests';
+type FilterOption = 'all' | 'unread' | 'direct' | 'groups' | 'requests' | 'pinned';
 type TabOption = 'conversations' | 'messages';
 
 const FILTER_LABELS: Record<FilterOption, string> = {
@@ -50,7 +55,18 @@ const FILTER_LABELS: Record<FilterOption, string> = {
   direct: 'Direto',
   groups: 'Grupos',
   requests: 'Solicitações',
+  pinned: 'Fixadas',
 };
+
+/** A navegação do HiperChat vira filtro aqui. Link de verdade: recarregar e o botão Voltar continuam funcionando. */
+const FILTRO_DA_NAVEGACAO: Record<HiperChatFilter, FilterOption> = {
+  todas: 'all',
+  grupos: 'groups',
+  fixadas: 'pinned',
+};
+
+const ehRotuloDeNavegacao = (valor: string | null | undefined): valor is HiperChatFilter =>
+  valor === 'todas' || valor === 'grupos' || valor === 'fixadas';
 
 interface MessagesSidebarProps {
   activeOtherUserId?: string;
@@ -74,6 +90,40 @@ export default function MessagesSidebar({
   const router = useRouter();
   const locale = useLocale();
   const { toast } = useToast();
+
+  // ─── só no HiperChat: fixadas, preferências do aparelho e o filtro que vem da navegação ───
+  const isHiperChat = useHiperChatMode();
+  const searchParams = useSearchParams();
+  // Com o uid nulo os dois ganchos não leem nem gravam nada: fora do HiperChat esta tela não encosta no armazenamento.
+  const uidHiperChat = isHiperChat ? currentUserId : null;
+  const { fixadas, alternar: alternarFixada } = useHiperChatPins(uidHiperChat);
+  const { preferencias } = useHiperChatPreferences(uidHiperChat);
+  // Depois do primeiro toque num filtro, a escolha é dela: o padrão do aparelho não volta por cima.
+  const escolheuFiltro = useRef(false);
+  const filtroDaUrl = searchParams?.get('filtro') ?? null;
+
+  useEffect(() => {
+    if (!isHiperChat) return;
+    // Com `?filtro=` na URL manda a navegação; sem ele, manda o padrão que a pessoa escolheu em Configurações.
+    const rotulo = ehRotuloDeNavegacao(filtroDaUrl) ? filtroDaUrl : null;
+    if (rotulo) {
+      escolheuFiltro.current = false;
+      setFilter(FILTRO_DA_NAVEGACAO[rotulo]);
+      setActiveTab('conversations');
+      return;
+    }
+    if (!escolheuFiltro.current) setFilter(FILTRO_DA_NAVEGACAO[preferencias.filtroInicial]);
+  }, [isHiperChat, filtroDaUrl, preferencias.filtroInicial]);
+
+  // Os números da barra de navegação: só esta lista sabe quantos grupos têm mensagem nova.
+  useEffect(() => {
+    if (!isHiperChat) return;
+    const existentes = new Set(activeConversations.map((c) => c.id));
+    chatBadges.publish({
+      grupos: contarGruposNaoLidos(activeConversations, currentUserId),
+      fixadas: fixadas.filter((id) => existentes.has(id)).length,
+    });
+  }, [isHiperChat, activeConversations, fixadas, currentUserId]);
 
   useEffect(() => {
     if (!currentUserId) {
@@ -202,6 +252,7 @@ export default function MessagesSidebar({
   };
 
   const handleSelectFilter = (nextFilter: FilterOption) => {
+    escolheuFiltro.current = true;
     setFilter(nextFilter);
     if (nextFilter === 'requests') {
       setActiveTab('messages');
@@ -224,6 +275,8 @@ export default function MessagesSidebar({
         if (!convo.isGroup && convo.participantIds.length <= 2) return false;
       } else if (filter === 'direct') {
         if (convo.isGroup || convo.participantIds.length > 2) return false;
+      } else if (filter === 'pinned') {
+        if (!estaFixada(fixadas, convo.id)) return false;
       }
 
       if (!term) return true;
@@ -234,9 +287,50 @@ export default function MessagesSidebar({
       const lastMsgMatch = convo.lastMessage?.text?.toLowerCase().includes(term);
       return Boolean(groupMatch || nameMatch || usernameMatch || lastMsgMatch);
     });
-  }, [activeConversations, requests, filter, activeTab, searchTerm, currentUserId]);
+  }, [activeConversations, requests, filter, activeTab, searchTerm, currentUserId, fixadas]);
 
   const showingRequests = filter === 'requests' || activeTab === 'messages';
+
+  // No HiperChat, com a lista inteira à mostra, as fixadas sobem para uma seção própria no topo.
+  const porSecao = useMemo(
+    () => separarFixadas(visibleConversations, isHiperChat && filter === 'all' && !showingRequests ? fixadas : []),
+    [visibleConversations, isHiperChat, filter, showingRequests, fixadas],
+  );
+
+  /** Fixar no teto desaloja a mais antiga; a pessoa precisa saber disso na hora, não descobrir pela lista. */
+  const fixarConversa = (conversationId: string) => {
+    const vaiEntrar = !estaFixada(fixadas, conversationId);
+    alternarFixada(conversationId);
+    if (vaiEntrar && fixadas.length >= MAX_FIXADAS) {
+      toast({
+        title: `Limite de ${MAX_FIXADAS} fixadas`,
+        description: 'A fixada mais antiga saiu do topo.',
+      });
+    }
+  };
+
+  const renderConversa = (convo: Conversation) => {
+    const otherParticipant = convo.participantsInfo.find((p) => p.id !== currentUserId);
+    const isActive = Boolean(
+      (activeConversationId && convo.id === activeConversationId) ||
+        (activeOtherUserId && !convo.isGroup && otherParticipant?.id === activeOtherUserId)
+    );
+
+    return (
+      <ConversationListItem
+        key={convo.id}
+        conversation={convo}
+        isActive={isActive}
+        isRequest={showingRequests}
+        onAccept={() => handleRequestAction(convo.id, 'accept')}
+        onDecline={() => handleRequestAction(convo.id, 'decline')}
+        // Fixar e a prévia são do HiperChat: sem o modo, nenhuma prop nova chega e o item é o mesmo do HiperVerso.
+        onTogglePin={isHiperChat && !showingRequests ? () => fixarConversa(convo.id) : undefined}
+        isPinned={isHiperChat && estaFixada(fixadas, convo.id)}
+        showPreview={!isHiperChat || preferencias.previa}
+      />
+    );
+  };
 
   return (
     <>
@@ -261,7 +355,9 @@ export default function MessagesSidebar({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="w-52">
-                {(['all', 'unread', 'direct', 'groups', 'requests'] as FilterOption[]).map(
+                {((isHiperChat
+                  ? ['all', 'pinned', 'unread', 'direct', 'groups', 'requests']
+                  : ['all', 'unread', 'direct', 'groups', 'requests']) as FilterOption[]).map(
                   (opt) => (
                     <DropdownMenuItem
                       key={opt}
@@ -370,32 +466,29 @@ export default function MessagesSidebar({
             </div>
           ) : visibleConversations.length > 0 ? (
             <div>
-              {visibleConversations.map((convo) => {
-                const otherParticipant = convo.participantsInfo.find(
-                  (p) => p.id !== currentUserId
-                );
-                const isActive = Boolean(
-                  (activeConversationId && convo.id === activeConversationId) ||
-                    (activeOtherUserId && !convo.isGroup && otherParticipant?.id === activeOtherUserId)
-                );
-
-                return (
-                  <ConversationListItem
-                    key={convo.id}
-                    conversation={convo}
-                    isActive={isActive}
-                    isRequest={showingRequests}
-                    onAccept={() => handleRequestAction(convo.id, 'accept')}
-                    onDecline={() => handleRequestAction(convo.id, 'decline')}
-                  />
-                );
-              })}
+              {porSecao.fixadas.length > 0 && (
+                <>
+                  <p className="flex items-center gap-1.5 bg-muted/40 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    <Pin className="h-3 w-3 fill-current" />
+                    Fixadas
+                  </p>
+                  {porSecao.fixadas.map((convo) => renderConversa(convo))}
+                  {porSecao.demais.length > 0 && (
+                    <p className="bg-muted/40 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      Conversas
+                    </p>
+                  )}
+                </>
+              )}
+              {porSecao.demais.map((convo) => renderConversa(convo))}
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center px-6 py-14 text-center">
               <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted/50 text-muted-foreground">
                 {showingRequests ? (
                   <Inbox className="h-6 w-6" />
+                ) : filter === 'pinned' ? (
+                  <Pin className="h-6 w-6" />
                 ) : (
                   <MessageSquare className="h-6 w-6" />
                 )}
@@ -407,10 +500,17 @@ export default function MessagesSidebar({
                   ? 'Nenhuma conversa não lida'
                   : filter === 'groups'
                   ? 'Nenhum grupo ainda'
+                  : filter === 'pinned'
+                  ? 'Nenhuma conversa fixada'
                   : searchTerm.trim()
                   ? 'Nenhuma conversa encontrada'
                   : 'Nenhuma conversa ativa'}
               </p>
+              {filter === 'pinned' && !showingRequests && (
+                <p className="mt-1.5 max-w-[15rem] text-xs text-muted-foreground">
+                  Toque no alfinete de uma conversa para deixá-la sempre no topo.
+                </p>
+              )}
               {!showingRequests && filter === 'all' && !searchTerm.trim() && (
                 <Button
                   onClick={() => setIsNewConvoDialogOpen(true)}

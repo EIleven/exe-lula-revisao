@@ -133,7 +133,25 @@ export type WireMessage = {
   parentMessageSenderName?: string | null;
 };
 
-export type WireRejection = 'tamanho' | 'json' | 'shape' | 'versao' | 'remetente' | 'id' | 'conteudo' | 'e2ee' | 'resposta';
+/**
+ * Confirmacao de leitura pelo tunel: no modo Zero DB nao existe documento no servidor para guardar a marca d'agua.
+ * Carrega SO "li ate este instante" -- sem conteudo, sem id de mensagem, sem lista do que foi aberto.
+ *
+ * Cliente antigo ignora com seguranca: o validador dele recusa tudo que nao e `kind: 'dm'` (motivo `versao`) em vez
+ * de quebrar. Era exatamente para isto que o campo `kind` existia desde a primeira versao.
+ */
+export type WireReadReceipt = {
+  v: 1;
+  kind: 'read';
+  senderId: string;
+  /** Instante ISO ate o qual quem manda ja leu. */
+  upTo: string;
+};
+
+/** Tudo o que pode trafegar no DataChannel. */
+export type WirePacket = WireMessage | WireReadReceipt;
+
+export type WireRejection = 'tamanho' | 'json' | 'shape' | 'versao' | 'remetente' | 'id' | 'conteudo' | 'e2ee' | 'resposta' | 'recibo';
 
 const WIRE_ID = /^p2p_\d{10,15}_[a-z0-9]{1,16}$/;
 const PARENT_ID = /^[A-Za-z0-9_-]{1,128}$/;
@@ -220,11 +238,29 @@ export function validateWireMessage(
   };
 }
 
+/**
+ * Valida UMA confirmacao de leitura. Nada de folga: um instante implausivel nao vira marca (seria o contato dizendo
+ * "li tudo ate o ano que vem" e apagando a distincao entre lida e nao lida para sempre).
+ */
+export function validateWireReceipt(
+  raw: unknown,
+  ctx: { expectedSender: string; now: number },
+): { ok: true; receipt: WireReadReceipt } | { ok: false; reason: WireRejection } {
+  if (!isPlainObject(raw)) return { ok: false, reason: 'shape' };
+  if (raw.v !== P2P_WIRE_VERSION || raw.kind !== 'read') return { ok: false, reason: 'versao' };
+  if (raw.senderId !== ctx.expectedSender) return { ok: false, reason: 'remetente' };
+  if (typeof raw.upTo !== 'string' || raw.upTo.length > 40) return { ok: false, reason: 'recibo' };
+  const t = Date.parse(raw.upTo);
+  if (!Number.isFinite(t)) return { ok: false, reason: 'recibo' };
+  if (t < ctx.now - 30 * 86_400_000 || t > ctx.now + 5 * 60_000) return { ok: false, reason: 'recibo' };
+  return { ok: true, receipt: { v: 1, kind: 'read', senderId: ctx.expectedSender, upTo: new Date(t).toISOString() } };
+}
+
 /** O que chega pelo DataChannel: texto → limite de tamanho → JSON → validação. */
 export function parseWireData(
   data: unknown,
   ctx: { expectedSender: string; now: number },
-): { ok: true; message: WireMessage } | { ok: false; reason: WireRejection } {
+): { ok: true; message: WirePacket } | { ok: false; reason: WireRejection } {
   if (typeof data !== 'string') return { ok: false, reason: 'shape' };
   if (data.length > MAX_WIRE_CHARS) return { ok: false, reason: 'tamanho' };
   let json: unknown;
@@ -232,6 +268,11 @@ export function parseWireData(
     json = JSON.parse(data);
   } catch {
     return { ok: false, reason: 'json' };
+  }
+  // O despacho olha so o `kind`; cada forma tem o proprio validador, e o que nao e nenhuma das duas continua recusado.
+  if (isPlainObject(json) && json.kind === 'read') {
+    const r = validateWireReceipt(json, ctx);
+    return r.ok ? { ok: true, message: r.receipt } : r;
   }
   return validateWireMessage(json, ctx);
 }
@@ -260,7 +301,7 @@ export type IceConfig = {
   turn?: { urls: string[]; username: string; credential: string } | null;
 };
 
-export const DEFAULT_STUN = ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'];
+export const DEFAULT_STUN = ['stun:stun.cloudflare.com:3478'];
 
 const ICE_URL = /^(stun|stuns|turn|turns):[A-Za-z0-9.\-[\]:]+(\?transport=(udp|tcp))?$/;
 

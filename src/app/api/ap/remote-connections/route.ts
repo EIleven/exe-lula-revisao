@@ -4,11 +4,22 @@ import type { NextRequest } from 'next/server';
 import { identify, json } from '@/lib/server/federation';
 import { fetchAndMaterializeRemoteConnections } from '@/lib/server/remoteConnections';
 import { requestIp, takeRateLimit } from '@/lib/server/requestAuth';
+import { evaluateRequestSecurity } from '@/lib/security/antiBotGuard';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
-  if (!takeRateLimit(`ap-remote-connections:${requestIp(request)}`, 20, 60_000)) {
+  const ip = requestIp(request);
+  const guard = evaluateRequestSecurity({
+    ip,
+    path: '/api/ap/remote-connections',
+    userAgent: request.headers.get('user-agent'),
+    acceptLanguage: request.headers.get('accept-language'),
+  });
+  if (!guard.allowed && guard.action === 'block') {
+    return json(429, { error: 'bloqueio-anti-bot' }, { 'Retry-After': String(guard.retryAfterSec || 30) });
+  }
+  if (!takeRateLimit(`ap-remote-connections:${ip}`, 20, 60_000)) {
     return json(429, { error: 'muitas-requisicoes' }, { 'Retry-After': '30' });
   }
 

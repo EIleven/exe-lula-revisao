@@ -28,7 +28,6 @@ import { ConsentProvider } from '@/contexts/ConsentContext';
 import ConsentBanner from '@/components/consent/ConsentBanner';
 import ConsentPreferencesDialog from '@/components/consent/ConsentPreferencesDialog';
 import GoogleTagManager from '@/components/consent/GoogleTagManager';
-import AdSenseScript from '@/components/consent/AdSenseScript';
 import JsonLd from '@/components/shared/JsonLd';
 import type { WithContext } from 'schema-dts';
 import { WebSite } from 'schema-dts';
@@ -51,13 +50,13 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'Exe. Lula',
+    title: 'HiperVerso',
   },
   referrer: 'origin-when-cross-origin',
   alternates: {
     types: {
-      'application/rss+xml': [{ url: '/feed.xml', title: 'Exe. Lula (RSS)' }],
-      'application/feed+json': [{ url: '/feed.json', title: 'Exe. Lula (JSON Feed)' }],
+      'application/rss+xml': [{ url: '/feed.xml', title: 'HiperVerso (RSS)' }],
+      'application/feed+json': [{ url: '/feed.json', title: 'HiperVerso (JSON Feed)' }],
     },
   },
   keywords: [
@@ -75,9 +74,9 @@ export const metadata: Metadata = {
     'news',
     'community',
   ],
-  authors: [{ name: 'Exe. Lula Team', url: BASE_URL }],
-  creator: 'Exe. Lula Team',
-  publisher: 'Exe. Lula',
+  authors: [{ name: 'HiperVerso Team', url: BASE_URL }],
+  creator: 'HiperVerso Team',
+  publisher: 'HiperVerso',
   formatDetection: {
     email: false,
     address: false,
@@ -142,6 +141,9 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   themeColor: "#0b5cff",
+  // O teclado encolhe a página em vez de passar por cima dela. No app Android isso já acontece (adjustResize);
+  // no navegador, sem esta linha, o compositor da conversa ficava atrás do teclado.
+  interactiveWidget: 'resizes-content',
 };
 
 
@@ -180,7 +182,7 @@ export default function LocaleLayout({
     },
     publisher: {
       '@type': 'Organization',
-      name: 'Exe. Lula / Hiperverso',
+      name: 'HiperVerso / Hiperverso',
       alternateName: 'Hiperverso',
       url: siteConfig.baseUrl,
       sameAs: [
@@ -199,23 +201,23 @@ export default function LocaleLayout({
     <>
       <JsonLd data={webSiteSchema} />
       <div className="sr-only">
-        <h1>Exe. Lula - A Fonte Soberana de Informação</h1>
+        <h1>HiperVerso - A Fonte Soberana de Informação</h1>
         <p>
-          Bem-vindo ao Exe. Lula.
+          Bem-vindo ao HiperVerso.
         </p>
       </div>
       {/*
-        Nada do Google é injetado aqui. O Tag Manager e o AdSense ficam em src/components/consent/, atrás do
-        consentimento da pessoa — antes, o GTM carregava em TODA visita de produção, sem aviso e sem escolha, e o
-        único freio era o modo emulador. O `<iframe>` de `<noscript>` do GTM saiu de vez: sem JavaScript não há como
-        consentir, logo não há como medir.
+        Nada do Google é injetado aqui. O Tag Manager fica em src/components/consent/, atrás do consentimento da
+        pessoa — antes, o GTM carregava em TODA visita de produção, sem aviso e sem escolha, e o único freio era o
+        modo emulador. O `<iframe>` de `<noscript>` do GTM saiu de vez: sem JavaScript não há como consentir, logo
+        não há como medir.
+        Publicidade não entra nesta lista porque não existe: o código de anúncios foi removido em 2026-11-19.
       */}
 
       {/* Preconnects and other head elements can be here or in metadata object */}
       <link rel="preconnect" href="https://firestore.googleapis.com" crossOrigin="anonymous" />
       <link rel="preconnect" href="https://firebasestorage.googleapis.com" crossOrigin="anonymous" />
       <link rel="preconnect" href="https://firebase.googleapis.com" crossOrigin="anonymous" />
-      {/* Os preconnect do AdSense foram para AdSenseScript.tsx: abrir conexão já entrega o IP a um terceiro. */}
 
       <NextIntlClientProvider locale={locale} messages={messages}>
         {/* O ConsentProvider envolve tudo: o rodapé e as configurações precisam reabrir o painel de preferências. */}
@@ -250,7 +252,6 @@ export default function LocaleLayout({
             </AuthProvider>
           </ThemeProvider>
           <GoogleTagManager />
-          <AdSenseScript />
           <ConsentBanner />
           <ConsentPreferencesDialog />
           {firebaseEnv.useEmulators && <EmulatorBanner />}

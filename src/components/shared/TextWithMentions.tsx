@@ -8,6 +8,7 @@ import { useLocale } from 'next-intl';
 import UserProfileHoverCard from '@/components/profile/UserProfileHoverCard';
 import HashtagHoverCard from '@/components/hashtags/HashtagHoverCard';
 import { lookupUsersByUsername } from '@/lib/services/mentionLookup';
+import { remoteMentionExternalUrl } from '@/lib/utils/textUtils';
 
 interface TextWithMentionsProps {
   text?: string;
@@ -159,14 +160,16 @@ const TextWithMentions: React.FC<TextWithMentionsProps> = ({
         } as User;
         return (
           <UserProfileHoverCard key={`fedi-mention-${index}`} user={placeholderRemoteUser} remoteHandle={remoteAcct}>
-            <Link
-              href={`/${locale}/fediverse/${encodeURIComponent(remoteAcct)}`}
+            <a
+              href={remoteMentionExternalUrl(fediUser, fediDomain)}
+              target="_blank"
+              rel="noopener noreferrer"
               className={linkClassName}
               onClick={(e) => e.stopPropagation()}
               data-interactive="true"
             >
               {part}
-            </Link>
+            </a>
           </UserProfileHoverCard>
         );
       }

@@ -196,7 +196,7 @@ export default function NotificationsSettings({ user }: SettingsProps) {
               )}
               {pushPermission === 'unsupported' && (
                 <p className="text-xs text-muted-foreground px-4">
-                  Este navegador não oferece notificações push. No celular, use o app do Exe. Lula ou adicione o site à tela inicial.
+                  Este navegador não oferece notificações push. No celular, use o app do HiperVerso ou adicione o site à tela inicial.
                 </p>
               )}
             </div>

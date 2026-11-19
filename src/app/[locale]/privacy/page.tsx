@@ -28,7 +28,7 @@ export default function PrivacyPolicyPage() {
         </CardHeader>
         <CardContent className="space-y-6 text-foreground/90 prose prose-invert prose-p:text-foreground/90 prose-a:text-primary prose-li:text-foreground/90">
           <p>
-            Esta política explica, sem rodeio, que dados a rede Exe. Lula coleta, para quê, com que fundamento legal,
+            Esta política explica, sem rodeio, que dados a rede <strong>HiperVerso</strong> (anteriormente Exe. Lula) coleta, para quê, com que fundamento legal,
             por quanto tempo, com quem compartilha e o que você pode exigir. Ela é escrita para ser lida por quem usa
             a rede, não por advogado.
           </p>

@@ -14,7 +14,16 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Loader2, PlusCircle, Trash2, Edit, Pin, PinOff } from 'lucide-react';
+import { useCurrentUser } from '@/contexts/CurrentUserContext';
+import { SUPPORTED_TRANSLATION_LANGUAGES } from '@/lib/i18n/translationPreferences';
 import type { User, CustomFeed, TabPreferences } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -35,27 +44,36 @@ interface ManageFeedsDialogProps {
 
 export default function ManageFeedsDialog({ user, open, onOpenChange, onPreferencesChanged }: ManageFeedsDialogProps) {
   const [customFeeds, setCustomFeeds] = useState<CustomFeed[]>([]);
-  const [tabPrefs, setTabPrefs] = useState<TabPreferences>({ hidden: [], pinnedOrder: [] });
+  const [tabPrefs, setTabPrefs] = useState<TabPreferences>({ hidden: [], pinnedOrder: [], feedLanguageFilter: 'all' });
   const [isLoading, setIsLoading] = useState(true);
   const [editingFeed, setEditingFeed] = useState<Partial<CustomFeed> | null>(null);
   const { toast } = useToast();
+  const { refreshCurrentUser } = useCurrentUser();
 
   useEffect(() => {
+    if (!open) {
+      setEditingFeed(null);
+      return;
+    }
     const fetchData = async () => {
-      if (open) {
-        setIsLoading(true);
-        try {
-          const [feeds, prefs] = await Promise.all([
-            getCustomFeeds(user.id),
-            Promise.resolve(user.tabPreferences || { hidden: [], pinnedOrder: [] })
-          ]);
-          setCustomFeeds(feeds);
-          setTabPrefs(prefs);
-        } catch (error) {
-          toast({ title: 'Erro', description: 'Não foi possível carregar seus feeds.', variant: 'destructive' });
-        } finally {
-          setIsLoading(false);
-        }
+      setIsLoading(true);
+      try {
+        const rawPrefs = user.tabPreferences;
+        const normalizedPrefs: TabPreferences = {
+          hidden: Array.isArray(rawPrefs?.hidden) ? rawPrefs.hidden : [],
+          pinnedOrder: Array.isArray(rawPrefs?.pinnedOrder) ? rawPrefs.pinnedOrder : [],
+          feedLanguageFilter: rawPrefs?.feedLanguageFilter || 'all',
+        };
+        const [feeds, prefs] = await Promise.all([
+          getCustomFeeds(user.id),
+          Promise.resolve(normalizedPrefs),
+        ]);
+        setCustomFeeds(feeds);
+        setTabPrefs(prefs);
+      } catch (error) {
+        toast({ title: 'Erro', description: 'Não foi possível carregar seus feeds.', variant: 'destructive' });
+      } finally {
+        setIsLoading(false);
       }
     };
     fetchData();
@@ -111,9 +129,9 @@ export default function ManageFeedsDialog({ user, open, onOpenChange, onPreferen
     }
   };
   
-  const handleToggleHideDefault = async (tabId: 'following' | 'explore' | 'articles', isChecked: boolean) => {
+  const handleToggleHideDefault = async (tabId: TabPreferences['hidden'][number], isChecked: boolean) => {
     const isCurrentlyHidden = tabPrefs.hidden.includes(tabId);
-    let newHiddenList: ('following' | 'explore' | 'articles')[] = [...tabPrefs.hidden];
+    let newHiddenList: TabPreferences['hidden'] = [...tabPrefs.hidden];
 
     if (isChecked && isCurrentlyHidden) {
       newHiddenList = newHiddenList.filter(id => id !== tabId);
@@ -137,14 +155,35 @@ export default function ManageFeedsDialog({ user, open, onOpenChange, onPreferen
   };
 
 
+  const handleFeedLanguageChange = async (lang: string) => {
+    const newPrefs: TabPreferences = { ...tabPrefs, feedLanguageFilter: lang };
+    const oldPrefs = { ...tabPrefs };
+    setTabPrefs(newPrefs);
+    try {
+      await updateTabPreferences(user.id, newPrefs);
+      await refreshCurrentUser();
+      onPreferencesChanged();
+      toast({
+        title: 'Filtro de idioma atualizado',
+        description:
+          lang === 'all'
+            ? 'Os feeds agora mostram posts em todos os idiomas.'
+            : 'Os feeds agora exibem apenas posts no idioma selecionado.',
+      });
+    } catch {
+      setTabPrefs(oldPrefs);
+      toast({ title: 'Erro ao salvar filtro de idioma', variant: 'destructive' });
+    }
+  };
+
   if (editingFeed !== null) {
     return <EditFeedDialog feed={editingFeed} onSave={handleSaveFeed} onOpenChange={() => setEditingFeed(null)} />;
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg p-0">
-        <DialogHeader className="p-6 pb-4">
+      <DialogContent className="flex max-h-[90dvh] w-[calc(100%-1.5rem)] flex-col gap-0 overflow-hidden rounded-2xl border border-border/80 bg-card p-0 shadow-2xl sm:max-w-lg">
+        <DialogHeader className="shrink-0 border-b border-border/60 p-6 pb-4 pr-12 text-left">
           <DialogTitle>Gerenciar Feeds e Abas</DialogTitle>
           <DialogDescription>
             Crie feeds personalizados, fixe-os como abas e gerencie a visibilidade das abas padrão.
@@ -153,7 +192,7 @@ export default function ManageFeedsDialog({ user, open, onOpenChange, onPreferen
         {isLoading ? (
           <div className="flex justify-center items-center h-64 p-6"><Loader2 className="h-8 w-8 animate-spin" /></div>
         ) : (
-          <div className="px-6 py-4 space-y-6">
+          <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4 space-y-6">
             <div className="space-y-2">
                 <h3 className="font-semibold">Abas Padrão</h3>
                 <div className="rounded-lg border p-4 space-y-4">
@@ -170,6 +209,33 @@ export default function ManageFeedsDialog({ user, open, onOpenChange, onPreferen
                         <Switch id="show-articles" checked={!tabPrefs.hidden.includes('articles')} onCheckedChange={(isVisible) => handleToggleHideDefault('articles', isVisible)} />
                     </div>
                 </div>
+            </div>
+            <div className="space-y-2">
+              <h3 className="font-semibold">Filtro de Idioma nos Feeds</h3>
+              <div className="rounded-lg border p-4 space-y-3">
+                <div className="space-y-1">
+                  <Label htmlFor="feed-language-filter">Exibir posts apenas em</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Oculta nos feeds posts em outros idiomas (contas internas e Fediverso/Bluesky), mesmo que você siga o autor.
+                  </p>
+                </div>
+                <Select
+                  value={tabPrefs.feedLanguageFilter || 'all'}
+                  onValueChange={(value) => void handleFeedLanguageChange(value)}
+                >
+                  <SelectTrigger id="feed-language-filter" className="w-full sm:w-[280px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos os idiomas</SelectItem>
+                    {SUPPORTED_TRANSLATION_LANGUAGES.map((lang) => (
+                      <SelectItem key={lang.code} value={lang.code}>
+                        Apenas {lang.code === 'pt' ? 'Português (PT-BR)' : lang.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <div className="space-y-2">
               <div className="flex justify-between items-center">
@@ -207,7 +273,7 @@ export default function ManageFeedsDialog({ user, open, onOpenChange, onPreferen
             </div>
           </div>
         )}
-        <DialogFooter className="p-6 pt-4">
+        <DialogFooter className="shrink-0 border-t border-border/60 p-6 pt-4">
             <Button onClick={() => onOpenChange(false)}>Fechar</Button>
         </DialogFooter>
       </DialogContent>

@@ -71,7 +71,8 @@ interface VideoInitResponse extends UploadApiResponse {
   maxDurationSeconds?: unknown;
 }
 
-async function readVideoDuration(file: File): Promise<number | null> {
+/** Duração lida pelo navegador. `null` quando o contêiner não entrega — nesse caso quem decide é o servidor. */
+export async function readVideoDuration(file: File): Promise<number | null> {
   return new Promise((resolve) => {
     const video = document.createElement('video');
     const objectUrl = URL.createObjectURL(file);

@@ -2,9 +2,11 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { ExternalLink, Globe } from 'lucide-react';
+import { ExternalLink, Globe, Repeat2 } from 'lucide-react';
 import type { Post } from '@/lib/types';
 import EmbeddedPostCard from '@/components/feed/EmbeddedPostCard';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 interface LinkPreviewData {
   id?: string;
@@ -12,6 +14,15 @@ interface LinkPreviewData {
   text?: string;
   media?: Array<{ url?: string; type?: string; alt?: string }>;
   sourceUrl?: string;
+  isFediverseQuote?: boolean;
+  fediverseHandle?: string;
+  user?: {
+    id?: string;
+    name?: string;
+    username?: string;
+    avatarUrl?: string;
+  };
+  createdAt?: string;
 }
 
 const previewCache = new Map<string, LinkPreviewData | null>();
@@ -62,6 +73,7 @@ interface LinkPreviewCardProps {
 export default function LinkPreviewCard({ url }: LinkPreviewCardProps) {
   const [data, setData] = useState<LinkPreviewData | null>(() => previewCache.get(url) ?? null);
   const [isLoading, setIsLoading] = useState<boolean>(() => !previewCache.has(url));
+  const [readerOpen, setReaderOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -87,7 +99,7 @@ export default function LinkPreviewCard({ url }: LinkPreviewCardProps) {
 
   if (!data) return null;
 
-  // Se for um post interno do próprio Exe. Lula retornado por /api/quote-preview
+  // Se for um post interno do próprio HiperVerso retornado por /api/quote-preview
   if (data.id && !data.id.startsWith('http') && 'userId' in data) {
     return <EmbeddedPostCard post={data as Post} />;
   }
@@ -102,6 +114,111 @@ export default function LinkPreviewCard({ url }: LinkPreviewCardProps) {
   const imageUrl = data.media?.[0]?.url;
   const title = data.headline?.trim();
   const description = data.text?.trim();
+
+  // Post federado (ActivityPub / Fediverso): renderiza como citação nativa e abre dentro do próprio HiperVerso
+  if (data.isFediverseQuote) {
+    const authorName = data.user?.name || title || hostname;
+    const authorHandle = data.fediverseHandle || (data.user?.username ? `@${data.user.username}` : `@${hostname}`);
+    const avatarUrl = data.user?.avatarUrl;
+
+    return (
+      <>
+        <div
+          role="button"
+          tabIndex={0}
+          data-interactive="true"
+          onClick={(e) => {
+            e.stopPropagation();
+            setReaderOpen(true);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              e.stopPropagation();
+              setReaderOpen(true);
+            }
+          }}
+          className="mt-2 block w-full text-left overflow-hidden rounded-xl border border-border bg-card/70 hover:bg-muted/40 transition-colors cursor-pointer"
+        >
+          <div className="p-3 space-y-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <Avatar className="h-6 w-6 shrink-0">
+                {avatarUrl && <AvatarImage src={avatarUrl} alt={authorName} />}
+                <AvatarFallback className="text-[10px]">{authorName.slice(0, 2).toUpperCase()}</AvatarFallback>
+              </Avatar>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-semibold text-foreground truncate">{authorName}</p>
+                <p className="text-[11px] text-muted-foreground truncate">{authorHandle}</p>
+              </div>
+              <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary shrink-0">
+                <Repeat2 className="h-3 w-3" />
+                Fediverso
+              </span>
+            </div>
+            {description && (
+              <p className="text-sm text-foreground/95 line-clamp-4 leading-snug whitespace-pre-wrap">
+                {description}
+              </p>
+            )}
+            {imageUrl && (
+              <div className="w-full max-h-52 overflow-hidden rounded-lg border border-border bg-muted">
+                <img
+                  src={imageUrl}
+                  alt={authorName}
+                  className="w-full max-h-52 object-cover"
+                  loading="lazy"
+                  decoding="async"
+                />
+              </div>
+            )}
+          </div>
+        </div>
+
+        <Dialog open={readerOpen} onOpenChange={setReaderOpen}>
+          <DialogContent
+            className="max-w-lg max-h-[85vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2.5 text-left">
+                <Avatar className="h-9 w-9 shrink-0">
+                  {avatarUrl && <AvatarImage src={avatarUrl} alt={authorName} />}
+                  <AvatarFallback>{authorName.slice(0, 2).toUpperCase()}</AvatarFallback>
+                </Avatar>
+                <div className="min-w-0">
+                  <div className="text-sm font-bold truncate">{authorName}</div>
+                  <div className="text-xs font-normal text-muted-foreground truncate">{authorHandle}</div>
+                </div>
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3 pt-1">
+              {description && (
+                <p className="text-sm leading-relaxed whitespace-pre-wrap text-foreground">
+                  {description}
+                </p>
+              )}
+              {imageUrl && (
+                <div className="overflow-hidden rounded-xl border border-border bg-muted">
+                  <img src={imageUrl} alt={authorName} className="w-full max-h-96 object-contain" />
+                </div>
+              )}
+              <div className="flex items-center justify-between pt-2 border-t border-border text-xs text-muted-foreground">
+                <span>Lendo no HiperVerso ({hostname})</span>
+                <a
+                  href={data.sourceUrl || url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-primary hover:underline"
+                >
+                  Original <ExternalLink className="h-3 w-3" />
+                </a>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </>
+    );
+  }
 
   if (!title && !description) return null;
 

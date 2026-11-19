@@ -27,6 +27,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { createPost as serverCreatePost } from '@/lib/services/posts/createPostActions';
+import { editPost as serverEditPost } from '@/lib/services/posts/editPostAction';
 import type { Post, ReplyPermission, Draft } from '@/lib/types'; // Import Draft type
 import { useRouter } from 'next/navigation';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -77,7 +78,9 @@ const createNewsFormSchema = z.object({
 type CreateNewsFormValues = z.infer<typeof createNewsFormSchema>;
 
 interface CreateNewsDialogContentProps {
-  onPostCreated: (newPost: Post) => void;
+  onPostCreated?: (newPost: Post) => void;
+  postToEdit?: Post;
+  onPostEdited?: (updatedPost: Post) => void;
   dialogClose?: () => void;
   initialData?: Partial<Draft> & { imageUrl?: string | null };
 }
@@ -109,11 +112,22 @@ const formatInitialArticleHtml = (data?: Partial<Draft> & { imageUrl?: string | 
   return body;
 };
 
-export default function CreateNewsDialogContent({ onPostCreated, dialogClose, initialData }: CreateNewsDialogContentProps) {
+export default function CreateNewsDialogContent({ onPostCreated, postToEdit, onPostEdited, dialogClose, initialData }: CreateNewsDialogContentProps) {
+  const isEditMode = Boolean(postToEdit);
+  const effectiveInitial = postToEdit
+    ? {
+        headline: postToEdit.headline || '',
+        text: postToEdit.text || '',
+        sourceUrl: postToEdit.sourceUrl || '',
+        newsCategory: postToEdit.newsCategory || '',
+        replyPermission: postToEdit.replyPermission,
+        allowReposts: postToEdit.allowReposts,
+      }
+    : initialData;
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [draftId, setDraftId] = useState<string | undefined>(initialData?.id);
-  const [replyPermission, setReplyPermission] = useState<ReplyPermission>( (initialData?.replyPermission as ReplyPermission) || 'everyone');
-  const [allowReposts, setAllowReposts] = useState(initialData?.allowReposts ?? true);
+  const [replyPermission, setReplyPermission] = useState<ReplyPermission>((effectiveInitial?.replyPermission as ReplyPermission) || 'everyone');
+  const [allowReposts, setAllowReposts] = useState(effectiveInitial?.allowReposts ?? true);
   const [showCustomCategoryInput, setShowCustomCategoryInput] = useState(false);
   const [previewMode, setPreviewMode] = useState(false);
   const [fontStyle, setFontStyle] = useState<ArticleFontStyle>('sans');
@@ -141,9 +155,9 @@ export default function CreateNewsDialogContent({ onPostCreated, dialogClose, in
   const form = useForm<CreateNewsFormValues>({
     resolver: zodResolver(createNewsFormSchema),
     defaultValues: {
-      headline: initialData?.headline || '',
-      text: formatInitialArticleHtml(initialData),
-      sourceUrl: initialData?.sourceUrl || '',
+      headline: effectiveInitial?.headline || '',
+      text: formatInitialArticleHtml(effectiveInitial),
+      sourceUrl: effectiveInitial?.sourceUrl || '',
       newsCategory: '',
       customNewsCategory: '',
     },
@@ -153,19 +167,27 @@ export default function CreateNewsDialogContent({ onPostCreated, dialogClose, in
   const { formState: { isValid }, control, setValue, getValues, trigger } = form;
   
   useEffect(() => {
-    if (initialData) {
-      const editorContent = formatInitialArticleHtml(initialData);
-      const isCustomCategory = Boolean(initialData.newsCategory && !newsCategories.includes(initialData.newsCategory));
+    const seed = postToEdit
+      ? {
+          headline: postToEdit.headline || '',
+          text: postToEdit.text || '',
+          sourceUrl: postToEdit.sourceUrl || '',
+          newsCategory: postToEdit.newsCategory || '',
+        }
+      : initialData;
+    if (seed) {
+      const editorContent = formatInitialArticleHtml(seed);
+      const isCustomCategory = Boolean(seed.newsCategory && !newsCategories.includes(seed.newsCategory));
       setShowCustomCategoryInput(isCustomCategory);
       
       form.reset({
-        headline: initialData.headline,
+        headline: seed.headline,
         text: editorContent,
-        sourceUrl: initialData.sourceUrl,
-        newsCategory: isCustomCategory ? 'Outro' : initialData.newsCategory,
-        customNewsCategory: isCustomCategory ? initialData.newsCategory : '',
+        sourceUrl: seed.sourceUrl,
+        newsCategory: isCustomCategory ? 'Outro' : seed.newsCategory,
+        customNewsCategory: isCustomCategory ? seed.newsCategory : '',
       });
-      setDraftId(initialData.id);
+      if (!postToEdit) setDraftId(initialData?.id);
     }
     const timer = setTimeout(() => {
       const el = headlineInputRef.current;
@@ -175,7 +197,7 @@ export default function CreateNewsDialogContent({ onPostCreated, dialogClose, in
       el.setSelectionRange(len, len);
     }, 100);
     return () => clearTimeout(timer);
-  }, [initialData, form]);
+  }, [initialData, postToEdit, form]);
   
   const handleClose = () => {
     if (dialogClose) dialogClose();
@@ -235,6 +257,25 @@ export default function CreateNewsDialogContent({ onPostCreated, dialogClose, in
     setIsSubmitting(true);
     try {
       const finalCategory = data.newsCategory === 'Outro' ? data.customNewsCategory : data.newsCategory;
+
+      if (postToEdit) {
+        const updatedPost = await serverEditPost(postToEdit.id, {
+          text: data.text,
+          headline: data.headline,
+          sourceUrl: data.sourceUrl,
+          newsCategory: finalCategory,
+          allowReposts,
+          replyPermission,
+        });
+        if (updatedPost) {
+          toast({ title: 'Artigo atualizado!', description: 'Suas alterações foram salvas.' });
+          onPostEdited?.(updatedPost);
+          handleClose();
+        } else {
+          toast({ title: 'Atualização não aplicada', description: 'Nenhuma alteração foi salva.' });
+        }
+        return;
+      }
       
       const newPost = await serverCreatePost({
         userId: currentUserId,
@@ -294,19 +335,21 @@ export default function CreateNewsDialogContent({ onPostCreated, dialogClose, in
           <Button type="button" variant="ghost" size="sm" className="px-2 sm:px-3">Cancelar</Button>
         </DialogClose>
         <div className="sr-only">
-          <DialogTitle>Criar Artigo</DialogTitle>
+          <DialogTitle>{isEditMode ? 'Editar Artigo' : 'Criar Artigo'}</DialogTitle>
           <DialogDescription>Compartilhe uma atualização ou história importante. Forneça um título, corpo e, opcionalmente, uma imagem ou fonte.</DialogDescription>
         </div>
         <div className="flex items-center gap-1.5 min-w-0">
-          <PublishTargetsControls
-            federationReach={federationReach}
-            onFederationChange={updateFederationReach}
-            connectedNetworks={connectedNetworks}
-            selectedNetworks={selectedNetworks}
-            onToggleNetwork={toggleNetwork}
-            postWillBePublic={postWillBePublic}
-            disabled={isSubmitting}
-          />
+          {!isEditMode && (
+            <PublishTargetsControls
+              federationReach={federationReach}
+              onFederationChange={updateFederationReach}
+              connectedNetworks={connectedNetworks}
+              selectedNetworks={selectedNetworks}
+              onToggleNetwork={toggleNetwork}
+              postWillBePublic={postWillBePublic}
+              disabled={isSubmitting}
+            />
+          )}
           <Button
             type="button"
             variant={previewMode ? 'secondary' : 'ghost'}
@@ -319,21 +362,25 @@ export default function CreateNewsDialogContent({ onPostCreated, dialogClose, in
             {previewMode ? <Pencil className="h-4 w-4 sm:mr-1.5" /> : <Eye className="h-4 w-4 sm:mr-1.5" />}
             <span className="hidden sm:inline">{previewMode ? 'Editar' : 'Preview'}</span>
           </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={handleSaveDraft}
-            disabled={isSubmitting}
-            className="h-8 px-2.5"
-            title="Salvar Rascunho"
-          >
-            <Save className="h-4 w-4 sm:mr-1.5" />
-            <span className="hidden sm:inline">Salvar</span>
-          </Button>
+          {!isEditMode && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleSaveDraft}
+              disabled={isSubmitting}
+              className="h-8 px-2.5"
+              title="Salvar Rascunho"
+            >
+              <Save className="h-4 w-4 sm:mr-1.5" />
+              <span className="hidden sm:inline">Salvar</span>
+            </Button>
+          )}
           <Button type="submit" form="create-news-form" disabled={isSubmitting || !isValid} size="sm" className="rounded-full h-8 px-3.5">
             {isSubmitting ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : null}
-            {isSubmitting ? 'Publicando...' : 'Publicar'}
+            {isEditMode
+              ? (isSubmitting ? 'Salvando...' : 'Salvar')
+              : (isSubmitting ? 'Publicando...' : 'Publicar')}
           </Button>
         </div>
       </DialogHeader>

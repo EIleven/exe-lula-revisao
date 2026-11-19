@@ -4,7 +4,9 @@
 import type { NextRequest } from 'next/server';
 import { normalizeHandle, profilePageUrl, wantsActivityJson } from '@/lib/activitypub/identity';
 import { DEFAULT_LOCALE, renderActor } from '@/lib/activitypub/render';
-import { apResponse, federation } from '@/lib/server/federation';
+import { apResponse, federation, legacyFederationOrigin } from '@/lib/server/federation';
+import { siteConfig } from '@/config/site';
+import { actorUrl } from '@/lib/activitypub/identity';
 import { requestIp, takeRateLimit } from '@/lib/server/requestAuth';
 
 export const dynamic = 'force-dynamic';
@@ -28,7 +30,13 @@ async function servir(request: NextRequest, context: { params: Promise<{ usernam
     });
   }
 
-  const r = await renderActor(f.render, handle);
+  // Pedido pelo domínio ANTIGO: o ator sai com o id daquele domínio e com `movedTo` para o canônico. Pelo canônico,
+  // sai com o auto-alias da migração, que é a prova que o Mastodon exige para aceitar o `Move`.
+  const antigo = legacyFederationOrigin(request);
+  const alias = antigo || !siteConfig.migrationAliasEnabled
+    ? []
+    : Array.from(new Set(siteConfig.legacyFederationHosts.map((h) => actorUrl(`https://${h.replace(/^www\./, '')}`, handle))));
+  const r = await renderActor(f.render, handle, { legacyOrigin: antigo, alsoKnownAs: alias });
   // 410 + Tombstone não deve ficar em cache por muito tempo: a conta pode ser reativada pelo mesmo dono.
   const cache = r.status === 200 ? 'public, max-age=300' : 'public, max-age=60';
   const resposta = apResponse(r.status, r.body, { 'Cache-Control': cache });

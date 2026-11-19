@@ -22,6 +22,22 @@ service firebase.storage {
       allow delete: if request.auth != null && request.auth.uid == userId;
     }
 
+    // Anexo CIFRADO de conversa protegida (video grande). O servidor nunca le isto: sobe opaco e sai opaco, sem
+    // FFmpeg e sem miniatura feita no servidor. Caminho separado porque as regras de user_uploads abaixo so aceitam
+    // ate 5 MB e tipos conhecidos -- um borrao nao e nenhum deles, e afrouxar aquelas regras abriria o envio comum.
+    // Leitura continua sendo pela rota /mp/<id>, que refaz a autorizacao contra a conversa a cada requisicao.
+    match /user_uploads_enc/{userId}/{mediaId} {
+      allow create, update: if isVerifiedMember()
+        && request.auth.uid == userId
+        && mediaId.matches('^[A-Za-z0-9_-]{22}$')
+        && request.resource.size > 0
+        && request.resource.size <= 201 * 1024 * 1024
+        && request.resource.contentType == 'application/octet-stream'
+        && request.resource.metadata.pipeline == 'e2ee-v2';
+      allow get, list: if false;
+      allow delete: if request.auth != null && request.auth.uid == userId;
+    }
+
     // Arquivos de cada pessoa (foto de perfil, capa, mídia de posts e artigos, anexos de mensagens).
     match /user_uploads/{userId}/{allPaths=**} {
       // Só o dono grava, até 5 MB, e só mídia e documentos comuns: nada de HTML, SVG ou executável (que poderiam

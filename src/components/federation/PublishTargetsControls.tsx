@@ -15,6 +15,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import FederationReachControl from '@/components/federation/FederationReachControl';
 import type { FederationReach } from '@/lib/federation/reach';
 import { getSocialConnections, publishPostToSocialNetworks } from '@/lib/social/client';
+import { cn } from '@/lib/utils';
 import type { SocialConnectionsStatus, SocialProvider } from '@/lib/social/types';
 import type { Post } from '@/lib/types';
 
@@ -124,11 +125,17 @@ export function usePublishTargets() {
     [firebaseUser, locale, t, toast],
   );
 
+  const effectiveFederationReach: FederationReach =
+    !postWillBePublic && (federationReach === 'public' || federationReach === 'unlisted')
+      ? 'followers'
+      : federationReach;
+  const effectiveSelectedNetworks = postWillBePublic ? selectedNetworks : [];
+
   return {
-    federationReach,
+    federationReach: effectiveFederationReach,
     updateFederationReach,
     connectedNetworks,
-    selectedNetworks,
+    selectedNetworks: effectiveSelectedNetworks,
     toggleNetwork,
     postWillBePublic,
     publishExternally,
@@ -157,6 +164,7 @@ export default function PublishTargetsControls({
   const locale = useLocale();
   const t = useTranslations('CreatePostDialog');
   const isMobile = useIsMobile();
+  const visibleSelectedNetworks = postWillBePublic ? selectedNetworks : [];
 
   return (
     <>
@@ -167,7 +175,7 @@ export default function PublishTargetsControls({
             <Share2 className="h-4 w-4" />
             {!isMobile && (
               <span className="max-w-28 truncate text-xs">
-                {selectedNetworks.length > 0 ? t('crossPostSelected', { count: selectedNetworks.length }) : t('crossPostMenuShort')}
+                {visibleSelectedNetworks.length > 0 ? t('crossPostSelected', { count: visibleSelectedNetworks.length }) : t('crossPostMenuShort')}
               </span>
             )}
             <ChevronDown className="h-3 w-3" />
@@ -180,8 +188,17 @@ export default function PublishTargetsControls({
           </div>
           {connectedNetworks.length > 0 ? (
             connectedNetworks.map((provider) => (
-              <div key={provider} className="flex items-center justify-between rounded-lg border p-3">
-                <Label htmlFor={`cross-post-${provider}`} className="cursor-pointer">
+              <div
+                key={provider}
+                className={cn(
+                  'flex items-center justify-between rounded-lg border p-3',
+                  !postWillBePublic && 'opacity-60',
+                )}
+              >
+                <Label
+                  htmlFor={`cross-post-${provider}`}
+                  className={postWillBePublic ? 'cursor-pointer' : 'cursor-not-allowed'}
+                >
                   Bluesky (Atmosfera)
                 </Label>
                 <Checkbox
@@ -195,6 +212,11 @@ export default function PublishTargetsControls({
           ) : (
             <Button variant="outline" size="sm" className="w-full" asChild>
               <Link href={`/${locale}/settings/connections`}>{t('crossPostConnect')}</Link>
+            </Button>
+          )}
+          {!postWillBePublic && (
+            <Button variant="outline" size="sm" className="w-full" asChild>
+              <Link href={`/${locale}/settings/privacy`}>{t('crossPostManagePrivacy')}</Link>
             </Button>
           )}
         </PopoverContent>

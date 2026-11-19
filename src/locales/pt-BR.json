@@ -6,10 +6,10 @@
     "logoutErrorTitle": "Erro ao Sair",
     "logoutErrorDescription": "Não foi possível encerrar a sessão.",
     "articlePublished": "Artigo Publicado!",
-    "postSent": "Post Enviado!",
-    "viewPost": "Ver Post",
+    "postSent": "Publicação Enviada!",
+    "viewPost": "Ver Publicação",
     "nav": {
-      "feed": "Feed",
+      "feed": "Início",
       "explore": "Explorar",
       "messages": "Mensagens",
       "notifications": "Notificações"
@@ -22,8 +22,8 @@
     "pageViewsDescription": "Visualizações de página por usuários autenticados e visitantes.",
     "authUsers": "Autenticados",
     "guestUsers": "Visitantes",
-    "authenticatedOnline": "Usuários Autenticados Online",
-    "guestsOnline": "Visitantes Anônimos Online",
+    "authenticatedOnline": "Usuários Autenticados Conectados",
+    "guestsOnline": "Visitantes Anônimos Conectados",
     "accessTitle": "Acessos",
     "accessDescription": "Analise como usuários e visitantes estão acessando sua plataforma.",
     "topRoutesTitle": "Rotas Mais Acessadas",
@@ -49,9 +49,9 @@
     "tableLocation": "Localização",
     "tableViews": "Visualizações",
     "tableShare": "Participação",
-    "mostViewedPosts": "Posts Mais Visualizados",
+    "mostViewedPosts": "Publicações Mais Visualizadas",
     "totalViews": "visualizações",
-    "authGuestViews": "({authViews} auth / {guestViews} guest)",
+    "authGuestViews": "({authViews} logados / {guestViews} visitantes)",
     "trends": {
       "title": "Centro de Tendências",
       "description": "Monitore notícias em tempo real coletadas de feeds RSS.",
@@ -62,32 +62,33 @@
     }
   },
   "CreatePostDialog": {
-    "title": "Criar Post",
+    "title": "Criar Publicação",
     "description": "Compartilhe uma nova ideia ou atualização com seus seguidores.",
-    "postSentTitle": "Post Enviado!",
-    "postSentDescription": "Seu novo post está no ar.",
-    "viewPost": "Ver Post",
+    "postSentTitle": "Publicação Enviada!",
+    "postSentDescription": "Sua nova publicação está no ar.",
+    "viewPost": "Ver Publicação",
     "authNeededTitle": "Autenticação Necessária",
-    "authNeededDescription": "Por favor, faça login para criar um post.",
-    "errorTitle": "Erro ao Enviar Post",
-    "errorDescription": "Não foi possível enviar o post.",
+    "authNeededDescription": "Por favor, entre na sua conta para criar uma publicação.",
+    "errorTitle": "Erro ao Enviar Publicação",
+    "errorDescription": "Não foi possível enviar a publicação.",
     "placeholder": "E aí?",
     "cancelButton": "Cancelar",
-    "postButton": "Postar",
-    "postButtonSubmitting": "Postando...",
+    "postButton": "Publicar",
+    "postButtonSubmitting": "Publicando...",
     "crossPostMenuLabel": "Escolher outras redes",
     "crossPostMenuShort": "Outras redes",
     "crossPostSelected": "{count, plural, one {# rede} other {# redes}}",
     "crossPostMenuTitle": "Publicar também em",
     "crossPostMenuDescription": "O texto e um link para este post serão enviados às redes selecionadas.",
-    "crossPostPrivateWarning": "Posts restritos não podem sair do seu círculo privado.",
+    "crossPostPrivateWarning": "Seu perfil está como privado: posts vão só para seguidores e não saem para outras redes.",
+    "crossPostManagePrivacy": "Ajustar privacidade do perfil",
     "crossPostConnect": "Conectar Bluesky ou X",
     "crossPostSuccessTitle": "Publicado nas outras redes",
     "crossPostSuccessDescription": "Seu post também foi publicado em {providers}.",
     "crossPostPartialDescription": "Publicado em {published}. Não foi possível enviar para {failed}.",
     "crossPostErrorTitle": "Post salvo; envio externo pendente",
     "crossPostErrorDescription": "Não foi possível publicar em {providers}. Você pode tentar novamente depois.",
-    "crossPostGenericError": "O post foi salvo no Exe. Lula, mas a rede externa não respondeu.",
+    "crossPostGenericError": "O post foi salvo no HiperVerso, mas a rede externa não respondeu.",
     "federationSkippedTitle": "Este post ficou só aqui",
     "federationSkippedDescription": "Enquetes e citações ainda não vão ao Fediverso. O post foi publicado normalmente na rede."
   },
@@ -96,7 +97,7 @@
     "followers": "Seguidores",
     "settings": "Configurações",
     "logout": "Sair",
-    "post": "Postar",
+    "post": "Publicar",
     "article": "Artigo",
     "login": "Entrar",
     "register": "Registrar",
@@ -105,7 +106,7 @@
     "guidelines": "Diretrizes",
     "cookies": "Cookies",
     "drafts": "Rascunhos",
-    "feeds": "Feeds",
+    "feeds": "Canais",
     "bookmarks": "Marcadores",
     "files": "Arquivos",
     "adminPanel": "Painel Admin",
@@ -117,7 +118,7 @@
   },
   "MobileBottomNav": {
     "profile": "Perfil",
-    "login": "Login",
+    "login": "Entrar",
     "promptAction": "acessar {action}",
     "nav": {
       "messages": "Mensagens",
@@ -148,8 +149,7 @@
       "notifications": "Notificações",
       "media": "Conteúdo e Mídia",
       "appearance": "Aparência",
-      "accessibility": "Acessibilidade",
-      "languages": "Idiomas",
+      "accessibility": "Acessibilidade e Idiomas",
       "help": "Ajuda",
       "about": "Sobre",
       "fediverse": "Fediverso",
@@ -162,7 +162,7 @@
     "connected": "Conectada",
     "connect": "Conectar",
     "disconnect": "Desconectar",
-    "blueskyDescription": "Publique no Bluesky sem compartilhar sua senha com o Exe. Lula.",
+    "blueskyDescription": "Publique no Bluesky sem compartilhar sua senha com o HiperVerso.",
     "blueskyHandle": "Seu endereço no Bluesky",
     "xDescription": "Envie posts públicos para sua conta do X usando a autorização oficial.",
     "serverSetupPending": "A chave segura do Bluesky ainda precisa ser ativada no servidor.",
@@ -278,7 +278,7 @@
     "description": "Personalize a aparência do aplicativo.",
     "theme": {
       "label": "Tema",
-      "description": "Escolha como o Exe. Lula se parece para você. Selecione um tema das opções abaixo.",
+      "description": "Escolha como o HiperVerso se parece para você. Selecione um tema das opções abaixo.",
       "light": "Claro",
       "dark": "Escuro",
       "system": "Sistema"
@@ -308,8 +308,8 @@
     "highContrastDescription": "Aumenta o contraste das cores para melhor legibilidade."
   },
   "AboutSettings": {
-    "title": "Sobre o Exe. Lula",
-    "description": "Informações e documentos legais da plataforma Exe. Lula.",
+    "title": "Sobre o HiperVerso",
+    "description": "Informações e documentos legais da plataforma HiperVerso.",
     "aboutUs": "Sobre Nós",
     "privacyPolicy": "Política de Privacidade",
     "termsOfService": "Termos de Serviço",
@@ -318,13 +318,13 @@
     "dataRights": "Seus direitos sobre seus dados",
     "open": "Abrir",
     "viewPage": "Ver Página",
-    "version": "Exe. Lula Platform v1.0.0",
-    "copyright": "© {year} Exe. Lula. Todos os Direitos Reservados."
+    "version": "HiperVerso Platform v1.0.0",
+    "copyright": "© {year} HiperVerso. Todos os Direitos Reservados."
   },
   "ProfileTabs": {
-    "posts": "Posts",
+    "posts": "Publicações",
     "comments": "Comentários",
-    "reposts": "Reposts",
+    "reposts": "Republicações",
     "quotes": "Citações",
     "media": "Mídia",
     "likes": "Curtidas",
@@ -333,12 +333,12 @@
   "ProfileHeader": {
     "following": "Seguindo",
     "followers": "Seguidores",
-    "posts": "Posts",
+    "posts": "Publicações",
     "editProfile": "Editar Perfil",
     "unblock": "Desbloquear",
-    "postNotifications": "Notificações de posts",
+    "postNotifications": "Notificações de publicações",
     "notifyMeAbout": "Notificar-me sobre",
-    "allPosts": "Todos os Posts",
+    "allPosts": "Todas as Publicações",
     "onlyNews": "Apenas Artigos",
     "disableNotifications": "Desativar Notificações",
     "message": "Mensagem",
@@ -348,15 +348,15 @@
     "unmute": "Não silenciar",
     "mute": "Silenciar",
     "block": "Bloquear",
-    "report": "Reportar",
-    "loginToInteract": "Login para Interagir",
+    "report": "Denunciar",
+    "loginToInteract": "Entrar para Interagir",
     "interactWith": "interagir com @{username}"
   },
   "ProfilePage": {
     "coverAlt": "Capa de {name}",
     "notFoundTitle": "Usuário não encontrado",
     "notFoundDescription": "O perfil que você procura não existe ou não pôde ser carregado.",
-    "backToFeed": "Voltar para o feed",
+    "backToFeed": "Voltar para o início",
     "accessDeniedTitle": "Acesso negado",
     "accessDeniedDescription": "Você não tem permissão para ver este perfil.",
     "blockedByTitle": "Você foi bloqueado",
@@ -390,9 +390,47 @@
     "quotesTitle": "Citações",
     "quotesDescription": "O post de @{username} foi citado {count, plural, =0 {0 vezes} one {1 vez} other {# vezes}}",
     "noQuotes": "Ninguém citou este post ainda.",
-    "repostsTitle": "Reposts",
-    "repostsDescription": "Pessoas que repostaram o post de @{username}",
-    "noReposts": "Ninguém repostou este post ainda."
+    "repostsTitle": "Republicações",
+    "repostsDescription": "Pessoas que republicaram a publicação de @{username}",
+    "noReposts": "Ninguém republicou esta publicação ainda."
+  },
+  "RemoteFollow": {
+    "follow": "Seguir",
+    "requestToFollow": "Pedir para seguir",
+    "requested": "Solicitação enviada",
+    "unfollow": "Deixar de seguir",
+    "cancelRequest": "Cancelar solicitação",
+    "keepRequest": "Manter",
+    "cancelTitle": "Cancelar a solicitação?",
+    "cancelDescription": "Você pode pedir de novo quando quiser.",
+    "dialogTitle": "Pedir para seguir {handle}",
+    "help": "Este perfil aprova seguidores manualmente. A mensagem é privada: só essa pessoa a recebe, e o pedido também pode ir sem ela.",
+    "helpLabel": "Como funciona",
+    "messageLabel": "Mensagem para {handle}",
+    "suggestedMessage": "Olá! Sou {me}, do HiperVerso. Gostaria de te seguir e acompanhar suas publicações. Se puder aceitar, agradeço!",
+    "sendWithMessage": "Pedir com mensagem",
+    "sendSilent": "Só pedir",
+    "requestSentTitle": "Solicitação enviada",
+    "requestSentDescription": "{handle} precisa aceitar para você começar a seguir.",
+    "requestSentNoteDescription": "Pedido e mensagem enviados a {handle}.",
+    "requestSentNoteFailed": "O pedido foi enviado, mas a mensagem não pôde ser entregue.",
+    "followedTitle": "Seguindo {handle}",
+    "unfollowedTitle": "Você deixou de seguir {handle}",
+    "requestCancelledTitle": "Solicitação cancelada",
+    "unfollowRemoteNote": "O servidor desse perfil não respondeu; você deixou de seguir aqui mesmo assim.",
+    "errorTitle": "Não foi possível atualizar",
+    "loginTitle": "Entre para seguir",
+    "loginDescription": "Faça login para seguir perfis do Fediverso.",
+    "errors": {
+      "federacao-nao-ativada": "Ative o Fediverso nas configurações para seguir perfis de lá.",
+      "plataforma-desligada": "O Fediverso está temporariamente desligado.",
+      "conta-pausada": "Sua conta está pausada no Fediverso. Retome nas configurações.",
+      "muitas-requisicoes": "Muitos pedidos seguidos. Tente de novo em instantes.",
+      "falha-entrega-remota": "O servidor desse perfil não respondeu. Tente de novo em instantes.",
+      "inbox-remoto-indisponivel": "Esse perfil não aceita pedidos agora.",
+      "perfil-nao-encontrado": "Perfil não encontrado.",
+      "generic": "Tente de novo em instantes."
+    }
   },
   "UserListItem": {
     "loginRequiredTitle": "Login Obrigatório",
@@ -462,7 +500,7 @@
   },
   "TrendingPage": {
     "title": "Tendências do Momento",
-    "description": "Descubra o que está bombando na rede Exe. Lula.",
+    "description": "Descubra o que está bombando na rede HiperVerso.",
     "topHashtagsTitle": "Principais Hashtags",
     "topHashtagsDescription": "As tags mais populares no momento.",
     "noHashtags": "Nenhuma hashtag em alta no momento.",
@@ -482,7 +520,7 @@
     "mentionsCount": "{count, plural, one {# menção} other {# menções}}",
     "noTrendingTopics": "Nenhum tópico em alta no momento.",
     "noTopArticles": "Nenhum artigo em destaque no momento.",
-    "downloadAppTitle": "Exe. Lula App",
+    "downloadAppTitle": "HiperVerso App",
     "downloadAppDescription": "Tenha a melhor experiência instalando o aplicativo no seu dispositivo.",
     "downloadNow": "Baixar Agora"
   },
@@ -599,13 +637,13 @@
   },
   "DownloadPage": {
     "title": "Baixar o Aplicativo",
-    "description": "Instale o Exe. Lula no seu dispositivo para a melhor experiência.",
+    "description": "Instale o HiperVerso no seu dispositivo para a melhor experiência.",
     "androidTitle": "Baixar para Android",
     "androidSoonTitle": "Aplicativo Android em breve",
-    "androidSoonText": "Estamos preparando uma nova versão do aplicativo para Android, que será disponibilizada aqui depois de validada. Enquanto isso, use o Exe. Lula pelo navegador.",
+    "androidSoonText": "Estamos preparando uma nova versão do aplicativo para Android, que será disponibilizada aqui depois de validada. Enquanto isso, use o HiperVerso pelo navegador.",
     "iosTitle": "Instalar no iPhone/iPad",
     "desktopTitle": "Instalar no seu Computador",
-    "downloadApkButton": "Baixar o app Exe. Lula",
+    "downloadApkButton": "Baixar o app HiperVerso",
     "apkInstallTitle": "Como Instalar o APK",
     "apkStep1": "1. Baixe o arquivo .apk usando o botão acima.",
     "apkStep2": "2. Abra o arquivo baixado. O seu dispositivo pedirá permissão para 'instalar apps de fontes desconhecidas'. Permita para continuar.",
@@ -616,9 +654,9 @@
     "iosStep1": "1. Abra este site no Safari.",
     "iosStep2": "2. Toque no ícone de Compartilhamento na barra de ferramentas do navegador.",
     "iosStep3": "3. Role para baixo e selecione 'Adicionar à Tela de Início'.",
-    "iosStep4": "4. Confirme para adicionar o ícone do Exe. Lula à sua tela de início.",
+    "iosStep4": "4. Confirme para adicionar o ícone do HiperVerso à sua tela de início.",
     "desktopInstallTitle": "Como Instalar no seu Navegador",
-    "desktopInstallText": "Procure pelo ícone de instalação na barra de endereço do seu navegador (geralmente à direita) e siga as instruções para adicionar o Exe. Lula como um aplicativo no seu computador.",
+    "desktopInstallText": "Procure pelo ícone de instalação na barra de endereço do seu navegador (geralmente à direita) e siga as instruções para adicionar o HiperVerso como um aplicativo no seu computador.",
     "releaseInfoTitle": "Informações da Versão",
     "version": "Versão",
     "releaseNotes": "Notas da Versão",
@@ -691,7 +729,8 @@
     "pollError_duration": "Escolha uma duração válida.",
     "pollMediaConflictTitle": "Enquete ou mídia",
     "pollMediaConflictDescription": "Remova a enquete para anexar imagem ou vídeo.",
-    "sensitiveButton": "Marcar mídia como conteúdo sensível"
+    "sensitiveButton": "Marcar mídia como conteúdo sensível",
+    "sensitiveActive": "Conteúdo sensível ativo"
   },
   "Poll": {
     "title": "Enquete",
@@ -708,16 +747,17 @@
   "PostContent": {
     "sensitiveWarning": "Conteúdo sensível",
     "sensitiveHint": "A mídia foi ocultada porque o autor marcou este conteúdo como sensível.",
-    "showSensitive": "Mostrar mídia"
+    "showSensitive": "Mostrar mídia",
+    "sensitiveSettingsLink": "Preferências"
   },
   "Signup": {
     "closedTitle": "Cadastros encerrados por enquanto",
-    "closedMessage": "As {limit} vagas iniciais do Exe. Lula foram preenchidas.",
+    "closedMessage": "As {limit} vagas iniciais do HiperVerso foram preenchidas.",
     "closedHint": "Quem já tem conta continua entrando normalmente, com o e-mail ou com o Google.",
     "goToLogin": "Ir para o login",
     "unavailable": "O cadastro está temporariamente indisponível. Tente novamente em alguns minutos.",
     "usernameInvalid": "Use de 3 a 15 letras, números ou _ (sem espaços nem acentos).",
-    "humanCheckFailed": "Não foi possível confirmar que você é uma pessoa. Recarregue a página e tente de novo. Se usa bloqueador de anúncios ou de rastreadores, libere o Exe. Lula e o Google reCAPTCHA.",
+    "humanCheckFailed": "Não foi possível confirmar que você é uma pessoa. Recarregue a página e tente de novo. Se usa bloqueador de anúncios ou de rastreadores, libere o HiperVerso e o Google reCAPTCHA.",
     "recaptchaNotice": "Este site é protegido pelo reCAPTCHA Enterprise do Google, e valem a Política de Privacidade e os Termos de Serviço do Google."
   },
   "ImageViewer": {
@@ -727,8 +767,8 @@
     "save": "Salvar",
     "share": "Compartilhar",
     "imageAlt": "Imagem em tela cheia",
-    "shareTitle": "Imagem do Exe. Lula",
-    "shareText": "Veja esta imagem no Exe. Lula!",
+    "shareTitle": "Imagem do HiperVerso",
+    "shareText": "Veja esta imagem no HiperVerso!",
     "linkCopiedTitle": "Link copiado!",
     "linkCopiedBody": "O link do post foi copiado para a área de transferência.",
     "shareFailedTitle": "Não foi possível compartilhar",
@@ -740,7 +780,7 @@
   },
   "NotificationItem": {
     "fallback": "Você tem uma nova notificação.",
-    "welcome": "Bem-vindo ao Exe. Lula!",
+    "welcome": "Bem-vindo ao HiperVerso!",
     "someone": "Alguém",
     "andOthers": "e outros {count}",
     "andOne": "e outro",
@@ -765,6 +805,7 @@
       "new_post_from_user": "publicou um novo post:",
       "new_message": "enviou uma nova mensagem:",
       "new_conversation": "iniciou uma conversa com você",
+      "alt_text_request": "pediu descrição (Alt Text) na imagem do seu post",
       "default": "interagiu com você"
     }
   },
@@ -775,17 +816,18 @@
     "later": "Agora não",
     "close": "Fechar",
     "blockedTitle": "As notificações estão bloqueadas",
-    "blockedBody": "Libere as notificações do Exe. Lula nas configurações do navegador ou do aparelho para receber os avisos.",
+    "blockedBody": "Libere as notificações do HiperVerso nas configurações do navegador ou do aparelho para receber os avisos.",
     "enabledTitle": "Notificações ativadas",
     "enabledBody": "Você vai receber os avisos neste aparelho.",
     "errorTitle": "Não foi possível ativar as notificações",
     "errorBody": "Tente de novo em instantes."
   },
   "Consent": {
-    "title": "Cookies e medição de uso",
-    "description": "Alguns cookies são necessários para você entrar na conta, guardar idioma e tema e barrar abuso — esses não dependem de escolha. Os de medição e de publicidade só entram se você aceitar, e você pode mudar de ideia quando quiser.",
+    "title": "Cookies, zero publicidade e apoio",
+    "description": "Aqui não exibimos anúncios nem vendemos seus dados. Alguns cookies são necessários para login, idioma, tema e segurança. Os opcionais de medição só entram se você aceitar.",
     "cookiePolicy": "Política de Cookies",
     "privacyPolicy": "Política de Privacidade",
+    "supportPix": "Apoiar via Pix (sem anúncios)",
     "acceptAll": "Aceitar tudo",
     "rejectAll": "Rejeitar tudo",
     "customize": "Personalizar",
@@ -807,8 +849,8 @@
         "description": "Ajudam a entender quais páginas são usadas e onde a rede falha. Desligados até você aceitar."
       },
       "marketing": {
-        "title": "Publicidade",
-        "description": "Permitiriam anúncios e medição de campanhas. A rede não exibe anúncios hoje; a categoria fica aqui para que nada seja ligado sem o seu aceite. Desligados até você aceitar."
+        "title": "Zero Publicidade (Apoio via Pix)",
+        "description": "Não trabalhamos com publicidade nem vendemos dados. Nossa rede se mantém independente com o apoio voluntário da comunidade via Pix."
       }
     }
   },
@@ -1007,7 +1049,7 @@
       "option": {
         "local": {
           "title": "Só aqui",
-          "description": "Fica no Exe. Lula. Nada sai para outros servidores."
+          "description": "Fica no HiperVerso. Nada sai para outros servidores."
         },
         "public": {
           "title": "Fediverso: público",

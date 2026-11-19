@@ -23,7 +23,7 @@ const PwaUpdateNotifier = () => {
       wb.addEventListener('waiting', () => {
         toast({
           title: "Atualização Disponível",
-          description: "Uma nova versão do Exe. Lula está pronta. Recarregue para atualizar.",
+          description: "Uma nova versão do HiperVerso está pronta. Recarregue para atualizar.",
           action: (
             <ToastAction altText="Recarregar" onClick={() => wb.messageSW({ type: 'SKIP_WAITING' })}>
               Recarregar

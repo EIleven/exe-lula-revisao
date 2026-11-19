@@ -29,7 +29,7 @@ export function blueskyClientMetadata() {
   const origin = socialOrigin();
   return {
     client_id: `${origin}/api/social/bluesky/client-metadata`,
-    client_name: 'Exe. Lula',
+    client_name: 'HiperVerso',
     client_uri: origin,
     logo_uri: `${origin}/brand/lula.png`,
     tos_uri: `${origin}/pt-BR/terms`,

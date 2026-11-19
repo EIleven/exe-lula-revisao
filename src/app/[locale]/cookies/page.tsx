@@ -106,13 +106,6 @@ const TERCEIROS: Linha[] = [
     categoria: 'Medição',
     duracao: 'Definida pelo Google',
   },
-  {
-    nome: 'Cookies do Google AdSense',
-    tipo: 'Cookie de terceiro (Google)',
-    finalidade: 'Anúncios e medição de campanha. A rede não exibe anúncios hoje; só existiriam com o seu aceite.',
-    categoria: 'Publicidade',
-    duracao: 'Definida pelo Google',
-  },
 ];
 
 function Tabela({ titulo, linhas }: { titulo: string; linhas: Linha[] }) {

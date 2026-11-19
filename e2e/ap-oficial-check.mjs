@@ -293,15 +293,22 @@ const contadorDe = (ctx, nome) => ctx.teste.contadores.get(nome) ?? 0;
   await publicar(ctx, { text: 'Imagem forte', hashtags: [], sensitive: true, media: [{ url: `${MIDIA}/m/forte`, type: 'image', alt: null }] });
   confere('SENSÍVEL · a marca `sensitive` sai na nota', (await entregar(ctx)).novas[0].json.object.sensitive === true, 'não marcou');
 
-  // 3f. notícia: manchete + resumo (até 360) + link da página; hashtags da manchete e do resumo
+  // 3f. notícia: o ARTIGO INTEIRO vai na nota (manchete em negrito + corpo), e o endereço fica só no campo `url`.
   relogio.avanca(1000);
   const longo = `${'Texto da matéria. '.repeat(40)}#CorteNoFim`;
   const n = await publicar(ctx, { category: 'news', headline: 'Reunião nacional confirmada #Mobilização', text: longo, hashtags: ['#Mobilização', '#CorteNoFim'] });
   const nn = (await entregar(ctx)).novas[0].json.object;
   const corpoPuro = nn.content.replace(/<[^>]+>/g, '|').replace(/&amp;/g, '&');
-  confere('NOTÍCIA · o corpo é manchete + resumo + link da página do post', nn.content.includes('Reunião nacional confirmada') && nn.content.includes(`${ORIGEM}/pt-BR/post/${n.id}`), nn.content.slice(0, 180));
-  confere('NOTÍCIA · o resumo é cortado (360 caracteres) e termina com reticências', nn.content.includes('...') && !nn.content.includes('#CorteNoFim'), nn.content.slice(0, 120));
-  confere('NOTÍCIA · `tag` só tem hashtag que o leitor VÊ: a da manchete sim, a que ficou no trecho cortado não', igual(nn.tag.map((x) => x.name), ['#Mobilização']), JSON.stringify(nn.tag));
+  confere('NOTÍCIA · a manchete abre a nota, em negrito', nn.content.startsWith('<p><strong>Reunião nacional confirmada'), nn.content.slice(0, 120));
+  confere('NOTÍCIA · o corpo vai INTEIRO: sem corte em 360 e sem reticências (quem lê no Mastodon não precisa abrir o site)',
+    !nn.content.includes('...') && nn.content.includes('#CorteNoFim') && corpoPuro.length > 600,
+    `${corpoPuro.length} caracteres: ${nn.content.slice(0, 120)}`);
+  confere('NOTÍCIA · o endereço canônico fica no campo `url`, e NÃO enfiado no texto',
+    nn.url === `${ORIGEM}/pt-BR/post/${n.id}` && !nn.content.includes(`${ORIGEM}/pt-BR/post/${n.id}`),
+    `url=${nn.url}`);
+  confere('NOTÍCIA · `tag` traz as hashtags que o leitor VÊ — e agora ele vê o texto todo, inclusive a do fim',
+    igual(nn.tag.filter((x) => x.type === 'Hashtag').map((x) => x.name).sort(), ['#CorteNoFim', '#Mobilização']),
+    JSON.stringify(nn.tag));
   void corpoPuro;
 
   // 3g. alcances

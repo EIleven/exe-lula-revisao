@@ -4,6 +4,8 @@
 import { getApps, initializeApp, type App } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
+import { getDatabase } from 'firebase-admin/database';
+import { getMessaging } from 'firebase-admin/messaging';
 import { getStorage } from 'firebase-admin/storage';
 
 function adminApp(): App {
@@ -14,9 +16,14 @@ function adminApp(): App {
   if (process.env.NEXT_PUBLIC_USE_EMULATORS === 'true') {
     process.env.FIREBASE_STORAGE_EMULATOR_HOST ||= '127.0.0.1:9199';
   }
+  const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+  const databaseURL =
+    process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL ||
+    (projectId ? `https://${projectId}-default-rtdb.firebaseio.com` : undefined);
   return getApps()[0] ?? initializeApp({
-    projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+    projectId,
     storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+    ...(databaseURL ? { databaseURL } : {}),
   });
 }
 
@@ -31,3 +38,9 @@ export const adminFirestore = () =>
  * URL pública não carregar credencial nenhuma. Nunca importar em código do navegador.
  */
 export const adminBucket = () => getStorage(adminApp()).bucket();
+
+/** Realtime Database pelo Admin SDK (usado para notificar dispositivos conectados em tempo real). */
+export const adminDatabase = () => getDatabase(adminApp());
+
+/** Cloud Messaging pelo Admin SDK (alertas de segurança/login e notificações push). */
+export const adminMessaging = () => getMessaging(adminApp());

@@ -58,7 +58,7 @@ function keyring(): MasterKeyring {
 export function federation(): FederationRuntime {
   if (runtime) return runtime;
 
-  const origin = siteConfig.baseUrl.replace(/\/+$/, '');
+  const origin = (process.env.NEXT_PUBLIC_BASE_URL?.trim() ? siteConfig.baseUrl : siteConfig.federationOrigin).replace(/\/+$/, '');
   const ownHost = new URL(origin).hostname;
   const db = adminFirestore();
   const now = () => Date.now();
@@ -75,7 +75,7 @@ export function federation(): FederationRuntime {
   };
   const fetcher = createFetcher({
     now,
-    userAgent: `ExeLula/${SOFTWARE_VERSION} (+${origin})`,
+    userAgent: `HiperVerso/${SOFTWARE_VERSION} (+${origin})`,
     signGet,
   });
   const randomId = () => randomBytes(12).toString('base64url');
@@ -133,6 +133,18 @@ function logWorkerEvent(evento: WorkerLogEvent): void {
  * O host que o REMOTO assinou. Atrás do balanceador do App Hosting o `host` pode ser o interno; o original vem em
  * `x-forwarded-host`. A assinatura cobre o host, então ele entra na verificação exatamente como o remoto o usou.
  */
+/**
+ * O pedido chegou por um host em que esta instância JÁ TEVE identidade no Fediverso? Devolve a origem dele, ou `null`
+ * quando é o host canônico (ou qualquer outro). É o que faz o ator e o WebFinger antigos voltarem a ser válidos.
+ */
+export function legacyFederationOrigin(request: Request): string | null {
+  const host = publicHost(request);
+  const antigo = siteConfig.legacyFederationHosts.find((h) => h === host);
+  if (!antigo) return null;
+  // O www do domínio antigo responde pela mesma identidade do apex: quem seguia `@user@exercitodolula.app` conhece o apex.
+  return `https://${antigo.replace(/^www\./, '')}`;
+}
+
 export function publicHost(request: Request): string {
   const reenviado = (
     request.headers.get('x-fh-requested-host')

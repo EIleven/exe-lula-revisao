@@ -14,10 +14,12 @@
 // impedi-lo prenderia a pessoa a uma cópia que ela quer retirar. Só o botão de emergência da plataforma o para.
 import { loadPrivateKey } from './account.ts';
 import type { AccountDeps } from './account.ts';
-import { buildAnnounce, buildCreate, buildDelete, buildDeleteActor, buildLike, buildUndo, buildUpdate } from './activity.ts';
+import { buildAnnounce, buildCreate, buildDelete, buildDeleteActor, buildLike, buildMove, buildUndo, buildUpdate } from './activity.ts';
 import { classifyDelivery, deliveryId, domainCooldownSeconds, failureClassOf, groupTargets, nextStep } from './delivery.ts';
 import type { FailureClass } from './delivery.ts';
+import { aposEntregaAceita, aposRecusa, ehRecusaDeConsentimento, pausaDeConsentimento } from './consentimentoDeDominio.ts';
 import { addressingFor, decideInstance, evaluateGate } from './gate.ts';
+import type { FederationScope } from './gate.ts';
 import type { GateOp, PostForGate } from './gate.ts';
 import { actorUrl, activityUrl, followersUrl, keyIdUrl, noteUrl } from './identity.ts';
 import { commentNoteFor, commentNoteUrl, noteFor } from './render.ts';
@@ -154,10 +156,46 @@ async function todosOsSeguidores(deps: WorkerDeps, uid: string): Promise<Followe
   return todos;
 }
 
-/** Destinos de uma conta, agrupados por inbox compartilhado e já sem as instâncias que a política recusa. */
-async function destinosDe(deps: WorkerDeps, seguidores: readonly FollowerRecord[]) {
+/**
+ * Destinos de uma conta, já sem as instâncias que a política recusa.
+ *
+ * `escopo` decide o agrupamento: público e não listado vão pelo inbox COMPARTILHADO (uma entrega por servidor); só-seguidores
+ * vai pelo inbox PESSOAL de cada seguidor (ver groupTargets). Sem `escopo`, o padrão é agrupar — é o caso do `Delete` do
+ * próprio ator, que é para todo mundo que seguia.
+ */
+async function destinosDe(deps: WorkerDeps, seguidores: readonly FollowerRecord[], escopo?: FederationScope) {
   const politica = await deps.store.getInstancePolicy();
-  return groupTargets(seguidores).filter((d) => decideInstance(d.domain, politica, deps.ownHost).decision !== 'reject');
+  const alvos = groupTargets(seguidores, { allowSharedInbox: escopo !== 'followers' });
+  return alvos.filter((d) => decideInstance(d.domain, politica, deps.ownHost).decision !== 'reject');
+}
+
+/**
+ * Soma aos destinos as caixas de quem foi MENCIONADO na nota. Sem isto a tag `Mention` ia no corpo e não chegava a ninguém:
+ * quem foi mencionado quase nunca segue a pessoa, e os destinos saíam só da lista de seguidores.
+ *
+ * Vai sempre na caixa PESSOAL (a menção é para aquela pessoa, não para o servidor) e nunca repete uma caixa que já estava na
+ * lista. Instância recusada pela política continua fora.
+ */
+async function comMencionados(
+  deps: WorkerDeps,
+  destinos: { inbox: string; domain: string; followers: number }[],
+  atividade: unknown,
+) {
+  const objeto = (atividade as { object?: { tag?: unknown } } | null)?.object;
+  const tags = Array.isArray(objeto?.tag) ? (objeto.tag as { type?: unknown; href?: unknown }[]) : [];
+  const alvos = tags.filter((x) => x?.type === 'Mention' && typeof x.href === 'string').map((x) => x.href as string);
+  if (alvos.length === 0) return destinos;
+  const politica = await deps.store.getInstancePolicy();
+  const jaTem = new Set(destinos.map((d) => d.inbox));
+  const saida = [...destinos];
+  for (const actorId of alvos.slice(0, 20)) {
+    const ator = await deps.store.getRemoteActor(actorId).catch(() => null);
+    if (!ator?.inbox || jaTem.has(ator.inbox)) continue;
+    if (decideInstance(ator.domain, politica, deps.ownHost).decision === 'reject') continue;
+    jaTem.add(ator.inbox);
+    saida.push({ inbox: ator.inbox, domain: ator.domain, followers: 0 });
+  }
+  return saida;
 }
 
 function postParaPortao(post: LocalPost | null, objeto: FederatedObject | null, uid: string): PostForGate {
@@ -212,6 +250,7 @@ async function expandirTarefa(deps: WorkerDeps, tarefa: OutboundJob): Promise<nu
   const { store } = deps;
   const agora = deps.now();
 
+  if (tarefa.op === 'move') return expandirMove(deps, tarefa);
   if (tarefa.op === 'delete-actor') return expandirDeleteActor(deps, tarefa);
   if (tarefa.op === 'comment-create' || tarefa.op === 'comment-delete') return expandirComentario(deps, tarefa);
   if (tarefa.op === 'local-boost' || tarefa.op === 'local-unboost') return expandirBoostLocal(deps, tarefa);
@@ -265,7 +304,7 @@ async function expandirTarefa(deps: WorkerDeps, tarefa: OutboundJob): Promise<nu
   const ator = actorUrl(deps.origin, handle);
   const escopo = decisao.scope;
   const seguidores = await todosOsSeguidores(deps, tarefa.uid);
-  const destinos = await destinosDe(deps, seguidores);
+  const destinos = await destinosDe(deps, seguidores, escopo);
 
   let atividade: unknown;
   let objectId: string;
@@ -318,8 +357,9 @@ async function expandirTarefa(deps: WorkerDeps, tarefa: OutboundJob): Promise<nu
   }
 
   const corpo = JSON.stringify(atividade);
+  const destinosFinais = await comMencionados(deps, destinos, atividade);
   let criadas = 0;
-  for (const destino of destinos) {
+  for (const destino of destinosFinais) {
     const id = deliveryId({ uid: tarefa.uid, op, objectId, targetInbox: destino.inbox });
     const registro: DeliveryRecord = {
       id, uid: tarefa.uid, op, objectId, activityId, targetInbox: destino.inbox, domain: destino.domain, body: corpo,
@@ -401,7 +441,7 @@ async function expandirComentario(deps: WorkerDeps, tarefa: OutboundJob): Promis
     todosOsSeguidores(deps, tarefa.uid),
     objeto.uid !== tarefa.uid ? todosOsSeguidores(deps, objeto.uid) : Promise.resolve([]),
   ]);
-  const destinos = await destinosDe(deps, [...segAutorComentario, ...segAutorPost]);
+  const destinos = await destinosDe(deps, [...segAutorComentario, ...segAutorPost], escopo);
   const corpo = JSON.stringify(atividade);
   let criadas = 0;
   for (const destino of destinos) {
@@ -599,6 +639,48 @@ async function expandirBoostLocal(deps: WorkerDeps, tarefa: OutboundJob): Promis
   return criadas;
 }
 
+/**
+ * `Move`: a conta mudou de domínio.
+ *
+ * Sai assinado pelo ator ANTIGO — quem segue conhece a conta por ele, e um `Move` vindo de um ator que o seguidor não
+ * conhece é descartado. O destino é o ator canônico, que declara `alsoKnownAs` apontando de volta: é esse par que o
+ * Mastodon confere antes de mover o follow. Os vínculos NÃO são apagados aqui: quem decide se migra é o servidor de lá,
+ * e apagar antes deixaria a pessoa sem seguidores dos dois lados.
+ */
+async function expandirMove(deps: WorkerDeps, tarefa: OutboundJob): Promise<number> {
+  const { store } = deps;
+  const agora = deps.now();
+  const reserva = await store.findHandleByUid(tarefa.uid);
+  if (!reserva) {
+    await store.finishJob(tarefa.id, 'skipped', 'sem-handle');
+    return 0;
+  }
+  // `note` carrega a origem ANTIGA (ex.: https://exercitodolula.app): é de lá que o Move fala.
+  const origemAntiga = (tarefa.note ?? '').trim().replace(/\/+$/, '');
+  if (!/^https:\/\/[a-z0-9.-]+$/i.test(origemAntiga)) {
+    await store.finishJob(tarefa.id, 'skipped', 'origem-antiga-invalida');
+    return 0;
+  }
+  const seguidores = await todosOsSeguidores(deps, tarefa.uid);
+  const destinos = await destinosDe(deps, seguidores);
+  const atorAntigo = actorUrl(origemAntiga, reserva.handle);
+  const atorNovo = actorUrl(deps.origin, reserva.handle);
+  const activityId = activityUrl(origemAntiga, reserva.handle, `move-${deps.randomId()}`);
+  const corpo = JSON.stringify(buildMove(activityId, atorAntigo, atorNovo));
+
+  let criadas = 0;
+  for (const destino of destinos) {
+    const registro: DeliveryRecord = {
+      id: deliveryId({ uid: tarefa.uid, op: 'move', objectId: atorNovo, targetInbox: destino.inbox }),
+      uid: tarefa.uid, op: 'move', objectId: atorNovo, activityId, targetInbox: destino.inbox, domain: destino.domain,
+      body: corpo, status: 'pending', attempts: 0, nextAttemptAt: agora, lastDetail: null, lastOutcome: null, createdAtMs: agora, sentAtMs: null,
+    };
+    if (await store.putDeliveryIfAbsent(registro)) criadas++;
+  }
+  await store.finishJob(tarefa.id, 'done', null);
+  return criadas;
+}
+
 async function expandirDeleteActor(deps: WorkerDeps, tarefa: OutboundJob): Promise<number> {
   const { store } = deps;
   const agora = deps.now();
@@ -658,6 +740,32 @@ async function entregarUma(deps: WorkerDeps, entrega: DeliveryRecord, chaves: Ma
 
   // Disjuntor: domínio que vem falhando espera, sem gastar tentativa desta entrega.
   const saude = await store.getDomainHealth(entrega.domain);
+
+  // RECUSA é diferente de QUEDA. O cooldown abaixo é para servidor fora do ar; este freio é para servidor que não
+  // nos quer. Depois de recusas seguidas, a entrega para aquele domínio para de sair -- insistir contra quem nos
+  // desfederou é desrespeito, não resiliência. A pausa tem prazo e cresce, então um engano se corrige sozinho.
+  const consentimento = pausaDeConsentimento(saude, agora);
+  if (consentimento.pausado) {
+    await store.updateDelivery(entrega.id, {
+      status: 'dead',
+      attempts: entrega.attempts,
+      nextAttemptAt: null,
+      lastDetail: `dominio recusou ${consentimento.recusas}x seguidas`,
+      lastOutcome: 'permanent',
+    });
+    await store.bump('entrega.morta.dominio-recusou');
+    await store.audit({
+      atMs: agora,
+      kind: 'delivery',
+      domain: entrega.domain,
+      decision: 'nao-entregue',
+      reason: `consentimento: ${consentimento.recusas} recusas seguidas, pausado ate ${new Date(consentimento.ate).toISOString()}`,
+      uid: entrega.uid,
+    });
+    deps.log?.({ level: 'warn', event: 'ap.delivery.dead', uid: entrega.uid, op: entrega.op, domain: entrega.domain, attempts: entrega.attempts, reason: 'dominio-recusou' });
+    return 'dead';
+  }
+
   if (saude && saude.cooldownUntilMs > agora) {
     await store.updateDelivery(entrega.id, { nextAttemptAt: saude.cooldownUntilMs });
     return 'deferred';
@@ -694,7 +802,15 @@ async function entregarUma(deps: WorkerDeps, entrega: DeliveryRecord, chaves: Ma
 
   if (resultado.outcome === 'sent') {
     await store.updateDelivery(entrega.id, { status: 'sent', attempts: tentativas, nextAttemptAt: null, sentAtMs: agora, lastDetail: resultado.detail, lastOutcome: 'sent' });
-    await store.setDomainHealth({ domain: entrega.domain, consecutiveFailures: 0, cooldownUntilMs: 0, lastFailureMs: saude?.lastFailureMs ?? 0 });
+    // Entrega aceita zera TAMBEM as recusas: e isto que impede uma pessoa que nos bloqueou de pausar um servidor
+    // inteiro onde o resto continua nos recebendo.
+    await store.setDomainHealth({
+      domain: entrega.domain,
+      consecutiveFailures: 0,
+      cooldownUntilMs: 0,
+      lastFailureMs: saude?.lastFailureMs ?? 0,
+      ...aposEntregaAceita(),
+    });
     await store.bump('entrega.enviada');
     return 'sent';
   }
@@ -703,7 +819,23 @@ async function entregarUma(deps: WorkerDeps, entrega: DeliveryRecord, chaves: Ma
   const infra = resposta.status === null || resposta.status >= 500 || resposta.status === 429 || resposta.status === 408;
   if (infra) {
     const falhas = (saude?.consecutiveFailures ?? 0) + 1;
-    await store.setDomainHealth({ domain: entrega.domain, consecutiveFailures: falhas, cooldownUntilMs: agora + domainCooldownSeconds(falhas) * 1000, lastFailureMs: agora });
+    await store.setDomainHealth({
+      domain: entrega.domain,
+      consecutiveFailures: falhas,
+      cooldownUntilMs: agora + domainCooldownSeconds(falhas) * 1000,
+      lastFailureMs: agora,
+      consecutiveRefusals: saude?.consecutiveRefusals ?? 0,
+      refusedUntilMs: saude?.refusedUntilMs ?? 0,
+    });
+  } else if (ehRecusaDeConsentimento(resposta.status)) {
+    // 403: o servidor nos conhece e recusou. Conta como recusa de consentimento, nao como queda.
+    await store.setDomainHealth({
+      domain: entrega.domain,
+      consecutiveFailures: saude?.consecutiveFailures ?? 0,
+      cooldownUntilMs: saude?.cooldownUntilMs ?? 0,
+      lastFailureMs: agora,
+      ...aposRecusa(saude, agora),
+    });
   }
 
   const passo = nextStep(resultado, tentativas, agora);

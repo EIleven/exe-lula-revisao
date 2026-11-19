@@ -36,8 +36,13 @@ export type AccountRecord = {
   enabledAtMs: number | null;
   publicKeyPem: string | null;
   updatedAtMs: number;
-  /** Migração: contas para onde a pessoa aponta (`alsoKnownAs`) e para onde se mudou (`movedTo`). */
+  /**
+   * LEGADO, SÓ LEITURA. Vínculos com contas externas gravados antes de o recurso ser desativado: nada escreve mais
+   * aqui e o ator público NUNCA os declara (ver `buildActor`). O campo continua no contrato para que documentos
+   * antigos sejam lidos e regravados sem perder dado nem quebrar.
+   */
   alsoKnownAs: string[];
+  /** Migração: a conta para onde a pessoa se mudou (`movedTo`), declarada no ator. */
   movedTo: string | null;
 };
 
@@ -48,7 +53,9 @@ export type LocalProfile = {
   username: string;
   bio: string;
   avatarUrl: string | null;
+  avatarAlt?: string | null;
   coverUrl: string | null;
+  coverUrlAlt?: string | null;
   website: string | null;
   location: string | null;
   createdAtMs: number;
@@ -87,6 +94,7 @@ export type LocalComment = {
   parentCommentId: string | null;
   isDeleted: boolean;
   sensitive: boolean;
+  media?: { url: string; type: 'image' | 'video'; alt?: string | null }[];
   isRemoteFediverse?: boolean;
 };
 
@@ -145,7 +153,13 @@ export type JobOp =
   | 'remote-unboost'
   | 'local-boost'
   | 'local-unboost'
-  | 'remote-reply';
+  | 'remote-reply'
+  /**
+   * Mudança de domínio: avisa quem segue, pelo endereço ANTIGO, que a conta agora mora no canônico. O `Move` sai
+   * assinado pelo ator ANTIGO (é ele que quem segue conhece) e aponta para o novo, que por sua vez declara
+   * `alsoKnownAs` de volta — sem esse par, o Mastodon recusa a mudança.
+   */
+  | 'move';
 
 /** O que uma ENTREGA pode ser: as operações da fila mais as respostas a quem nos segue. */
 export type DeliveryOp = JobOp | 'accept' | 'reject';
@@ -189,7 +203,16 @@ export type DeliveryRecord = {
   sentAtMs: number | null;
 };
 
-export type DomainHealth = { domain: string; consecutiveFailures: number; cooldownUntilMs: number; lastFailureMs: number };
+export type DomainHealth = {
+  domain: string;
+  consecutiveFailures: number;
+  cooldownUntilMs: number;
+  lastFailureMs: number;
+  /** Recusas (403) seguidas deste servidor. Zera a cada entrega aceita. Ver consentimentoDeDominio.ts. */
+  consecutiveRefusals?: number;
+  /** Ate quando a entrega para este dominio esta pausada por RECUSA (nao por queda). */
+  refusedUntilMs?: number;
+};
 
 export type AuditEntry = {
   atMs: number;
@@ -269,6 +292,11 @@ export interface FederationStore {
 
   // ── atores remotos (cache) ──
   getRemoteActor(actorId: string): Promise<RemoteActorRecord | null>;
+  /**
+   * Ator remoto pelo handle `usuario@dominio`, para resolver uma menção escrita no texto. Só acha quem já passou por aqui
+   * (quem a pessoa viu para poder mencionar); desconhecido devolve `null` e a menção sai como texto puro, sem tag.
+   */
+  findRemoteActorByHandle?(handle: string): Promise<RemoteActorRecord | null>;
   putRemoteActor(record: RemoteActorRecord): Promise<void>;
 
   // ── idempotência de entrada ──
@@ -323,6 +351,10 @@ export interface FederationStore {
     text: string;
     createdAtMs: number;
     parentCommentId?: string | null;
+    media?: { url: string; type: 'image' | 'video'; alt?: string | null }[];
+    sensitive?: boolean;
+    /** Aviso de conteúdo escrito pelo autor (`summary`). Mostrado ANTES do texto e da mídia. */
+    contentWarning?: string | null;
   }): Promise<'added' | 'duplicate' | 'missing-post'>;
   removeRemoteComment?(apObjectId: string, actorId: string): Promise<boolean>;
   ingestRemotePost?(input: {
@@ -334,6 +366,11 @@ export interface FederationStore {
     media?: { url: string; type: 'image' | 'video'; alt?: string | null }[];
     quoteUrl?: string | null;
     customEmojis?: Record<string, string>;
+    sensitive?: boolean;
+    /** Aviso de conteúdo escrito pelo autor (`summary`). Mostrado ANTES do texto e da mídia. */
+    contentWarning?: string | null;
+    /** Idioma declarado pela origem (`pt-BR`, `en`...). Decide se o post entra na vitrine de quem não tem conta. */
+    language?: string | null;
   }): Promise<'added' | 'duplicate' | 'no-followers'>;
   hasRemoteFollowers?(actorId: string): Promise<boolean>;
   hasPost?(postId: string): Promise<boolean>;
@@ -348,6 +385,11 @@ export interface FederationStore {
     postCreatedAtMs?: number;
     media?: { url: string; type: 'image' | 'video'; alt?: string | null }[];
     customEmojis?: Record<string, string>;
+    sensitive?: boolean;
+    /** Aviso de conteudo escrito pelo autor do post impulsionado (`summary`). */
+    contentWarning?: string | null;
+    /** Idioma declarado pela origem do post impulsionado. */
+    language?: string | null;
   }): Promise<'added' | 'duplicate' | 'no-followers' | 'missing-post'>;
   // Curtir ou repostar um COMENTÁRIO nosso (e não o post): o marcador vai para o comentário, e as Functions de comentário
   // contam e notificam a pessoa certa. Antes, curtir o comentário curtia o post.
@@ -360,11 +402,16 @@ export interface FederationStore {
   /** O servidor remoto RECUSOU o nosso Follow: desfaz o "Seguindo" gravado por antecipação. `false` = não seguíamos. */
   rejectOutboundFollow?(uid: string, remoteActorId: string): Promise<boolean>;
   /** Edição de um post ou comentário remoto que guardamos. Só o MESMO ator que o criou pode alterá-lo. */
-  updateRemoteContent?(apObjectId: string, actorId: string, text: string): Promise<'post' | 'comment' | 'unknown'>;
+  updateRemoteContent?(apObjectId: string, actorId: string, text: string, sensitive?: boolean, contentWarning?: string | null): Promise<'post' | 'comment' | 'unknown'>;
   /** O autor apagou na origem: o que guardamos vira túmulo (sem texto nem mídia). */
   removeRemotePost?(apObjectId: string, actorId: string): Promise<boolean>;
   /** O ator removeu a conta na origem: os posts dele que guardamos viram túmulo. Devolve quantos. */
   removeRemoteActorContent?(actorId: string): Promise<number>;
+  /**
+   * Ainda existe algum vinculo entre esta instancia e o ator remoto -- alguem daqui que o segue, ou ele seguindo
+   * alguem daqui? Usado ao receber um `Block`: sem vinculo nenhum, o que guardamos dele nao tem por que continuar.
+   */
+  hasLocalLinkToActor?(actorId: string): Promise<boolean>;
   getRemotePostMeta?(postId: string): Promise<{
     remoteObjectId: string;
     remoteInbox: string;

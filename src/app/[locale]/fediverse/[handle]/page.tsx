@@ -36,7 +36,7 @@ const REMOTE_PROFILE_CACHE_TTL_MS = 5 * 60 * 1000;
 
 const MENSAGENS_DE_ERRO: Record<string, string> = {
   'login-obrigatorio': 'Entre na sua conta para ver perfis do Fediverso.',
-  'perfil-local': 'Este perfil é daqui do Exe. Lula.',
+  'perfil-local': 'Este perfil é daqui do HiperVerso.',
   'perfil-nao-encontrado': 'Perfil não encontrado no Fediverso.',
   'ator-invalido': 'O servidor deste perfil respondeu com dados inconsistentes, e por segurança não mostramos o perfil.',
   'instancia-bloqueada': 'Este servidor está bloqueado.',
@@ -116,7 +116,7 @@ export default function RemoteFediverseProfilePage() {
     if (!firebaseUser || !currentUser) {
       toast({
         title: 'Entre na sua conta',
-        description: 'Você precisa estar conectado no Exe. Lula para seguir perfis do Fediverso.',
+        description: 'Você precisa estar conectado no HiperVerso para seguir perfis do Fediverso.',
         variant: 'destructive',
       });
       return;
@@ -197,7 +197,7 @@ export default function RemoteFediverseProfilePage() {
         {nativeUser.coverImageUrl ? (
           <Image
             src={nativeUser.coverImageUrl}
-            alt={`${nativeUser.name} banner`}
+            alt={nativeUser.coverImageAlt?.trim() || `${nativeUser.name} banner`}
             fill
             sizes="100vw"
             className="object-cover"

@@ -4,8 +4,8 @@
 // menos uma (antes, fechar uma aba marcava offline com outra aberta). Sair da conta marca offline ANTES do signOut
 // (depois dele a escrita é negada e a pessoa ficava online para sempre). Visitantes: /guests/{id}, que some quando a
 // conexão cai. Veja docs/presenca.md.
+import { getRtdb } from '@/lib/rtdbClient';
 import {
-  getDatabase,
   ref,
   onValue,
   onDisconnect,
@@ -35,7 +35,9 @@ export const initializePresence = (userId: string) => {
   if (!userId || userSession?.uid === userId) return;
   if (userSession) void goOffline(userSession.uid);
 
-  const rtdb = getDatabase();
+  // `getRtdb()` nunca lança (devolve null): a presença roda em TODA página, um erro aqui derrubaria o app inteiro.
+  const rtdb = getRtdb();
+  if (!rtdb) return;
   const connectionsRef = ref(rtdb, `status/${userId}/connections`);
   const lastSeenRef = ref(rtdb, `status/${userId}/lastSeen`);
   const session: UserSession = { uid: userId, connectionRef: null, stopListening: () => {} };
@@ -61,7 +63,8 @@ export const goOffline = async (userId?: string): Promise<void> => {
   userSession = null;
   session.stopListening();
 
-  const rtdb = getDatabase();
+  const rtdb = getRtdb();
+  if (!rtdb) return;
   const lastSeenRef = ref(rtdb, `status/${session.uid}/lastSeen`);
   try {
     if (session.connectionRef) {
@@ -84,7 +87,8 @@ export const initializeGuestPresence = () => {
     sessionStorageSet(GUEST_SESSION_ID_KEY, guestId);
   }
 
-  const rtdb = getDatabase();
+  const rtdb = getRtdb();
+  if (!rtdb) return;
   const guestRef = ref(rtdb, `guests/${guestId}`);
   const stopListening = onValue(ref(rtdb, '.info/connected'), (snap) => {
     if (snap.val() !== true) return;

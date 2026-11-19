@@ -17,7 +17,6 @@ import { useDebounce } from '@/hooks/use-debounce';
 import { useFeedActions, useFeedSelector } from '@/contexts/FeedContext';
 import { useTabSwipe } from '@/hooks/useTabSwipe';
 import { useIsMobile } from '@/hooks/use-mobile';
-import FediverseOnboardingBanner from '@/components/federation/FediverseOnboardingBanner';
 
 interface HomeFeedTabsProps {
   newPostToPrepend: Post | null;
@@ -308,7 +307,7 @@ export default function HomeFeedTabs({ newPostToPrepend, onPostPrepended }: Home
           </TabsList>
         </div>
 
-        <FediverseOnboardingBanner />
+        {/* Avisos de onboarding removidos do topo do feed para manter a timeline limpa (acessíveis em Configurações e Identidade P2P). */}
 
         <div {...swipeProps} style={{ overscrollBehaviorX: 'none' }}>
           {TABS_ORDER.filter(tab => visitedTabsRef.current.has(tab.id)).map(tab => (

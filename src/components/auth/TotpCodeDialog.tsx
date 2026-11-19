@@ -66,7 +66,7 @@ export default function TotpCodeDialog({ open, onSubmit, onCancel, description }
               Verificação em duas etapas
             </DialogTitle>
             <DialogDescription>
-              {description ?? 'Abra o seu app autenticador e digite o código de 6 dígitos do Exe. Lula.'}
+              {description ?? 'Abra o seu app autenticador e digite o código de 6 dígitos do HiperVerso.'}
             </DialogDescription>
           </DialogHeader>
           <div className="my-4 space-y-2">

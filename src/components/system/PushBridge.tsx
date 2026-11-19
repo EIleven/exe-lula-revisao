@@ -6,7 +6,8 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useLocale } from 'next-intl';
 import { Capacitor } from '@capacitor/core';
 import { useCurrentUser } from '@/contexts/CurrentUserContext';
-import { syncPushToken } from '@/lib/services/pushNotificationService';
+import { ensureNativeChannels, syncPushToken } from '@/lib/services/pushNotificationService';
+import { consumeNativeAndroidShare, getShareBridgePlugin } from '@/lib/share/pendingShareStore';
 import { ensureUserE2eeKeyPair } from '@/lib/crypto/e2ee';
 import { useToast } from '@/hooks/use-toast';
 import { ToastAction } from '@/components/ui/toast';
@@ -68,7 +69,7 @@ export default function PushBridge() {
         if (cancelled || !(await isSupported().catch(() => false))) return;
         const messaging = getMessaging(app);
         const unsub = onMessage(messaging, (payload) => {
-          const title = payload.notification?.title || (payload.data?.title as string | undefined) || 'Exe. Lula';
+          const title = payload.notification?.title || (payload.data?.title as string | undefined) || 'HiperVerso';
           const body = payload.notification?.body || (payload.data?.body as string | undefined) || '';
           const path = internalPath(payload.data?.url) ?? internalPath(payload.data?.path);
           if (path && pathname === path.split('#')[0]) return;
@@ -95,9 +96,35 @@ export default function PushBridge() {
 
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
+    void ensureNativeChannels();
+
+    let cancelled = false;
+    let removeShareListener: (() => void) | undefined;
+
+    const checkIncomingShare = async () => {
+      const payload = await consumeNativeAndroidShare();
+      if (!cancelled && payload) {
+        router.push(`/${locale}/share?source=android`);
+      }
+    };
+
+    void checkIncomingShare();
+
+    const sharePlugin = getShareBridgePlugin();
+    if (sharePlugin) {
+      void sharePlugin
+        .addListener('shareReceived', () => {
+          void checkIncomingShare();
+        })
+        .then((handle) => {
+          if (cancelled) void handle.remove();
+          else removeShareListener = () => void handle.remove();
+        })
+        .catch(() => undefined);
+    }
+
     let removeAction: (() => void) | undefined;
     let removeReceived: (() => void) | undefined;
-    let cancelled = false;
     void import('@capacitor/push-notifications').then(async ({ PushNotifications }) => {
       const actionHandle = await PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
         const data = action.notification?.data as Record<string, unknown> | undefined;
@@ -109,7 +136,7 @@ export default function PushBridge() {
         const path = internalPath(data?.url) ?? (typeof data?.path === 'string' ? internalPath(data.path) : null);
         if (path && pathname === path.split('#')[0]) return;
         toast({
-          title: notification.title || 'Exe. Lula',
+          title: notification.title || 'HiperVerso',
           description: notification.body || undefined,
           action: path ? (
             <ToastAction altText="Abrir" onClick={() => router.push(path)}>
@@ -128,6 +155,7 @@ export default function PushBridge() {
     });
     return () => {
       cancelled = true;
+      removeShareListener?.();
       removeAction?.();
       removeReceived?.();
     };

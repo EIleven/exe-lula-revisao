@@ -166,6 +166,7 @@ async function resolveAccountToUser(
     {
       id: uid,
       name,
+      name_lowercase: (name || handle || '').toLowerCase(),
       username: handle,
       bio,
       avatarUrl,
@@ -174,6 +175,7 @@ async function resolveAccountToUser(
       followersCount,
       followingCount,
       postsCount,
+      dmPreference: 'everyone',
       profileVisibility: 'public',
       isRemoteFediverse: true,
       remoteActorId: actorId,
@@ -250,7 +252,7 @@ function remoteHostOf(post: RemotePostFields): string | null {
   }
 }
 
-const syncUserAgent = () => `ExeLula/1.0 (+${federation().origin})`;
+const syncUserAgent = () => `HiperVerso/1.0 (+${federation().origin})`;
 
 /** Busca o status na origem e o traduz para o que o orquestrador entende (sem decidir nada). */
 async function fetchRemoteStatus(location: { domain: string; statusId: string }): Promise<FetchedStatus> {
@@ -312,7 +314,7 @@ export async function syncRemotePostComments(postId: string): Promise<number> {
   if (!postData.isRemoteFediverse && !postId.startsWith('ap_')) return 0;
 
   const f = federation();
-  const userAgent = `ExeLula/1.0 (+${f.origin})`;
+  const userAgent = `HiperVerso/1.0 (+${f.origin})`;
   const loc = await resolveStatusLocation(postData, userAgent);
   if (!loc) return 0;
 
@@ -432,7 +434,7 @@ async function fetchReactorsForStatus(
   callerUid?: string | null,
 ): Promise<{ users: User[]; restricted: boolean }> {
   const f = federation();
-  const userAgent = `ExeLula/1.0 (+${f.origin})`;
+  const userAgent = `HiperVerso/1.0 (+${f.origin})`;
   const db = adminFirestore();
 
   const endpoint = mode === 'likes' ? 'favourited_by' : 'reblogged_by';
@@ -507,7 +509,7 @@ export async function fetchAndMaterializeRemotePostReactors(
   const expectedCount =
     mode === 'likes' ? Number(postData.likes ?? 0) : Number(postData.reposts ?? 0);
   const f = federation();
-  const userAgent = `ExeLula/1.0 (+${f.origin})`;
+  const userAgent = `HiperVerso/1.0 (+${f.origin})`;
   const loc = await resolveStatusLocation(postData, userAgent);
   if (!loc) return { users: [], restricted: expectedCount > 0 };
 
@@ -550,7 +552,7 @@ export async function fetchAndMaterializeRemoteCommentReactors(
   const expectedCount =
     mode === 'likes' ? Number(commentData.likes ?? 0) : Number(commentData.repostsCount ?? 0);
   const f = federation();
-  const userAgent = `ExeLula/1.0 (+${f.origin})`;
+  const userAgent = `HiperVerso/1.0 (+${f.origin})`;
   const loc = await resolveStatusLocation(
     {
       remoteUrl: commentData.remoteUrl || commentData.apObjectId,

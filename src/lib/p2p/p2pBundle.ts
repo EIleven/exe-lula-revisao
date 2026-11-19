@@ -242,9 +242,9 @@ export async function readBundle(
 /** Texto para a pessoa, por motivo. */
 export function describeBundleError(error: ReadBundleError): string {
   switch (error) {
-    case 'tamanho': return 'O arquivo é grande demais para ser um backup do Exe. Lula.';
+    case 'tamanho': return 'O arquivo é grande demais para ser um backup do HiperVerso.';
     case 'json': return 'O arquivo não é um backup válido (não é JSON).';
-    case 'formato': return 'O arquivo não parece ser um backup do Exe. Lula.';
+    case 'formato': return 'O arquivo não parece ser um backup do HiperVerso.';
     case 'versao': return 'Este backup foi criado por uma versão mais nova do app. Atualize o app e tente de novo.';
     case 'senha-necessaria': return 'Este backup é protegido por senha. Informe a senha para abrir.';
     case 'senha-incorreta': return 'Senha incorreta, ou o arquivo foi alterado.';

@@ -27,6 +27,19 @@ export function videoStagingPath(uid: string, mediaId: string): string {
   return `video_staging/${uid}/${mediaId}/source`;
 }
 
+/**
+ * Onde mora um anexo CIFRADO e grande. Caminho proprio, separado de `user_uploads/`, por dois motivos: as regras de
+ * `user_uploads` so aceitam ate 5 MB e tipos conhecidos (um borrao opaco nao e nenhum deles), e ter o caminho
+ * dizendo "enc" deixa visivel, na inspecao do bucket, qual objeto o servidor nao consegue ler.
+ */
+export function encryptedMediaPath(uid: string, mediaId: string): string {
+  return `user_uploads_enc/${uid}/${mediaId}`;
+}
+
+export function isEncryptedMediaPath(path: string): boolean {
+  return /^user_uploads_enc\/[^/]+\/[A-Za-z0-9_-]{22}$/.test(path);
+}
+
 export function isVideoStagingPath(path: string): boolean {
   return /^video_staging\/[^/]+\/[A-Za-z0-9_-]{22}\/source$/.test(path);
 }

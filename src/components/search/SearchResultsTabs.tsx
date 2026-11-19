@@ -3,7 +3,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { getSearchResultsWithCounts, type SearchResultWithCounts } from '@/lib/services/searchService';
+import { getSearchResultsWithCounts, type ResultadosDaBusca } from '@/lib/services/searchService';
+import ResultadoDeComentario from './ResultadoDeComentario';
+import { usePreferenciasDeBusca } from '@/hooks/usePreferenciasDeBusca';
 import type { Post, User } from '@/lib/types';
 import FeedList from '@/components/feed/FeedList';
 import UserListItem from '@/components/profile/UserListItem';
@@ -35,7 +37,7 @@ interface SearchResultsTabsProps {
   query: string;
 }
 
-type SearchTab = 'top' | 'latest' | 'people' | 'feeds' | 'articles';
+type SearchTab = 'top' | 'latest' | 'people' | 'comments' | 'feeds' | 'articles';
 
 const SearchSkeleton = () => (
     <div className="space-y-4">
@@ -64,17 +66,19 @@ export default function SearchResultsTabs({ query }: SearchResultsTabsProps) {
   const t = useTranslations('SearchResultsTabs');
   const locale = useLocale();
   const [activeTab, setActiveTab] = useState<SearchTab>('top');
-  const [results, setResults] = useState<Partial<SearchResultWithCounts>>({});
+  const [results, setResults] = useState<ResultadosDaBusca | null>(null);
   const [remoteProfile, setRemoteProfile] = useState<RemoteFediverseProfile | null>(null);
   const [localUrlPath, setLocalUrlPath] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const { currentUser } = useCurrentUser();
+  const { preferencias: prefsDeBusca } = usePreferenciasDeBusca(currentUser?.id);
+  const mostrarSensivel = !prefsDeBusca.filtrarSensivel;
   
   useEffect(() => {
     // Reset results and fetch everything when query changes
     const fetchAllResultsAndCounts = async () => {
         setIsLoading(true);
-        setResults({}); // Clear previous results
+        setResults(null); // Clear previous results
         setRemoteProfile(null);
         setLocalUrlPath(null);
         try {
@@ -86,7 +90,7 @@ export default function SearchResultsTabs({ query }: SearchResultsTabsProps) {
             const shouldLookupRemote =
               classified.kind === 'fediverse-handle' || classified.kind === 'fediverse-profile-url';
             const [data, fediRes] = await Promise.all([
-              getSearchResultsWithCounts(query, currentUser?.id),
+              getSearchResultsWithCounts(query, currentUser?.id, { mostrarSensivel }),
               shouldLookupRemote
                 ? fetch(`/api/ap/lookup?q=${encodeURIComponent(trimmed)}`).then((r) => (r.ok ? r.json() : null)).catch(() => null)
                 : Promise.resolve(null),
@@ -97,21 +101,18 @@ export default function SearchResultsTabs({ query }: SearchResultsTabsProps) {
             }
         } catch (error) {
             console.error(`Failed to fetch all search results for query "${query}":`, error);
-            setResults({ counts: { top: 0, latest: 0, people: 0, feeds: 0, articles: 0 }});
+            setResults(null);
         } finally {
             setIsLoading(false);
         }
     };
     fetchAllResultsAndCounts();
-  }, [query, currentUser]);
+  }, [query, currentUser, mostrarSensivel]);
 
   const handleFollowStateChange = (updatedUser: User) => {
-     setResults(prev => {
-      if (!prev.people) return prev;
-      return {
-        ...prev,
-        people: (prev.people as User[]).map(u => u.id === updatedUser.id ? updatedUser : u)
-      };
+    setResults((prev) => {
+      if (!prev) return prev;
+      return { ...prev, people: prev.people.map((u) => (u.id === updatedUser.id ? updatedUser : u)) };
     });
   };
 
@@ -172,36 +173,59 @@ export default function SearchResultsTabs({ query }: SearchResultsTabsProps) {
     );
   };
 
+  /**
+   * O numero da aba sai da MESMA lista que a aba desenha. Enquanto a contagem vinha do servico e a lista passava
+   * por filtros depois dele (idioma do feed, posts ocultos, item apagado no meio), existia o caso de aba marcando
+   * 12 com a tela vazia -- e quem usa so via o app mentindo.
+   */
+  const contagemDaAba = (aba: SearchTab): number => {
+    if (!results) return 0;
+    const extraRemoto = remoteProfile && (aba === 'top' || aba === 'people') ? 1 : 0;
+    return results.counts[aba] + extraRemoto;
+  };
+
   const renderContent = () => {
     if (isLoading) {
         return <SearchSkeleton />;
     }
 
-    const currentResults = results[activeTab];
     const showRemoteHere = Boolean(remoteProfile) && (activeTab === 'top' || activeTab === 'people');
 
-    if ((!currentResults || currentResults.length === 0) && !showRemoteHere) {
+    if (contagemDaAba(activeTab) === 0 && !showRemoteHere) {
         return <EmptyState message={t('noResults')} />;
     }
 
     switch (activeTab) {
         case 'top':
+        case 'latest':
+        case 'articles': {
+            // `semFiltroDeIdioma`: na busca a pessoa pediu AQUILO. Esconder um resultado pelo idioma escolhido no
+            // feed era metade da causa do contador que nao batia com a lista.
+            const lista = results ? results[activeTab] : [];
             return (
                 <div>
                     {showRemoteHere && renderRemoteProfileCard()}
-                    {currentResults && currentResults.length > 0 && (
-                        <FeedList initialPosts={currentResults as Post[]} feedId={`search-${activeTab}-${query}`} />
+                    {lista.length > 0 && (
+                        <FeedList initialPosts={lista} feedId={`search-${activeTab}-${query}`} semFiltroDeIdioma />
                     )}
                 </div>
             );
-        case 'latest':
-        case 'articles':
-            return <FeedList initialPosts={currentResults as Post[]} feedId={`search-${activeTab}-${query}`} />;
+        }
+        case 'comments':
+            // Comentario tem cartao proprio: trecho, autor e link para o post pai. Antes ia cru para a lista do
+            // feed, que espera post.
+            return (
+                <div className="space-y-2">
+                    {(results?.comments ?? []).map((c) => (
+                        <ResultadoDeComentario key={`${c.postPaiId}-${c.id}`} resultado={c} locale={locale} />
+                    ))}
+                </div>
+            );
         case 'people':
             return (
                 <div className="space-y-1">
                     {showRemoteHere && renderRemoteProfileCard()}
-                    {((currentResults as User[]) ?? []).map(user => (
+                    {(results?.people ?? []).map(user => (
                         <UserListItem 
                             key={user.id} 
                             userToList={user} 
@@ -214,7 +238,7 @@ export default function SearchResultsTabs({ query }: SearchResultsTabsProps) {
         case 'feeds':
              return (
                 <div className="space-y-1">
-                    {(currentResults as { tag: string; count: number }[]).map(hashtag => (
+                    {(results?.feeds ?? []).map(hashtag => (
                         <HashtagListItem key={hashtag.tag} tag={hashtag.tag} count={hashtag.count} />
                     ))}
                 </div>
@@ -227,9 +251,9 @@ export default function SearchResultsTabs({ query }: SearchResultsTabsProps) {
   const TabTriggerWithCount = ({ value, label }: { value: SearchTab, label: string }) => (
     <TabsTrigger value={value} className="flex items-center gap-2">
       <span>{label}</span>
-      {!isLoading && results.counts && (
+      {!isLoading && results && (
         <Badge variant={activeTab === value ? 'default' : 'secondary'} className="px-2 py-0.5 text-xs">
-          {results.counts[value] + (remoteProfile && (value === 'top' || value === 'people') ? 1 : 0)}
+          {contagemDaAba(value)}
         </Badge>
       )}
     </TabsTrigger>
@@ -242,6 +266,7 @@ export default function SearchResultsTabs({ query }: SearchResultsTabsProps) {
           <TabTriggerWithCount value="top" label={t('top')} />
           <TabTriggerWithCount value="latest" label={t('latest')} />
           <TabTriggerWithCount value="people" label={t('people')} />
+          <TabTriggerWithCount value="comments" label="Comentários" />
           <TabTriggerWithCount value="feeds" label={t('feeds')} />
           <TabTriggerWithCount value="articles" label={t('articles')} />
         </TabsList>

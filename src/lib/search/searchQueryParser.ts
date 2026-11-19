@@ -78,7 +78,7 @@ export function classifySearchQuery(raw: string): ClassifiedSearchQuery {
 
       const host = parsed.hostname.toLowerCase();
 
-      // URL do próprio HiperVerso / Exe. Lula
+      // URL do próprio HiperVerso / HiperVerso
       if (LOCAL_APP_HOSTS.has(host)) {
         const safePath = `${parsed.pathname}${parsed.search}${parsed.hash}` || '/';
         return {
@@ -127,3 +127,4 @@ export function classifySearchQuery(raw: string): ClassifiedSearchQuery {
 
   return { kind: 'text', text: trimmed };
 }
+

@@ -44,43 +44,121 @@ async function translateViaLibreTranslate(
   source: string,
 ): Promise<CachedTranslation | null> {
   const configuredUrl = process.env.LIBRETRANSLATE_URL?.trim();
+  if (!configuredUrl) return null;
   const apiKey = process.env.LIBRETRANSLATE_API_KEY?.trim();
-  const endpoints = configuredUrl
-    ? [configuredUrl]
-    : ['https://libretranslate.de/translate', 'https://translate.terraprint.co/translate'];
 
-  for (const endpoint of endpoints) {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 6500);
+    const res = await fetch(configuredUrl, {
+      method: 'POST',
+      signal: controller.signal,
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({
+        q: text,
+        source: source === 'auto' ? 'auto' : source,
+        target,
+        format: 'text',
+        ...(apiKey ? { api_key: apiKey } : {}),
+      }),
+    });
+    clearTimeout(timer);
+    if (!res.ok) return null;
+    const data = (await res.json()) as {
+      translatedText?: string;
+      detectedLanguage?: { language?: string };
+    };
+    if (typeof data.translatedText === 'string' && data.translatedText.trim()) {
+      return {
+        translatedText: data.translatedText.trim(),
+        detectedSource: data.detectedLanguage?.language || (source === 'auto' ? 'auto' : source),
+        provider: 'libretranslate',
+      };
+    }
+  } catch {
+    // instância própria indisponível, segue para espelhos FOSS
+  }
+  return null;
+}
+
+async function translateViaMozhi(
+  text: string,
+  target: string,
+  source: string,
+): Promise<CachedTranslation | null> {
+  const src = source === 'auto' ? 'auto' : source;
+  const trimmed = text.slice(0, 1800);
+  const attempts: Array<{ base: string; engine: string }> = [
+    { base: 'https://mozhi.aryak.me', engine: 'duckduckgo' },
+    { base: 'https://mozhi.aryak.me', engine: 'google' },
+    { base: 'https://mozhi.pussthecat.org', engine: 'duckduckgo' },
+  ];
+
+  for (const { base, engine } of attempts) {
     try {
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 6500);
-      const res = await fetch(endpoint, {
-        method: 'POST',
+      const timer = setTimeout(() => controller.abort(), 6000);
+      const url = `${base}/api/translate?engine=${encodeURIComponent(engine)}&from=${encodeURIComponent(src)}&to=${encodeURIComponent(target)}&text=${encodeURIComponent(trimmed)}`;
+      const res = await fetch(url, {
+        method: 'GET',
         signal: controller.signal,
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({
-          q: text,
-          source: source === 'auto' ? 'auto' : source,
-          target,
-          format: 'text',
-          ...(apiKey ? { api_key: apiKey } : {}),
-        }),
+        headers: { Accept: 'application/json' },
       });
       clearTimeout(timer);
       if (!res.ok) continue;
       const data = (await res.json()) as {
+        'translated-text'?: string;
         translatedText?: string;
-        detectedLanguage?: { language?: string };
+        detected?: string;
+        source_language?: string;
       };
-      if (typeof data.translatedText === 'string' && data.translatedText.trim()) {
+      const translated = (data['translated-text'] ?? data.translatedText ?? '').trim();
+      if (translated) {
         return {
-          translatedText: data.translatedText.trim(),
-          detectedSource: data.detectedLanguage?.language || (source === 'auto' ? 'auto' : source),
-          provider: 'libretranslate',
+          translatedText: translated,
+          detectedSource: data.detected || (data.source_language && data.source_language !== 'auto' ? data.source_language : src),
+          provider: `mozhi-${engine}`,
         };
       }
     } catch {
-      // tenta próximo espelho open-source
+      // tenta próximo espelho Mozhi
     }
+  }
+  return null;
+}
+
+async function translateViaMyMemory(
+  text: string,
+  target: string,
+  source: string,
+): Promise<CachedTranslation | null> {
+  if (!source || source === 'auto' || source === target) return null;
+  const trimmed = text.slice(0, 500);
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 5000);
+    const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(trimmed)}&langpair=${encodeURIComponent(`${source}|${target}`)}`;
+    const res = await fetch(url, {
+      method: 'GET',
+      signal: controller.signal,
+      headers: { Accept: 'application/json' },
+    });
+    clearTimeout(timer);
+    if (!res.ok) return null;
+    const data = (await res.json()) as {
+      responseStatus?: number;
+      responseData?: { translatedText?: string };
+    };
+    const translated = data.responseData?.translatedText?.trim();
+    if (data.responseStatus === 200 && translated) {
+      return {
+        translatedText: translated,
+        detectedSource: source,
+        provider: 'mymemory',
+      };
+    }
+  } catch {
+    // falha silenciosa no fallback
   }
   return null;
 }
@@ -172,11 +250,24 @@ export async function POST(request: NextRequest) {
     return json(200, viaLibre);
   }
 
+  const viaMozhi = await translateViaMozhi(rawText, target, source);
+  if (viaMozhi) {
+    writeCache(key, viaMozhi);
+    return json(200, viaMozhi);
+  }
+
   const viaLingva = await translateViaLingva(rawText, target, source);
   if (viaLingva) {
     writeCache(key, viaLingva);
     return json(200, viaLingva);
   }
 
+  const viaMyMemory = await translateViaMyMemory(rawText, target, source);
+  if (viaMyMemory) {
+    writeCache(key, viaMyMemory);
+    return json(200, viaMyMemory);
+  }
+
   return json(503, { error: 'servico-traducao-indisponivel' });
 }
+

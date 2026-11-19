@@ -4,6 +4,7 @@ import type { Metadata, ResolvingMetadata } from 'next';
 import PostPageClientContent from './PostPageClientContent';
 import { siteConfig } from '@/config/site';
 import { notFound } from 'next/navigation';
+import { isPublicSafe } from '@/lib/feed/publicVisibility';
 import { extractFirstMediaFromHtml } from '@/lib/utils/textUtils';
 import { Fragment } from 'react';
 import type { Post } from '@/lib/types';
@@ -52,7 +53,9 @@ export async function generateMetadata(
   const { postId, locale } = params;
   const post = await loadPublicPost(postId);
 
-  if (!post || post.isDeleted || (post.visibility === 'private' && post.userId !== getCurrentUserId())) {
+  // Conteúdo com aviso, ou fora do português, não vai para buscador nem para prévia de link: é a mesma vitrine do feed
+  // (lib/feed/publicVisibility.ts). Quem tem conta continua abrindo normalmente, pelo caminho do navegador.
+  if (!post || post.isDeleted || !isPublicSafe(post) || (post.visibility === 'private' && post.userId !== getCurrentUserId())) {
     // Sem título nem texto do post: se ele for restrito, nada do conteúdo vaza para buscadores e prévias de link.
     // O noindex vale também para o post que não existe: a resposta sai com HTTP 200 (o conteúdo das páginas só é
     // montado no navegador, o AppLayout mostra o esqueleto até montar, e o notFound() do Next nem o dos metadados
@@ -67,7 +70,7 @@ export async function generateMetadata(
   const siteName = siteConfig.name;
   const postUrl = `${siteConfig.baseUrl}/${locale}/post/${postId}`;
   
-  const title = post.headline || post.user.name + ` on Exe. Lula: "${(post.text || '').replace(/<[^>]*>?/gm, ' ').substring(0, 50)}..."`;
+  const title = post.headline || post.user.name + ` on HiperVerso: "${(post.text || '').replace(/<[^>]*>?/gm, ' ').substring(0, 50)}..."`;
   const description = getSafeDescription(post, siteName);
 
   let imageUrl: string | null = null;
@@ -79,7 +82,7 @@ export async function generateMetadata(
     imageUrl = extractFirstMediaFromHtml(post.text);
   }
 
-  // Sem imagem própria (post de texto), a prévia do link nas outras redes mostrava só a logo genérica do Exe. Lula.
+  // Sem imagem própria (post de texto), a prévia do link nas outras redes mostrava só a logo genérica do HiperVerso.
   // Agora mostra o PRÓPRIO post desenhado no visual da rede (autor, texto e marca) — /api/post-image só monta isso
   // para post público; o restrito continua caindo na imagem da marca.
   const ogImage = imageUrl ? imageUrl : `${siteConfig.baseUrl}/api/post-image/${postId}`;
@@ -150,9 +153,10 @@ export async function generateMetadata(
 
 export default async function SinglePostPage({ params }: Props) {
   const post = await loadPublicPost(params.postId);
-  if (!post) {
-    if (await isMissingPost(params.postId)) notFound();
-    return <PostPageClientContent />; // restrito: sem JSON-LD, o navegador busca com o login
+  if (!post || !isPublicSafe(post)) {
+    if (!post && (await isMissingPost(params.postId))) notFound();
+    // Restrito (ou com aviso de conteúdo): sem JSON-LD e sem texto no HTML. O navegador busca de novo com o login.
+    return <PostPageClientContent />;
   }
 
   let jsonLd: WithContext<NewsArticle | SocialMediaPosting>;
@@ -178,7 +182,7 @@ export default async function SinglePostPage({ params }: Props) {
       },
       publisher: {
         '@type': 'Organization',
-        'name': 'Exe. Lula',
+        'name': 'HiperVerso',
         'logo': {
           '@type': 'ImageObject',
           'url': `${siteConfig.baseUrl}/favicon.ico`
@@ -190,7 +194,7 @@ export default async function SinglePostPage({ params }: Props) {
     jsonLd = {
         '@context': 'https://schema.org',
         '@type': 'SocialMediaPosting',
-        headline: post.text?.substring(0, 50) || 'Exe. Lula Post',
+        headline: post.text?.substring(0, 50) || 'HiperVerso Post',
         articleBody: post.text?.replace(/<[^>]*>?/gm, ' ') || '',
         author: {
             '@type': 'Person',
@@ -201,7 +205,7 @@ export default async function SinglePostPage({ params }: Props) {
         dateModified: post.updatedAt ? new Date(post.updatedAt).toISOString() : new Date(post.createdAt).toISOString(),
         publisher: {
             '@type': 'Organization',
-            'name': 'Exe. Lula',
+            'name': 'HiperVerso',
         },
         mainEntityOfPage: {
             '@type': 'WebPage',

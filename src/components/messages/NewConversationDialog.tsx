@@ -126,7 +126,7 @@ export function NewConversationDialog({ open, onOpenChange }: NewConversationDia
           const [localMatches, remoteUser] = await Promise.all([
             searchUsers(trimmed, currentUser.id),
             isFediverseHandle
-              ? fetch(`/api/ap/remote-profile?handle=${encodeURIComponent(trimmed)}`, {
+              ? fetch(`/api/ap/remote-profile?handle=${encodeURIComponent(trimmed)}&withPosts=0`, {
                   headers: token ? { Authorization: `Bearer ${token}` } : undefined,
                 })
                   .then((r) => (r.ok ? r.json() : null))
@@ -138,7 +138,7 @@ export function NewConversationDialog({ open, onOpenChange }: NewConversationDia
             ? [remoteUser, ...localMatches.filter((u) => u.id !== remoteUser.id)]
             : localMatches;
         } else {
-          users = await getUsersFollowedBy(currentUser.id, currentUser.id);
+          users = await getUsersFollowedBy(currentUser.id, currentUser.id, 60);
         }
 
         const messageableUsers = users.filter(

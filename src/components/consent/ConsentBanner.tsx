@@ -47,6 +47,10 @@ export default function ConsentBanner() {
           <Link href={`/${locale}/privacy`} className="text-primary hover:underline">
             {t('privacyPolicy')}
           </Link>
+          {' · '}
+          <Link href={`/${locale}/profile/qdnRsBvLG8NdwrLv9GwiHDa1xi42?pix=1`} className="font-medium text-emerald-500 hover:underline">
+            {t('supportPix')}
+          </Link>
         </p>
         {/* Os dois primeiros botões são idênticos de propósito: aceitar e recusar com o mesmo destaque. */}
         <div className="flex flex-col gap-2 sm:flex-row">

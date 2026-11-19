@@ -313,7 +313,9 @@ export function createFirestoreStore(deps: FirestoreStoreDeps): FederationStore 
       const d = snap.data() as DocumentData;
       return {
         uid, name: texto(d.name), username: texto(d.username), bio: texto(d.bio), avatarUrl: textoOuNulo(d.avatarUrl),
-        coverUrl: textoOuNulo(d.coverImageUrl), website: textoOuNulo(d.website), location: textoOuNulo(d.location),
+        avatarAlt: textoOuNulo(d.avatarAlt),
+        coverUrl: textoOuNulo(d.coverImageUrl), coverUrlAlt: textoOuNulo(d.coverImageAlt),
+        website: textoOuNulo(d.website), location: textoOuNulo(d.location),
         createdAtMs: toMillis(d.createdAt), profileVisibility: d.profileVisibility === 'private' ? 'private' : 'public',
         isOfficial: d.isOfficial === true,
       } satisfies LocalProfile;
@@ -441,6 +443,20 @@ export function createFirestoreStore(deps: FirestoreStoreDeps): FederationStore 
       const actor = resto as RemoteActorRecord;
       cacheAtoresRemotos.set(actorId, actor);
       return actor;
+    },
+    async findRemoteActorByHandle(handle) {
+      const alvo = handle.trim().toLowerCase().replace(/^@/, '');
+      if (!alvo.includes('@')) return null;
+      for (const atorEmCache of cacheAtoresRemotos.values()) {
+        if (atorEmCache.handle.toLowerCase() === alvo) return atorEmCache;
+      }
+      const snap = await db.collection('ap_remote_actors').where('handle', '==', alvo).limit(1).get();
+      if (snap.empty) return null;
+      const { expireAt, ...resto } = snap.docs[0].data() as DocumentData;
+      void expireAt;
+      const ator = resto as RemoteActorRecord;
+      cacheAtoresRemotos.set(ator.actorId, ator);
+      return ator;
     },
     async putRemoteActor(r) {
       cacheAtoresRemotos.set(r.actorId, r);
@@ -573,6 +589,17 @@ export function createFirestoreStore(deps: FirestoreStoreDeps): FederationStore 
       const snap = await db.collection('posts').doc(postId).collection('comments').doc(commentId).get();
       if (!snap.exists) return null;
       const d = snap.data() as DocumentData;
+      const rawMedia = Array.isArray(d.media)
+        ? d.media
+            .filter((item): item is { url: string; type?: unknown; alt?: unknown } =>
+              Boolean(item && typeof item === 'object' && typeof (item as { url?: unknown }).url === 'string'),
+            )
+            .map((item) => ({
+              url: item.url,
+              type: (item.type === 'video' ? 'video' : 'image') as 'image' | 'video',
+              alt: typeof item.alt === 'string' ? item.alt : null,
+            }))
+        : undefined;
       return {
         id: commentId,
         postId,
@@ -582,6 +609,7 @@ export function createFirestoreStore(deps: FirestoreStoreDeps): FederationStore 
         parentCommentId: textoOuNulo(d.parentCommentId),
         isDeleted: d.isDeleted === true,
         sensitive: d.sensitive === true,
+        ...(rawMedia && rawMedia.length > 0 ? { media: rawMedia } : {}),
         isRemoteFediverse: d.isRemoteFediverse === true,
       } satisfies LocalComment;
     },
@@ -659,7 +687,17 @@ export function createFirestoreStore(deps: FirestoreStoreDeps): FederationStore 
       const ref = db.collection('ap_following').doc(uid).collection('actors').doc(remoteFollowDocIdOf(remoteActorId));
       const snap = await ref.get();
       if (!snap.exists) return false;
+      const eraPedido = (snap.data() as { status?: string } | undefined)?.status === 'pending';
       await ref.set({ status: 'accepted', acceptedAtMs: now() }, { merge: true });
+      // Perfil FECHADO: o pedido ficou sem arestas até aqui. Aceito, o seguir passa a valer de verdade (feed e contadores andam pelas
+      // arestas, e as Functions de seguir contam e notificam). Perfil aberto: as arestas já existem desde o clique, não se regravam.
+      if (eraPedido) {
+        const remoteUid = remoteUserIdOf(remoteActorId);
+        await Promise.all([
+          db.collection('users').doc(uid).collection('following').doc(remoteUid).set({ userId: remoteUid, isRemoteFediverse: true, createdAt: FieldValue.serverTimestamp() }),
+          db.collection('users').doc(remoteUid).collection('followers').doc(uid).set({ userId: uid, createdAt: FieldValue.serverTimestamp() }),
+        ]);
+      }
       return true;
     },
     async rejectOutboundFollow(uid, remoteActorId) {
@@ -676,22 +714,38 @@ export function createFirestoreStore(deps: FirestoreStoreDeps): FederationStore 
     },
 
     // ── o autor editou ou apagou na origem: só o MESMO ator que criou o que guardamos pode mexer nele ──
-    async updateRemoteContent(apObjectId, actorId, novoTexto) {
+    async updateRemoteContent(apObjectId, actorId, novoTexto, sensitive, contentWarning) {
       const tags = Array.from(new Set(novoTexto.match(HASHTAG_DO_TEXTO) ?? []));
       const mapa = await db.collection('ap_remote_comments').doc(remoteObjectKeyOf(apObjectId)).get();
       if (mapa.exists) {
         const m = mapa.data() as DocumentData;
         if (m.actorId === actorId && typeof m.postId === 'string' && typeof m.commentId === 'string') {
           const ref = db.collection('posts').doc(m.postId).collection('comments').doc(m.commentId);
-          if ((await ref.get()).exists) {
-            await ref.update({ text: novoTexto, hashtags: tags.length > 0 ? tags : null, isEdited: true });
+          const snap = await ref.get();
+          if (snap.exists) {
+            const existingMedia = Array.isArray(snap.data()?.media) ? snap.data()?.media : [];
+            await ref.update({
+              text: novoTexto,
+              hashtags: tags.length > 0 ? tags : null,
+              isEdited: true,
+              ...(typeof sensitive === 'boolean' ? { sensitive } : {}),
+              ...(contentWarning !== undefined ? { contentWarning } : {}),
+            });
             return 'comment';
           }
         }
       }
       const post = await postRemotoDoAtor(apObjectId, actorId);
       if (!post) return 'unknown';
-      await post.update({ text: novoTexto, hashtags: tags.length > 0 ? tags : null, isEdited: true });
+      const postSnap = await post.get();
+      const postMedia = Array.isArray(postSnap.data()?.media) ? postSnap.data()?.media : [];
+      await post.update({
+        text: novoTexto,
+        hashtags: tags.length > 0 ? tags : null,
+        isEdited: true,
+        ...(typeof sensitive === 'boolean' ? { sensitive } : {}),
+        ...(contentWarning !== undefined ? { contentWarning } : {}),
+      });
       return 'post';
     },
     async removeRemotePost(apObjectId, actorId) {
@@ -700,6 +754,18 @@ export function createFirestoreStore(deps: FirestoreStoreDeps): FederationStore 
       await post.update(TUMULO_DE_POST_REMOTO);
       return true;
     },
+    async hasLocalLinkToActor(actorId) {
+      // Direcao 1: ele segue alguem daqui. E a mesma consulta de `findFollowersByActor` (colecao `ap_followers`,
+      // campo `actorId`), que ja tem indice -- por isto nao se inventa consulta nova aqui.
+      const seguidores = await db.collection('ap_followers').where('actorId', '==', actorId).limit(1).get();
+      if (!seguidores.empty) return true;
+      // Direcao 2: alguem daqui segue ELE. O espelho `users/{remoteUid}` guarda quem daqui o segue.
+      const locais = await db
+        .collection('users').doc(remoteUserIdOf(actorId))
+        .collection('followers').limit(1).get();
+      return !locais.empty;
+    },
+
     async removeRemoteActorContent(actorId) {
       const snap = await db.collection('posts').where('remoteActorId', '==', actorId).limit(500).get();
       let apagados = 0;
@@ -727,6 +793,10 @@ export function createFirestoreStore(deps: FirestoreStoreDeps): FederationStore 
           input.text.match(/#([a-zA-Z0-9_áéíóúÁÉÍÓÚàèìòùÀÈÌÒÙâêîôûÂÊÎÔÛãõÃÕçÇ]+)/g) ?? [],
         ),
       );
+      const commentMediaList = Array.isArray(input.media) ? input.media : [];
+      // O aviso do autor vale com ou sem anexo: quem escreveu "relato de violencia" num texto puro pediu o aviso do mesmo jeito.
+      const commentSensitive = Boolean(input.sensitive);
+      const commentAviso = input.contentWarning ?? null;
       try {
         await db.collection('posts').doc(input.postId).collection('comments').doc(commentId).create({
           userId: remoteUid,
@@ -746,7 +816,10 @@ export function createFirestoreStore(deps: FirestoreStoreDeps): FederationStore 
           parentCommentId: input.parentCommentId ?? null,
           text: input.text,
           hashtags: commentHashtags.length > 0 ? commentHashtags : null,
-          hasMedia: false,
+          media: commentMediaList.length > 0 ? commentMediaList : null,
+          hasMedia: commentMediaList.length > 0,
+          sensitive: commentSensitive,
+          contentWarning: commentAviso,
           createdAt: Timestamp.fromMillis(input.createdAtMs),
           likes: 0,
           repostsCount: 0,
@@ -820,6 +893,9 @@ export function createFirestoreStore(deps: FirestoreStoreDeps): FederationStore 
           hashtags: hashtags.length > 0 ? hashtags : null,
           media: mediaList,
           hasMedia: mediaList.length > 0,
+          sensitive: Boolean(input.sensitive),
+          contentWarning: input.contentWarning ?? null,
+          language: input.language ?? null,
           visibility: 'public',
           federation: 'local',
           type: 'original',
@@ -881,6 +957,9 @@ export function createFirestoreStore(deps: FirestoreStoreDeps): FederationStore 
             hashtags: hashtags.length > 0 ? hashtags : null,
             media: mediaList,
             hasMedia: mediaList.length > 0,
+            sensitive: Boolean(input.sensitive),
+            contentWarning: input.contentWarning ?? null,
+            language: input.language ?? null,
             visibility: 'public',
             federation: 'local',
             type: 'original',
@@ -945,28 +1024,58 @@ export function createFirestoreStore(deps: FirestoreStoreDeps): FederationStore 
       const dmPref = typeof targetData.dmPreference === 'string' ? targetData.dmPreference : 'all';
       if (dmPref === 'none') return 'rejected';
 
-      const remoteUid = remoteUserIdOf(input.actor.actorId);
+      const cleanHandle = (input.actor.handle || '').replace(/^@+/, '').trim();
+      const fedMatchSnap = cleanHandle
+        ? await db
+            .collection('users')
+            .where('federatedLoginHandle', '==', cleanHandle)
+            .limit(1)
+            .get()
+            .catch(() => null)
+        : null;
+      const existingFedDoc = fedMatchSnap && !fedMatchSnap.empty ? fedMatchSnap.docs[0] : null;
+      const remoteUid = existingFedDoc ? existingFedDoc.id : remoteUserIdOf(input.actor.actorId);
 
       if (dmPref === 'followed') {
         const followSnap = await db.collection('users').doc(input.targetUid).collection('following').doc(remoteUid).get();
         if (!followSnap.exists) return 'rejected';
       }
 
-      const remoteName = input.actor.name || input.actor.handle;
-      await db.collection('users').doc(remoteUid).set({
-        id: remoteUid,
-        name: remoteName,
-        username: input.actor.handle,
-        bio: input.actor.summary || '',
-        avatarUrl: input.actor.iconUrl || '',
-        dmPreference: 'all',
-        profileVisibility: 'public',
-        isRemoteFediverse: true,
-        remoteActorId: input.actor.actorId,
-        remoteDomain: input.actor.domain,
-        remoteInbox: input.actor.inbox || input.actor.sharedInbox || null,
-        updatedAt: FieldValue.serverTimestamp(),
-      }, { merge: true });
+      const remoteName =
+        (existingFedDoc ? (existingFedDoc.data()?.name as string) : '') ||
+        input.actor.name ||
+        input.actor.handle;
+      const remoteUsername =
+        (existingFedDoc ? (existingFedDoc.data()?.username as string) : '') ||
+        input.actor.handle;
+
+      if (existingFedDoc) {
+        await db.collection('users').doc(remoteUid).set(
+          {
+            remoteActorId: input.actor.actorId,
+            remoteDomain: input.actor.domain,
+            remoteInbox: input.actor.inbox || input.actor.sharedInbox || null,
+            updatedAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true }
+        );
+      } else {
+        await db.collection('users').doc(remoteUid).set({
+          id: remoteUid,
+          name: remoteName,
+          name_lowercase: remoteName.toLowerCase(),
+          username: input.actor.handle,
+          bio: input.actor.summary || '',
+          avatarUrl: input.actor.iconUrl || '',
+          dmPreference: 'everyone',
+          profileVisibility: 'public',
+          isRemoteFediverse: true,
+          remoteActorId: input.actor.actorId,
+          remoteDomain: input.actor.domain,
+          remoteInbox: input.actor.inbox || input.actor.sharedInbox || null,
+          updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
+      }
 
       const sortedParticipants = [input.targetUid, remoteUid].sort();
       const convId = sortedParticipants.join('_');
@@ -981,7 +1090,7 @@ export function createFirestoreStore(deps: FirestoreStoreDeps): FederationStore 
         {
           id: remoteUid,
           name: remoteName,
-          username: input.actor.handle,
+          username: remoteUsername,
           avatarUrl: input.actor.iconUrl || '',
         },
       ].sort((a, b) => a.id.localeCompare(b.id));

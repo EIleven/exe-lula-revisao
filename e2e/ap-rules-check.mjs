@@ -96,7 +96,7 @@ permitido('perfil PRIVADO cria post só-seguidores (cabe na visibilidade dele)',
 for (const estranho of ['PUBLIC', 'Public', 'tudo', 'direct', 'private', '', 'followers ']) {
   negado(`valor desconhecido ${JSON.stringify(estranho)} é recusado (não vira público por engano)`, await postar(A, { federation: estranho }));
 }
-negado('notícia (category news) não federa', await postar(A, { federation: 'public', category: 'news', headline: 'x' }));
+permitido('artigo/notícia (category news) federa para conta que aderiu', await postar(A, { federation: 'public', category: 'news', headline: 'x' }));
 negado('enquete não federa', await postar(A, {
   federation: 'public', poll: { options: [{ id: 'a', text: 'sim' }, { id: 'b', text: 'não' }], endsAt: new Date(Date.now() + 3_600_000) },
   pollOptionIds: ['a', 'b'], pollCounts: { a: 0, b: 0 }, pollTotal: 0,

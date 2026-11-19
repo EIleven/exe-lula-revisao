@@ -105,7 +105,9 @@ if (firebaseEnv.useEmulators) {
 let analyticsInstance: Analytics | null = null;
 
 export function getAnalyticsIfConsented(): Analytics | null {
+  // Soberania de dados: telemetria do Google Analytics desativada para não enviar histórico de navegação ao Google.
   if (typeof window === 'undefined' || firebaseEnv.useEmulators) return null;
+  return null;
   if (!firebaseConfig.measurementId) return null;
   const stored = (() => {
     try {

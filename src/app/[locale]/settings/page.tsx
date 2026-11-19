@@ -5,7 +5,7 @@ import React from 'react';
 import { useCurrentUser } from '@/contexts/CurrentUserContext';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
-  User, Shield, ShieldQuestion, Bell, Film, Palette, Accessibility, Languages, HelpCircle, Info, LogOut, ChevronRight, Share2, Globe, Wifi
+  User, Shield, ShieldQuestion, Bell, Film, Palette, Accessibility, HelpCircle, Info, LogOut, ChevronRight, Share2, Globe, Wifi, KeyRound
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -29,20 +29,20 @@ import { useLocale } from 'next-intl';
 import { Card } from '@/components/ui/card';
 import Link from 'next/link';
 
-type SettingsSection = 'account' | 'connections' | 'fediverse' | 'p2p' | 'privacy' | 'moderation' | 'notifications' | 'media' | 'appearance' | 'accessibility' | 'languages' | 'help' | 'about';
+type SettingsSection = 'account' | 'connections' | 'fediverse' | 'p2p' | 'keys' | 'privacy' | 'moderation' | 'notifications' | 'media' | 'appearance' | 'accessibility' | 'help' | 'about';
 
-const SETTINGS_SECTIONS: { id: SettingsSection; labelKey: string; icon: React.ElementType; }[] = [
+const SETTINGS_SECTIONS: { id: SettingsSection; labelKey?: string; label?: string; href?: string; icon: React.ElementType; }[] = [
   { id: 'account', labelKey: 'sections.account', icon: User },
   { id: 'connections', labelKey: 'sections.connections', icon: Share2 },
   { id: 'fediverse', labelKey: 'sections.fediverse', icon: Globe },
   { id: 'p2p', labelKey: 'sections.p2p', icon: Wifi },
+  { id: 'keys', label: 'Chaves Soberanas P2P & Passe QR', href: '/keys', icon: KeyRound },
   { id: 'privacy', labelKey: 'sections.privacy', icon: Shield },
   { id: 'moderation', labelKey: 'sections.moderation', icon: ShieldQuestion },
   { id: 'notifications', labelKey: 'sections.notifications', icon: Bell },
   { id: 'media', labelKey: 'sections.media', icon: Film },
   { id: 'appearance', labelKey: 'sections.appearance', icon: Palette },
   { id: 'accessibility', labelKey: 'sections.accessibility', icon: Accessibility },
-  { id: 'languages', labelKey: 'sections.languages', icon: Languages },
   { id: 'help', labelKey: 'sections.help', icon: HelpCircle },
   { id: 'about', labelKey: 'sections.about', icon: Info },
 ];
@@ -105,17 +105,17 @@ export default function SettingsPage() {
         </header>
         
         <nav className="space-y-2">
-            {SETTINGS_SECTIONS.map(({ id, labelKey, icon: Icon }) => (
+            {SETTINGS_SECTIONS.map(({ id, labelKey, label, href, icon: Icon }) => (
                 <Button
                     key={id}
                     variant="ghost"
                     className="w-full justify-between text-base py-8 px-4"
                     asChild
                 >
-                    <Link href={`/${locale}/settings/${id}`}>
+                    <Link href={href ? `/${locale}${href}` : `/${locale}/settings/${id}`}>
                         <div className="flex items-center">
                             <Icon className="mr-4 h-5 w-5 text-muted-foreground" />
-                            <span>{t(labelKey as any)}</span>
+                            <span>{label ?? t(labelKey as any)}</span>
                         </div>
                         <ChevronRight className="h-5 w-5 text-muted-foreground" />
                     </Link>

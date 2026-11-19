@@ -318,8 +318,8 @@ export function useCommentInteractions({
     if (!comment) return;
   
     const shareData: ShareData = {
-      title: `Comentário de @${comment.user?.username || 'usuário'} no Exe. Lula`,
-      text: comment.text?.substring(0, 100) || `Confira este comentário no Exe. Lula!`,
+      title: `Comentário de @${comment.user?.username || 'usuário'} no HiperVerso`,
+      text: comment.text?.substring(0, 100) || `Confira este comentário no HiperVerso!`,
       url: `${siteConfig.baseUrl}/${locale}/post/${comment.parentPostId}#comment-${comment.id}`,
     };
   

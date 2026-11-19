@@ -1,7 +1,6 @@
 'use client';
 
 import {
-  getDatabase,
   onChildAdded,
   onDisconnect,
   onValue,
@@ -10,6 +9,7 @@ import {
   remove,
   set,
 } from 'firebase/database';
+import { getRtdb } from '@/lib/rtdbClient';
 import type { User } from '@/lib/types';
 import { MAX_TEXT_CHARS } from './p2pProtocol';
 import {
@@ -29,8 +29,7 @@ import {
 
 const MAX_GROUP_PEERS = 8;
 const ICE_SERVERS: RTCIceServer[] = [
-  { urls: 'stun:stun.l.google.com:19302' },
-  { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:stun.cloudflare.com:3478' },
 ];
 
 type GroupSignal = {
@@ -48,6 +47,7 @@ type GroupWireMessage = {
   id: string;
   senderId: string;
   senderName?: string;
+  senderUsername?: string;
   senderAvatar?: string;
   createdAt: string;
   text: string;
@@ -144,7 +144,11 @@ export function createP2pGroupSession(params: {
     return { sendText: async () => null, destroy: () => {} };
   }
 
-  const db = getDatabase();
+  const db = getRtdb();
+  if (!db) {
+    onConnectedCountChange(0);
+    return { sendText: async () => null, destroy: () => {} };
+  }
   const presenceListRef = ref(db, `p2pGroupPresence/${conversationId}`);
   const myPresenceRef = ref(db, `p2pGroupPresence/${conversationId}/${currentUserId}`);
   const myInboxSignalsRef = ref(db, `p2pGroupSignals/${conversationId}/${currentUserId}`);
@@ -169,11 +173,11 @@ export function createP2pGroupSession(params: {
     onConnectedCountChange(open);
   };
 
-  const fallbackPeerUser = (uid: string, name?: string, avatar?: string): User =>
+  const fallbackPeerUser = (uid: string, name?: string, avatar?: string, username?: string): User =>
     participantsById[uid] || {
       id: uid,
-      name: name || 'Participante',
-      username: 'participante',
+      name: name || username || 'Membro',
+      username: username || uid.slice(0, 12),
       email: '',
       avatarUrl: avatar || '',
       followersCount: 0,
@@ -239,6 +243,7 @@ export function createP2pGroupSession(params: {
         id: m.id,
         senderId: currentUserId,
         senderName: currentUser.name,
+        senderUsername: currentUser.username,
         senderAvatar: currentUser.avatarUrl,
         createdAt: m.createdAt,
         text: m.text || '',
@@ -323,7 +328,7 @@ export function createP2pGroupSession(params: {
           id: registro.id,
           conversationId,
           senderId: peerUid,
-          sender: fallbackPeerUser(peerUid, wire.senderName, wire.senderAvatar),
+          sender: fallbackPeerUser(peerUid, wire.senderName, wire.senderAvatar, wire.senderUsername),
           text,
           createdAt: registro.createdAt,
           readAt: new Date().toISOString(),
@@ -467,6 +472,7 @@ export function createP2pGroupSession(params: {
           id,
           senderId: currentUserId,
           senderName: currentUser.name,
+          senderUsername: currentUser.username,
           senderAvatar: currentUser.avatarUrl,
           createdAt,
           text,

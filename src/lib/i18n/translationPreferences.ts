@@ -92,3 +92,4 @@ export function getTranslationLanguageLabel(code: string): string {
   const found = SUPPORTED_TRANSLATION_LANGUAGES.find((l) => l.code === code.toLowerCase());
   return found ? found.label : code.toUpperCase();
 }
+

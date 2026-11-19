@@ -16,10 +16,12 @@ import {
 import { clearAll, exportAll, importConversations, stats, type StorageLike } from './p2pLocalStore';
 
 export type AutoConnectScope = 'mutual' | 'any';
+export type GroupP2pMode = 'off' | 'hybrid';
 
 export type P2pPreferences = BundlePreferences;
 
 const PREFS_KEY_PREFIX = 'exelula:p2p:prefs:v1:';
+const GROUP_MODE_KEY_PREFIX = 'exelula:p2p:group-mode:v1:';
 
 export const DEFAULT_P2P_PREFERENCES: P2pPreferences = {
   defaultZeroDbOnly: false,
@@ -63,6 +65,37 @@ export function saveP2pPreferences(userId: string, prefs: P2pPreferences): void 
     store.setItem(`${PREFS_KEY_PREFIX}${userId}`, JSON.stringify(prefs));
   } catch (err) {
     console.warn('[P2P] Falha ao salvar preferências P2P:', err);
+  }
+}
+
+export function getGroupP2pMode(userId?: string | null, conversationId?: string | null): GroupP2pMode {
+  const prefs = getP2pPreferences(userId);
+  // Em grupos, mesmo se o usuário ativou P2P como padrão, mantém entrega compatível (P2P + DB para quem está offline/sem P2P)
+  // para que todos os participantes recebam todas as mensagens independente da preferência individual de segurança.
+  const fallback: GroupP2pMode = prefs.autoConnectP2p || prefs.defaultZeroDbOnly ? 'hybrid' : 'off';
+  const store = localStore();
+  if (!store || !userId || !conversationId) return fallback;
+  try {
+    const saved = store.getItem(`${GROUP_MODE_KEY_PREFIX}${userId}:${conversationId}`);
+    if (saved === 'off' || saved === 'hybrid') {
+      return saved;
+    }
+    if (saved === 'zero_db') {
+      return 'hybrid';
+    }
+  } catch {
+    // ignore
+  }
+  return fallback;
+}
+
+export function setGroupP2pMode(userId: string, conversationId: string, mode: GroupP2pMode): void {
+  const store = localStore();
+  if (!store || !userId || !conversationId) return;
+  try {
+    store.setItem(`${GROUP_MODE_KEY_PREFIX}${userId}:${conversationId}`, mode);
+  } catch (err) {
+    console.warn('[P2P] Falha ao salvar modo P2P do grupo:', err);
   }
 }
 

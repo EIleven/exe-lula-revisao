@@ -11,7 +11,7 @@ import { deleteDoc, doc, serverTimestamp, setDoc } from 'firebase/firestore';
 export type PushPermission = 'granted' | 'denied' | 'prompt' | 'unsupported';
 export type PushLocale = 'pt-BR' | 'en';
 
-/** Canal de notificações do Android (o servidor manda o mesmo id; veja functions/src/push.ts). */
+/** Canal padrão de notificações do Android (o servidor manda o mesmo id; veja functions/src/push.ts). */
 const ANDROID_CHANNEL_ID = 'exelula_default';
 const SW_URL = '/firebase-messaging-sw.js';
 const SW_SCOPE = '/firebase-cloud-messaging-push-scope';
@@ -86,26 +86,128 @@ async function nativePlugin() {
   return (await import('@capacitor/push-notifications')).PushNotifications;
 }
 
-async function nativeToken(): Promise<string> {
-  const PushNotifications = await nativePlugin();
-  // O canal precisa existir antes do primeiro aviso (Android 8+): é nele que a pessoa ajusta som e vibração do app.
-  await PushNotifications.createChannel({
-    id: ANDROID_CHANNEL_ID,
-    name: 'Notificações',
-    description: 'Curtidas, respostas, menções, seguidores e mensagens',
-    importance: 4,
-    visibility: 0,
+const ANDROID_CHANNELS = [
+  {
+    id: 'exelula_messages',
+    name: 'Mensagens Diretas e Grupos',
+    description: 'Novas mensagens diretas e conversas em grupo',
+    importance: 4 as const,
+    visibility: 0 as const,
     vibration: true,
     lights: true,
-  }).catch(() => undefined);
+  },
+  {
+    id: 'exelula_security',
+    name: 'Segurança e Login (IDP2P)',
+    description: 'Pedidos de aprovação de novos aparelhos e alertas da conta',
+    importance: 4 as const,
+    visibility: 0 as const,
+    vibration: true,
+    lights: true,
+  },
+  {
+    id: 'exelula_mentions',
+    name: 'Menções e Respostas',
+    description: 'Quando citam, mencionam ou respondem a você',
+    importance: 4 as const,
+    visibility: 1 as const,
+    vibration: true,
+    lights: true,
+  },
+  {
+    id: ANDROID_CHANNEL_ID,
+    name: 'Atividade Social',
+    description: 'Curtidas, reposts e novos seguidores',
+    importance: 3 as const,
+    visibility: 1 as const,
+    vibration: false,
+    lights: true,
+  },
+];
+
+let nativeChannelsCreated = false;
+
+/** Garante os canais organizados no Android 8+ (som, vibração e destaque por categoria). */
+export async function ensureNativeChannels(): Promise<void> {
+  if (!isNative() || nativeChannelsCreated) return;
+  try {
+    const PushNotifications = await nativePlugin();
+    await Promise.all(
+      ANDROID_CHANNELS.map((channel) => PushNotifications.createChannel(channel).catch(() => undefined))
+    );
+    nativeChannelsCreated = true;
+  } catch {
+    // Segue sem travar caso o WebView ainda não exponha o plugin
+  }
+}
+
+function friendlyNativeRegistrationError(raw: unknown): string {
+  const msg = String(raw ?? '').trim();
+  if (/Default FirebaseApp is not initialized|google[-_ ]?services|MISSING_INSTANCEID_SERVICE/i.test(msg)) {
+    return 'Este APK precisa da atualização v1.5.0 (em /download) com suporte completo a notificações nativas.';
+  }
+  if (/SERVICE_NOT_AVAILABLE|FIS_AUTH_ERROR/i.test(msg)) {
+    return 'Serviço de push indisponível no aparelho agora (verifique sua conexão ou o Google Play Services).';
+  }
+  return msg || 'Falha ao registrar o aparelho para notificações push.';
+}
+
+async function nativeToken(): Promise<string> {
+  const PushNotifications = await nativePlugin();
+  await ensureNativeChannels();
+
   return new Promise<string>((resolve, reject) => {
     const cleanup: Array<() => void> = [];
-    const done = (fn: () => void) => { cleanup.forEach((remove) => remove()); fn(); };
-    const timer = setTimeout(() => done(() => reject(new Error('O Android não devolveu o token de notificação a tempo.'))), 20_000);
-    void PushNotifications.addListener('registration', (result) => { clearTimeout(timer); done(() => resolve(result.value)); }).then((h) => cleanup.push(() => void h.remove()));
-    void PushNotifications.addListener('registrationError', (error) => { clearTimeout(timer); done(() => reject(new Error(String(error?.error ?? 'Falha ao registrar no FCM')))); }).then((h) => cleanup.push(() => void h.remove()));
-    void PushNotifications.register();
+    let settled = false;
+    const done = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      cleanup.forEach((remove) => remove());
+      fn();
+    };
+    const timer = setTimeout(
+      () => done(() => reject(new Error('O Android demorou para responder ao registro de notificações. Tente atualizar o app em /download.'))),
+      20_000
+    );
+
+    void (async () => {
+      try {
+        const regHandle = await PushNotifications.addListener('registration', (result) => {
+          clearTimeout(timer);
+          done(() => resolve(result.value));
+        });
+        cleanup.push(() => void regHandle.remove().catch(() => undefined));
+
+        const errHandle = await PushNotifications.addListener('registrationError', (error) => {
+          clearTimeout(timer);
+          done(() => reject(new Error(friendlyNativeRegistrationError(error?.error))));
+        });
+        cleanup.push(() => void errHandle.remove().catch(() => undefined));
+
+        if (!settled) {
+          await PushNotifications.register();
+        }
+      } catch (err) {
+        clearTimeout(timer);
+        done(() => reject(new Error(friendlyNativeRegistrationError(err instanceof Error ? err.message : err))));
+      }
+    })();
   });
+}
+
+/** Abre diretamente as configurações de notificação do app no Android quando o sistema bloqueou o pedido. */
+export async function openNativeNotificationSettings(): Promise<boolean> {
+  if (!isNative()) return false;
+  try {
+    const { registerPlugin } = await import('@capacitor/core');
+    if (!Capacitor.isPluginAvailable('BiometricBridge')) return false;
+    const BiometricBridge = registerPlugin<{ openNotificationSettings?: () => Promise<void> }>('BiometricBridge');
+    if (typeof BiometricBridge.openNotificationSettings !== 'function') return false;
+    await BiometricBridge.openNotificationSettings();
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 // ---------------------------------------------------------------------------------------------------------------------

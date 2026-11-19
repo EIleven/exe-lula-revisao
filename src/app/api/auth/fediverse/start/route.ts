@@ -1,11 +1,12 @@
 // src/app/api/auth/fediverse/start/route.ts
-// Inicia OAuth com uma instância Mastodon/Pleroma/Akkoma/GoToSocial para login/cadastro no Exe. Lula.
+// Inicia OAuth com uma instância Mastodon/Pleroma/Akkoma/GoToSocial para login/cadastro no HiperVerso.
 import { createHash, randomBytes } from 'node:crypto';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { NextResponse } from 'next/server';
 import { decideInstance } from '@/lib/activitypub/gate';
 import { safeFetchText } from '@/lib/security/safe-fetch';
 import { federation } from '@/lib/server/federation';
+import { normalizeFederatedConsent } from '@/lib/server/federatedSync';
 import { adminFirestore } from '@/lib/server/firebaseAdmin';
 import { requestIp, takeRateLimit } from '@/lib/server/requestAuth';
 
@@ -36,7 +37,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: 'Muitas tentativas. Aguarde alguns minutos.' }, { status: 429 });
   }
 
-  const body = (await request.json().catch(() => ({}))) as { instance?: unknown; locale?: unknown };
+  const body = (await request.json().catch(() => ({}))) as { instance?: unknown; locale?: unknown; consent?: unknown };
+  const consent = normalizeFederatedConsent(body.consent);
   const domain = extractInstanceDomain(String(body.instance ?? ''));
   if (!domain) {
     return NextResponse.json(
@@ -58,12 +60,14 @@ export async function POST(request: Request) {
 
   let clientId = '';
   let clientSecret = '';
+  let registeredScopes = 'read:accounts';
 
   if (appSnap.exists) {
-    const d = appSnap.data() as { clientId?: string; clientSecret?: string; redirectUri?: string };
+    const d = appSnap.data() as { clientId?: string; clientSecret?: string; redirectUri?: string; scopes?: string };
     if (d.clientId && d.clientSecret && d.redirectUri === redirectUri) {
       clientId = d.clientId;
       clientSecret = d.clientSecret;
+      registeredScopes = d.scopes || 'read:accounts';
     }
   }
 
@@ -75,12 +79,12 @@ export async function POST(request: Request) {
       headers: {
         'Content-Type': 'application/json',
         Accept: 'application/json',
-        'User-Agent': `ExeLula/1.0 (+${f.origin})`,
+        'User-Agent': `HiperVerso/1.0 (+${f.origin})`,
       },
       body: JSON.stringify({
-        client_name: 'Exe. Lula',
+        client_name: 'HiperVerso',
         redirect_uris: redirectUri,
-        scopes: 'read:accounts',
+        scopes: 'read:accounts read:follows read:statuses',
         website: f.origin,
       }),
       allowedContentTypes: /^application\/json/i,
@@ -105,8 +109,10 @@ export async function POST(request: Request) {
         clientId,
         clientSecret,
         redirectUri,
+        scopes: 'read:accounts read:follows read:statuses',
         updatedAt: FieldValue.serverTimestamp(),
       });
+      registeredScopes = 'read:accounts read:follows read:statuses';
     } catch {
       return NextResponse.json({ message: 'Resposta inválida do servidor do Fediverso.' }, { status: 502 });
     }
@@ -119,6 +125,7 @@ export async function POST(request: Request) {
   await db.collection('fediverse_auth_states').doc(stateHash).set({
     domain,
     locale,
+    consent,
     expiresAt: Date.now() + 10 * 60_000,
     expireAt: Timestamp.fromMillis(Date.now() + 10 * 60_000),
     createdAt: FieldValue.serverTimestamp(),
@@ -126,7 +133,7 @@ export async function POST(request: Request) {
 
   const authUrl = new URL(`https://${domain}/oauth/authorize`);
   authUrl.searchParams.set('client_id', clientId);
-  authUrl.searchParams.set('scope', 'read:accounts');
+  authUrl.searchParams.set('scope', registeredScopes);
   authUrl.searchParams.set('redirect_uri', redirectUri);
   authUrl.searchParams.set('response_type', 'code');
   authUrl.searchParams.set('state', state);

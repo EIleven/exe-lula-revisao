@@ -2,11 +2,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { LRUCache } from 'lru-cache';
 import { getPublicPostById as getOwnPost } from '@/lib/services/postReadService';
+import { adminFirestore } from '@/lib/server/firebaseAdmin';
 import { JSDOM, VirtualConsole } from 'jsdom';
 import type { Post } from '@/lib/types';
 import { siteConfig } from '@/config/site';
 import { assertSafeUrl, safeFetchText, UnsafeUrlError } from '@/lib/security/safe-fetch';
 import { requestIp, takeRateLimit } from '@/lib/server/requestAuth';
+import { evaluateRequestSecurity } from '@/lib/security/antiBotGuard';
 
 const PREVIEWS_PER_WINDOW = 120;
 const PREVIEW_WINDOW_MS = 10 * 60 * 1000;
@@ -25,8 +27,124 @@ const previewCache = new LRUCache<string, CachedPreviewResult>({
 });
 const inFlightPreviews = new Map<string, Promise<CachedPreviewResult>>();
 
-// Links para posts do próprio site (o domínio oficial e o www) viram o post; o resto vira pré-visualização de artigo.
+// Links para posts do próprio site (o domínio oficial e o www) viram o post; posts federados viram citação nativa ActivityPub; o resto vira pré-visualização de artigo.
 const OWN_HOST_REGEX = new RegExp(`(^|\\.)${siteConfig.officialHost.replace(/\./g, '\\.')}$`);
+const FEDIVERSE_STATUS_PATH_REGEX = /\/(?:@[^/]+\/\d+|users\/[^/]+\/statuses\/\d+|ap\/users\/[^/]+\/statuses\/\d+|notes\/[a-zA-Z0-9_-]+|statuses\/\d+)/i;
+
+function stripHtmlToText(html: string): string {
+  if (!html) return '';
+  try {
+    const dom = new JSDOM(`<body>${html}</body>`, { virtualConsole: new VirtualConsole() });
+    return (dom.window.document.body.textContent || '').replace(/\s+/g, ' ').trim();
+  } catch {
+    return html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+}
+
+async function resolveFediverseStatusPreview(urlToPreview: string, parsedUrl: URL): Promise<Record<string, unknown> | null> {
+  // Primeiro tenta localizar se este post federado já está indexado no HiperVerso
+  try {
+    const db = adminFirestore();
+    const byApId = await db.collection('posts').where('apId', '==', urlToPreview).limit(1).get();
+    const docSnap = !byApId.empty
+      ? byApId.docs[0]
+      : (await db.collection('posts').where('externalUrl', '==', urlToPreview).limit(1).get()).docs[0];
+    if (docSnap?.exists) {
+      const own = await getOwnPost(docSnap.id);
+      if (own) return own as unknown as Record<string, unknown>;
+    }
+  } catch {
+    // Fallback para busca ActivityPub direta
+  }
+
+  if (!FEDIVERSE_STATUS_PATH_REGEX.test(parsedUrl.pathname)) return null;
+
+  try {
+    const res = await safeFetchText(urlToPreview, {
+      headers: {
+        'Accept': 'application/activity+json, application/ld+json; profile="https://www.w3.org/ns/activitystreams", application/json',
+        'User-Agent': `${siteConfig.name}/1.0 (+https://${siteConfig.officialHost})`,
+      },
+    });
+    if (!res.ok) return null;
+    const trimmed = res.text.trim();
+    if (!trimmed.startsWith('{')) return null;
+
+    const apObj = JSON.parse(trimmed) as Record<string, any>;
+    const obj = apObj?.type === 'Create' && apObj?.object && typeof apObj.object === 'object' ? apObj.object : apObj;
+    if (!obj || (obj.type !== 'Note' && obj.type !== 'Article' && typeof obj.content !== 'string')) {
+      return null;
+    }
+
+    const cleanText = stripHtmlToText(String(obj.content || obj.summary || ''));
+    const attachments = Array.isArray(obj.attachment) ? obj.attachment : obj.attachment ? [obj.attachment] : [];
+    const media = attachments
+      .filter((att: any) => att?.url && (String(att?.mediaType || '').startsWith('image/') || String(att?.mediaType || '').startsWith('video/') || att?.type === 'Image' || att?.type === 'Video'))
+      .map((att: any) => ({
+        url: String(att.url),
+        type: String(att?.mediaType || '').startsWith('video/') || att?.type === 'Video' ? 'video' : 'image',
+        alt: typeof att.name === 'string' ? att.name : '',
+      }));
+
+    let authorName = parsedUrl.hostname;
+    let authorUsername = parsedUrl.hostname;
+    let avatarUrl = `https://www.google.com/s2/favicons?domain=${parsedUrl.hostname}&sz=64`;
+
+    const attributedTo = typeof obj.attributedTo === 'string' ? obj.attributedTo : obj.attributedTo?.id;
+    if (typeof attributedTo === 'string' && attributedTo.startsWith('http')) {
+      try {
+        assertSafeUrl(attributedTo);
+        const actorRes = await safeFetchText(attributedTo, {
+          headers: {
+            'Accept': 'application/activity+json, application/ld+json; profile="https://www.w3.org/ns/activitystreams"',
+            'User-Agent': `${siteConfig.name}/1.0 (+https://${siteConfig.officialHost})`,
+          },
+        });
+        if (actorRes.ok && actorRes.text.trim().startsWith('{')) {
+          const actor = JSON.parse(actorRes.text) as Record<string, any>;
+          if (actor.name || actor.preferredUsername) {
+            authorName = String(actor.name || actor.preferredUsername);
+          }
+          if (actor.preferredUsername) {
+            authorUsername = `${actor.preferredUsername}@${new URL(attributedTo).hostname}`;
+          }
+          if (actor.icon?.url) {
+            avatarUrl = String(actor.icon.url);
+          }
+        }
+      } catch {
+        // Segue com dados básicos do domínio
+      }
+    }
+
+    const handleMatch = parsedUrl.pathname.match(/\/@([^/]+)\//);
+    if (authorUsername === parsedUrl.hostname && handleMatch?.[1]) {
+      authorUsername = `${handleMatch[1]}@${parsedUrl.hostname}`;
+      if (authorName === parsedUrl.hostname) authorName = handleMatch[1];
+    }
+
+    return {
+      id: String(obj.id || urlToPreview),
+      isFediverseQuote: true,
+      fediverseHandle: authorUsername.startsWith('@') ? authorUsername : `@${authorUsername}`,
+      apObjectUrl: String(obj.id || urlToPreview),
+      headline: authorName,
+      text: cleanText,
+      media,
+      hasMedia: media.length > 0,
+      sourceUrl: String(obj.url || urlToPreview),
+      user: {
+        id: String(attributedTo || parsedUrl.hostname),
+        name: authorName,
+        username: authorUsername,
+        avatarUrl,
+      },
+      createdAt: String(obj.published || new Date().toISOString()),
+    };
+  } catch {
+    return null;
+  }
+}
 
 // Function to clean up the article content, copied from extract-article route
 const cleanArticleContent = (element: Element): string => {
@@ -49,6 +167,19 @@ const cleanArticleContent = (element: Element): string => {
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
+  const ip = requestIp(request);
+  const guard = evaluateRequestSecurity({
+    ip,
+    path: '/api/quote-preview',
+    userAgent: request.headers.get('user-agent'),
+    acceptLanguage: request.headers.get('accept-language'),
+  });
+  if (!guard.allowed && guard.action === 'block') {
+    return NextResponse.json(
+      { message: 'Bloqueio temporário anti-bot.' },
+      { status: 429, headers: { 'Retry-After': String(guard.retryAfterSec || 30) } }
+    );
+  }
   const urlToPreview = request.nextUrl.searchParams.get('url');
   if (!urlToPreview || !urlToPreview.startsWith('http')) {
     return NextResponse.json(
@@ -105,6 +236,12 @@ export async function GET(request: NextRequest) {
     let pending = inFlightPreviews.get(cacheKey);
     if (!pending) {
       pending = (async (): Promise<CachedPreviewResult> => {
+        const fediversePost = await resolveFediverseStatusPreview(urlToPreview, parsedUrl);
+        if (fediversePost) {
+          const okFed = { status: 200, body: fediversePost };
+          previewCache.set(cacheKey, okFed);
+          return okFed;
+        }
         let response;
         try {
           response = await safeFetchText(urlToPreview, {

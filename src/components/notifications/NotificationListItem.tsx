@@ -7,7 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import type { Notification } from '@/lib/types';
 import { timeAgo } from '@/lib/utils/time';
 import { cn } from '@/lib/utils';
-import { Heart, Repeat2, MessageCircle, UserPlus, AtSign, FilePenLine, Send, Sparkles, Bell, X, Trash2 } from 'lucide-react';
+import { Accessibility, Heart, Repeat2, MessageCircle, UserPlus, AtSign, FilePenLine, Send, Sparkles, Bell, X, Trash2 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 
 interface NotificationListItemProps {
@@ -42,6 +42,8 @@ const getNotificationIcon = (type: Notification['type']) => {
     case 'new_message':
     case 'new_conversation':
       return <Send className="h-5 w-5 text-indigo-500" />;
+    case 'alt_text_request':
+      return <Accessibility className="h-5 w-5 text-emerald-500" />;
     case 'welcome':
       return <Sparkles className="h-5 w-5 text-yellow-400" />;
     default:
@@ -70,6 +72,8 @@ const getNotificationLink = (notification: Notification, locale: string): string
     case 'new_post_from_user':
     case 'mention_in_post':
       return entityId ? buildUrl(`/post/${entityId}`) : buildUrl('/');
+    case 'alt_text_request':
+      return entityId ? buildUrl(`/post/${entityId}?addAlt=1`) : buildUrl('/');
     case 'repost':
     case 'repost_repost':
       return commentUrl ?? (entityId ? buildUrl(`/post/${entityId}`) : buildUrl('/'));
@@ -113,6 +117,7 @@ const getActionText = (notification: Notification, t: Translate): string => {
     case 'new_post_from_user':
     case 'new_message':
     case 'new_conversation':
+    case 'alt_text_request':
       return t(`actions.${type}`);
     default:
       return t('actions.default');

@@ -30,6 +30,7 @@ import PostCardFooter from './PostCardFooter';
 import CommentSection from './CommentSection';
 import LoginOrRegisterPromptDialog from '@/components/auth/LoginOrRegisterPromptDialog';
 import QuotePostDialogContent from './QuotePostDialogContent';
+import PostAltTextDialog from './PostAltTextDialog';
 import ReplyDialogContent from '../comments/ReplyDialogContent';
 import InteractionCounts from './InteractionCounts'; // Import the new component
 import SendViaDirectDialog from '@/components/messages/SendViaDirectDialog'; // Import SendViaDirectDialog
@@ -41,6 +42,8 @@ import { useCommentManagement } from '@/hooks/features/comment/useCommentManagem
 import { trackPostView, trackProfileClick } from '@/lib/services/analyticsService'; // Import the analytics service
 
 import { useToast } from '@/hooks/use-toast';
+import { auth } from '@/lib/firebase';
+import { haptics } from '@/lib/haptics';
 import { useLivePostCounters } from '@/hooks/features/feed/useLivePostCounters';
 import { COUNTER_FIELDS, countersOf, createOptimisticTracker, mergeServerCounters } from '@/lib/feed/liveCounters';
 import { useCommentSettings } from '@/hooks/features/comment/useCommentSettings'; // Import the new hook
@@ -165,6 +168,23 @@ function PostCard({
   const [isImageViewerOpen, setIsImageViewerOpen] = useState(false);
   const [selectedImageUrl, setSelectedImageUrl] = useState<string | null>(null);
   const [showComments, setShowComments] = useState(isSinglePostView);
+  const [isAltTextDialogOpen, setIsAltTextDialogOpen] = useState(false);
+  /* Funcionalidade de pedir Alt Text entre usuários desativada temporariamente:
+  const [altRequested, setAltRequested] = useState(false);
+  const [isRequestingAltText, setIsRequestingAltText] = useState(false);
+  */
+
+  const hasPostImages = Boolean(post?.media?.some((m) => m.type === 'image'));
+  const hasMissingImageAlt = Boolean(
+    post?.media?.some((m) => m.type === 'image' && !(typeof m.alt === 'string' && m.alt.trim().length > 0))
+  );
+
+  useEffect(() => {
+    if (!isSinglePostView || searchParams?.get('addAlt') !== '1') return;
+    if (!currentUserId || !post?.userId || post.userId !== currentUserId || !hasPostImages) return;
+    setIsAltTextDialogOpen(true);
+    router.replace(`/${locale}/post/${post.id}`, { scroll: false });
+  }, [isSinglePostView, searchParams, currentUserId, post?.userId, post?.id, hasPostImages, router, locale]);
 
   const { settings } = useCommentSettings();
   const {
@@ -180,6 +200,49 @@ function PostCard({
     isEditDialogOpen,
     setIsEditDialogOpen,
   } = usePostDialogs();
+
+  /* Funcionalidade de pedir Alt Text entre usuários desativada temporariamente:
+  const handleRequestAltText = useCallback(async (e?: React.MouseEvent | Event) => {
+    e?.stopPropagation?.();
+    if (!post?.id) return;
+    if (!currentUserId) {
+      openLoginPrompt('pedir descrição (Alt Text)');
+      return;
+    }
+    if (altRequested || isRequestingAltText) return;
+    setIsRequestingAltText(true);
+    try {
+      const token = await auth.currentUser?.getIdToken().catch(() => null);
+      if (!token) throw new Error('Sessão expirada. Entre novamente.');
+      const res = await fetch('/api/notifications/alt-text-request', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ postId: post.id }),
+      });
+      const json = (await res.json().catch(() => null)) as { alreadyRequested?: boolean; error?: string } | null;
+      if (!res.ok) {
+        throw new Error(json?.error || 'Não foi possível enviar a solicitação.');
+      }
+      setAltRequested(true);
+      haptics.success();
+      toast({
+        title: json?.alreadyRequested ? 'Solicitação já enviada!' : 'Pedido de Alt Text enviado!',
+        description: `@${post.user?.username || 'autor'} foi notificado(a) para descrever a imagem.`,
+      });
+    } catch (err) {
+      toast({
+        title: 'Não foi possível notificar',
+        description: err instanceof Error ? err.message : 'Tente novamente em instantes.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsRequestingAltText(false);
+    }
+  }, [post?.id, post?.user?.username, currentUserId, altRequested, isRequestingAltText, openLoginPrompt, toast]);
+  */
 
   const {
     loadedComments,
@@ -237,12 +300,30 @@ function PostCard({
 
   // Calculado na própria renderização: gravá-lo em estado por um efeito custava uma segunda renderização de CADA cartão.
   const createdAt = post?.createdAt;
-  const timeAgo = useMemo(() => {
-    if (!createdAt) return '';
+  const repostedAt = post?.repostedAt;
+  const toSafeDate = (value: unknown): Date | null => {
+    if (!value) return null;
+    if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+    if (typeof value === 'string' || typeof value === 'number') {
+      const d = new Date(value);
+      return Number.isNaN(d.getTime()) ? null : d;
+    }
+    if (typeof value === 'object' && 'toDate' in value && typeof (value as { toDate?: () => Date }).toDate === 'function') {
+      const d = (value as { toDate: () => Date }).toDate();
+      return Number.isNaN(d.getTime()) ? null : d;
+    }
+    return null;
+  };
+  const formatRelativeTime = (value: unknown) => {
+    const date = toSafeDate(value);
+    if (!date) return '';
     const localeOptions = locale === 'pt-BR' ? { locale: ptBR } : { locale: enUS };
-    const formatted = formatDistanceToNow(new Date(createdAt), { addSuffix: true, ...localeOptions });
+    const formatted = formatDistanceToNow(date, { addSuffix: true, ...localeOptions });
     return locale === 'pt-BR' ? formatted.replace('cerca de ', '') : formatted;
-  }, [createdAt, locale]);
+  };
+  const timeAgo = useMemo(() => formatRelativeTime(createdAt), [createdAt, locale]);
+  const repostedTimeAgo = useMemo(() => formatRelativeTime(repostedAt), [repostedAt, locale]);
+  const repostedDate = useMemo(() => toSafeDate(repostedAt), [repostedAt]);
 
   // Quem pode responder sai do próprio post (antes cada cartão baixava o post inteiro de novo, e de novo a cada curtida,
   // porque o efeito dependia do objeto `post`). Só os campos que mudam a resposta entram nas dependências.
@@ -350,7 +431,7 @@ function PostCard({
   };
   
   // `false` = não enviou: o diálogo fica aberto com o texto e as imagens (só um erro ou `false` mantêm o formulário).
-  const handleCreateTopLevelComment = async (data: { text?: string; media?: any[]; youtubeVideoId?: string; quotedPostObject?: PostType | null; replyPermission: ReplyPermission; allowReposts: boolean; }): Promise<boolean> => {
+  const handleCreateTopLevelComment = async (data: { text?: string; media?: any[]; youtubeVideoId?: string; quotedPostObject?: PostType | null; replyPermission: ReplyPermission; allowReposts: boolean; sensitive?: boolean; }): Promise<boolean> => {
     if (!post?.id || !currentUserId) {
       openLoginPrompt("comentar");
       return false;
@@ -376,6 +457,7 @@ function PostCard({
       <CommentCard
         comment={post.repostedComment!}
         repostedBy={post.repostedBy}
+        repostedAt={post.repostedAt}
         onPostCreated={onPostCreated}
         parentPostAuthorId={post.repostedComment!.postAuthorId}
       />
@@ -390,7 +472,13 @@ function PostCard({
         <LoginOrRegisterPromptDialog open={showLoginPrompt} onOpenChange={setShowLoginPrompt} actionName={promptActionName} currentPath={currentPath} />
       </MountOnceOpened>
       <MountOnceOpened open={isImageViewerOpen}>
-        <ImageViewer isOpen={isImageViewerOpen} onOpenChange={setIsImageViewerOpen} imageUrl={selectedImageUrl} postUrl={post ? `${siteConfig.baseUrl}/${locale}/post/${post.id}` : undefined} />
+        <ImageViewer
+          isOpen={isImageViewerOpen}
+          onOpenChange={setIsImageViewerOpen}
+          imageUrl={selectedImageUrl}
+          images={post?.media?.filter((m) => m.type !== 'video' && m.url).map((m) => m.url) ?? []}
+          postUrl={post ? `${siteConfig.baseUrl}/${locale}/post/${post.id}` : undefined}
+        />
       </MountOnceOpened>
       {!isRepostedComment && (
         <MountOnceOpened open={postInteractions.isSendViaDirectOpen}>
@@ -400,6 +488,18 @@ function PostCard({
       {post && (
         <MountOnceOpened open={isShareDialogOpen}>
           <SharePostDialog post={post} open={isShareDialogOpen} onOpenChange={setIsShareDialogOpen} />
+        </MountOnceOpened>
+      )}
+      {post && hasPostImages && (
+        <MountOnceOpened open={isAltTextDialogOpen}>
+          <PostAltTextDialog
+            post={post}
+            open={isAltTextDialogOpen}
+            onOpenChange={setIsAltTextDialogOpen}
+            onMediaUpdated={(updatedMedia) => {
+              setPost((prev) => (prev ? { ...prev, media: updatedMedia } : prev));
+            }}
+          />
         </MountOnceOpened>
       )}
       <Dialog open={isCommentDialogOpen} onOpenChange={setIsCommentDialogOpen}>
@@ -421,6 +521,14 @@ function PostCard({
                         <div className="text-xs text-muted-foreground" onClick={(e) => e.stopPropagation()} data-interactive="true">
                             <Repeat2 className="inline-block h-3 w-3 mr-1" />
                             {post.repostedBy.userId === currentUserId ? 'Você repostou' : <><UserProfileHoverCard user={{ ...post.repostedBy, id: post.repostedBy.userId } as unknown as User}><Link href={`/${locale}/profile/${post.repostedBy.userId}`} className="hover:underline font-semibold text-foreground">{post.repostedBy.name}</Link></UserProfileHoverCard>{' '}repostou</>}
+                            {repostedTimeAgo && (
+                              <span
+                                className="ml-1 text-muted-foreground/80"
+                                title={repostedDate ? format(repostedDate, "p · PP", { locale: locale === 'pt-BR' ? ptBR : enUS }) : undefined}
+                              >
+                                · {repostedTimeAgo}
+                              </span>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -444,7 +552,18 @@ function PostCard({
                   
                    <div className="flex-1 min-w-0">
                       {!isSinglePostView && <PostCardHeader post={post} currentUserId={currentUserId} timeAgo={timeAgo} isSinglePostView={isSinglePostView} />}
-                      <div className={cn("mt-1", isSinglePostView && "mt-0")}><PostCardContent post={post} isSinglePostView={isSinglePostView} onImageClick={openImage} /></div>
+                      <div className={cn("mt-1", isSinglePostView && "mt-0")}>
+                        <PostCardContent
+                          post={post}
+                          isSinglePostView={isSinglePostView}
+                          onImageClick={openImage}
+                          currentUserId={currentUserId}
+                          onOpenAltTextEditor={() => setIsAltTextDialogOpen(true)}
+                          // onRequestAltText={handleRequestAltText}
+                          // altRequested={altRequested}
+                          // isRequestingAltText={isRequestingAltText}
+                        />
+                      </div>
                       {isSinglePostView && !isRepostedComment && (
                           <>
                               <div className="mt-3 pt-3 border-t border-border text-muted-foreground flex items-center justify-between text-xs"><div className="flex items-center" title={getReplyPermissionText(post.replyPermission)}>{getReplyPermissionIcon(post.replyPermission)}<span className="pl-1">{getReplyPermissionText(post.replyPermission)}.</span></div><span className="pl-1">{format(new Date(post.createdAt), "p · PP", { locale: ptBR })}</span></div>
@@ -463,6 +582,12 @@ function PostCard({
                           onShare={(e) => { e?.stopPropagation?.(); setIsShareDialogOpen(true); }} onMutePostAuthor={postInteractions.handleMutePostAuthor}
                           onBlockPostAuthor={postInteractions.handleBlockPostAuthor} onReportPostAction={postInteractions.handleReportPostAction}
                           onDeletePost={postInteractions.handleDeletePost} onPostQuoted={handlePostQuoted} onPinPost={postInteractions.handlePinPost} onHidePost={postInteractions.handleHidePost}
+                          hasPostImages={hasPostImages}
+                          hasMissingImageAlt={hasMissingImageAlt}
+                          // altRequested={altRequested}
+                          // isRequestingAltText={isRequestingAltText}
+                          onOpenAltTextEditor={() => setIsAltTextDialogOpen(true)}
+                          // onRequestAltText={handleRequestAltText}
                       />
                   </div>
               </div>

@@ -24,6 +24,8 @@ import ReplyDialogContent from '@/components/comments/ReplyDialogContent';
 import QuoteCommentDialogContent from '../feed/QuoteCommentDialogContent';
 import { Dialog } from '../ui/dialog';
 import ImageViewer from '../shared/ImageViewer';
+import MediaGrid from '../shared/MediaGrid';
+import SensitiveMediaCover from '../shared/SensitiveMediaCover';
 import UserProfileHoverCard from '@/components/profile/UserProfileHoverCard';
 
 interface CommentThreadProps {
@@ -235,22 +237,45 @@ export default function CommentThread({
               </p>
             )}
 
-            {imageUrl && (
-              <div 
-                className="mt-2 rounded-md overflow-hidden border border-border aspect-video relative cursor-pointer group"
-                onClick={handleImageClick}
-                data-interactive="true"
-               >
-                <Image 
-                  src={imageUrl} 
-                  alt="Comment image" 
-                  layout="fill" 
-                  objectFit="cover" 
-                  className="group-hover:opacity-90 transition-opacity"
-                  data-ai-hint={comment["data-ai-hint"] || "image content"}
+            {(comment.media && comment.media.length > 0) ? (
+              <SensitiveMediaCover
+                sensitive={comment.sensitive === true}
+                contentKey={comment.id}
+                compact
+                className="mt-2"
+              >
+                <MediaGrid
+                  media={comment.media}
+                  fallbackAlt={text?.substring(0, 50)}
+                  onImageClick={(url) => {
+                    setSelectedImageUrl(url);
+                    setIsImageViewerOpen(true);
+                  }}
                 />
-              </div>
-            )}
+              </SensitiveMediaCover>
+            ) : imageUrl ? (
+              <SensitiveMediaCover
+                sensitive={comment.sensitive === true}
+                contentKey={comment.id}
+                compact
+                className="mt-2"
+              >
+                <div
+                  className="rounded-md overflow-hidden border border-border aspect-video relative cursor-pointer group"
+                  onClick={handleImageClick}
+                  data-interactive="true"
+                >
+                  <Image
+                    src={imageUrl}
+                    alt="Comment image"
+                    layout="fill"
+                    objectFit="cover"
+                    className="group-hover:opacity-90 transition-opacity"
+                    data-ai-hint={comment["data-ai-hint"] || "image content"}
+                  />
+                </div>
+              </SensitiveMediaCover>
+            ) : null}
             {youtubeVideoId && (
               <div className="mt-2 aspect-video w-full rounded-lg overflow-hidden border border-border">
                   <iframe

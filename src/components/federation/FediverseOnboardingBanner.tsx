@@ -54,7 +54,7 @@ export default function FediverseOnboardingBanner() {
           <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary">
             <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
           </span>
-          <span>Novidade: o Exe. Lula agora conversa com o Fediverso e o Bluesky</span>
+          <span>Novidade: o HiperVerso agora conversa com o Fediverso e o Bluesky</span>
         </div>
         <button
           type="button"
@@ -69,7 +69,7 @@ export default function FediverseOnboardingBanner() {
       <ul className="mt-2.5 space-y-1.5 text-muted-foreground leading-relaxed">
         <li>
           <strong className="text-foreground">Fediverso (<Globe className="inline h-3 w-3 text-primary align-text-bottom" />):</strong>{' '}
-          ative seu <span className="font-mono text-foreground">@usuario@exercitodolula.app</span> para trocar posts e respostas com Mastodon e Misskey.
+          ative seu <span className="font-mono text-foreground">@usuario@hiperverso.social</span> para trocar posts e respostas com Mastodon e Misskey.
         </li>
         <li>
           <strong className="text-foreground">Bluesky (Atmosfera):</strong>{' '}

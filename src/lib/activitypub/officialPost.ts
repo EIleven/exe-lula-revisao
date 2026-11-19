@@ -77,9 +77,15 @@ export function isHttpsUrl(valor: unknown, max = 2048): valor is string {
   }
 }
 
+const EXTRA_OWN_MEDIA_ORIGINS = [
+  'https://media.hiperverso.app',
+  'https://media.hiperverso.social',
+];
+
 /** Este endereço de mídia é da nossa URL pública, a única que o Fediverso recebe? */
 export function isOwnPublicMedia(url: string, mediaOrigin: string): boolean {
-  return url.startsWith(`${semBarra(mediaOrigin)}/m/`);
+  if (url.startsWith(`${semBarra(mediaOrigin)}/m/`)) return true;
+  return EXTRA_OWN_MEDIA_ORIGINS.some((origin) => url.startsWith(`${origin}/m/`));
 }
 
 function parseMedia(bruto: unknown, federa: boolean, ctx: OfficialPostContext): { ok: true; media: OfficialMedia[] } | { ok: false; error: OfficialPostErrorCode; detail: string } {

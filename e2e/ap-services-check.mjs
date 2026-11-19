@@ -203,7 +203,33 @@ function relogio_avanca(deps, ms) { const base = deps.now(); deps.now = () => ba
   confere('DESCOBERTA · actor de handle inexistente → 404', (await renderActor(deps, 'ninguem')).status === 404, 'respondeu');
   await enableFederation(deps, 'U_ANA', { emailVerified: true });
 
+  // Conta antiga: o vínculo que a pessoa cadastrava continua gravado (leitura retrocompatível) e NÃO pode sair no ator.
+  await store.saveAccount({ ...(await store.getAccount('U_ANA')), alsoKnownAs: ['https://x.org/users/ana'] });
+
   const a = await renderActor(deps, 'ana_silva');
+  confere('DESCOBERTA · actor NÃO publica o alsoKnownAs que a pessoa cadastrava, mesmo gravado na conta',
+    !JSON.stringify(a.body).includes('x.org/users/ana'),
+    JSON.stringify(a.body).slice(0, 200));
+
+  // ── migração de domínio: o host antigo continua válido e aponta para o novo ──
+  const ANTIGO = 'https://exercitodolula.app';
+  const velho = await renderActor(deps, 'ana_silva', { legacyOrigin: ANTIGO });
+  confere('MIGRAÇÃO · pelo host ANTIGO o ator declara o id DELE (documento com id de outro host é recusado como falsificação)',
+    velho.body.id === `${ANTIGO}/ap/users/ana_silva` && velho.body.inbox.startsWith(ANTIGO) && velho.body.publicKey.id.startsWith(ANTIGO),
+    JSON.stringify({ id: velho.body.id, inbox: velho.body.inbox, key: velho.body.publicKey.id }));
+  confere('MIGRAÇÃO · e leva `movedTo` para o endereço canônico (é assim que o Fediverso diz que a conta se mudou)',
+    velho.body.movedTo === `${ORIGEM}/ap/users/ana_silva`, String(velho.body.movedTo));
+  confere('MIGRAÇÃO · o ator do host antigo NÃO leva alias (quem aponta de volta é o canônico)',
+    !('alsoKnownAs' in velho.body), JSON.stringify(velho.body.alsoKnownAs));
+  const novo = await renderActor(deps, 'ana_silva', { alsoKnownAs: [`${ANTIGO}/ap/users/ana_silva`] });
+  confere('MIGRAÇÃO · o ator canônico aponta de volta pelo auto-alias, e segue com o id canônico',
+    novo.body.id === `${ORIGEM}/ap/users/ana_silva` && JSON.stringify(novo.body.alsoKnownAs) === JSON.stringify([`${ANTIGO}/ap/users/ana_silva`]),
+    JSON.stringify({ id: novo.body.id, aka: novo.body.alsoKnownAs }));
+  const wfVelho = await renderWebfinger(deps, 'ana_silva', { legacyOrigin: ANTIGO, legacyHost: 'exercitodolula.app' });
+  confere('MIGRAÇÃO · o WebFinger do host antigo volta a responder, apontando para o ator ANTIGO',
+    wfVelho.status === 200 && wfVelho.body.subject === 'acct:ana_silva@exercitodolula.app'
+    && JSON.stringify(wfVelho.body.links).includes(`${ANTIGO}/ap/users/ana_silva`),
+    JSON.stringify(wfVelho.body));
   confere('DESCOBERTA · actor ativo → 200 com Person', a.status === 200 && a.body.type === 'Person' && a.body.id === `${ORIGEM}/ap/users/ana_silva`, JSON.stringify(a.body).slice(0, 80));
   confere('DESCOBERTA · a chave pública do actor é a da reserva', a.body.publicKey.publicKeyPem === teste.handles.get('ana_silva').publicKeyPem, 'chave diferente');
   confere('DESCOBERTA · o actor NÃO tem chave privada, e-mail nem nascimento', !/PRIVATE|email|birth|nascimento|dateOfBirth/i.test(JSON.stringify(a.body)), 'dado sensível no actor');

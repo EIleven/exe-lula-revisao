@@ -5,7 +5,6 @@
 import React, { useEffect, useRef, useCallback, forwardRef, useImperativeHandle, Fragment, useMemo } from 'react';
 import type { Post, Comment } from '@/lib/types';
 import PostCard from './PostCard';
-import AdPostCard from './AdPostCard'; // Import the new AdPostCard component
 import { siteConfig } from '@/config/site';
 import CommentCard from './CommentCard';
 import { useInfiniteFeed } from '@/hooks/features/feed/useInfiniteFeed';
@@ -14,7 +13,10 @@ import { Loader2, AlertTriangle, Frown, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { Timestamp as FirestoreTimestamp } from 'firebase/firestore';
 import { useHiddenPostIds } from '@/contexts/FeedContext';
+import { useCurrentUser } from '@/contexts/CurrentUserContext';
+import { detectLikelyLanguage } from '@/lib/i18n/detectLanguage';
 import PostCardSkeleton from './PostCardSkeleton';
+import { VideoQueueContext, type VideoQueueSource } from '@/contexts/VideoQueueContext';
 
 export interface FeedListHandle {
   resetFeed: () => Promise<void>;
@@ -30,6 +32,11 @@ interface FeedListProps {
   onPostPrepended?: () => void;
   onPostsChange?: (items: (Post | Comment)[]) => void;
   initialPosts?: (Post | Comment)[];
+  /**
+   * Desliga o filtro de idioma desta lista. Serve para a BUSCA: lá a pessoa pediu aquilo explicitamente, e esconder
+   * um resultado por causa do idioma do feed fazia o contador dizer 12 e a lista mostrar 3 — o número nunca batia.
+   */
+  semFiltroDeIdioma?: boolean;
 }
 
 const EMPTY_FEED_OPTIONS: PaginatedPostsOptions = {};
@@ -42,9 +49,13 @@ const FeedList = forwardRef<FeedListHandle, FeedListProps>(({
   newPostToPrepend,
   onPostPrepended,
   onPostsChange,
-  initialPosts
+  initialPosts,
+  semFiltroDeIdioma = false
 }, ref) => {
   const hiddenPostIds = useHiddenPostIds();
+  const { currentUser } = useCurrentUser();
+  const feedLanguageFilter = currentUser?.tabPreferences?.feedLanguageFilter || 'all';
+  const queueContext = feedContextOptions.feedContext ?? (initialPosts !== undefined ? 'static' : 'feed');
   
   const isStaticList = initialPosts !== undefined;
   const effectiveFeedId = feedId || 'static_list'; // Use a default ID for static lists if none is provided
@@ -120,8 +131,36 @@ const FeedList = forwardRef<FeedListHandle, FeedListProps>(({
   const finalPosts = useMemo(() => {
     const listToFilter = isStaticList ? initialPosts : posts;
     if (!listToFilter) return [];
-    return listToFilter.filter(item => !hiddenPostIds.has((item as Post | Comment).id));
-  }, [isStaticList, initialPosts, posts, hiddenPostIds]);
+    const shouldFilterLang =
+      !semFiltroDeIdioma &&
+      feedLanguageFilter !== 'all' &&
+      !String(queueContext).startsWith('profile');
+
+    return listToFilter.filter((item) => {
+      if (hiddenPostIds.has((item as Post | Comment).id)) return false;
+      if (!shouldFilterLang || 'parentPostId' in item) return true;
+
+      const post = item as Post & { lang?: string; language?: string };
+      const explicitLang = (post.language || post.lang || '').split('-')[0].toLowerCase().trim();
+      const textSample = [post.headline, post.text].filter(Boolean).join(' ').trim();
+      const detected = explicitLang || detectLikelyLanguage(textSample);
+
+      // Se o post tem idioma identificável diferente do escolhido pelo usuário, oculta no feed.
+      if (detected && detected !== feedLanguageFilter) {
+        return false;
+      }
+      return true;
+    });
+  }, [isStaticList, initialPosts, posts, hiddenPostIds, feedLanguageFilter, queueContext, semFiltroDeIdioma]);
+
+  // A fila do teatro de vídeo é esta lista (só os posts, sem comentários). O valor do contexto é estável: a função lê a lista atual
+  // pela ref no momento do toque, então carregar mais uma página não redesenha nenhum cartão.
+  const queuePostsRef = useRef<Post[]>([]);
+  queuePostsRef.current = (finalPosts ?? []).filter((item) => !('parentPostId' in item)) as Post[];
+  const videoQueueSource = useMemo<VideoQueueSource>(
+    () => ({ context: queueContext, getPosts: () => queuePostsRef.current }),
+    [queueContext],
+  );
 
 
   if (isRefreshing) {
@@ -175,6 +214,7 @@ const FeedList = forwardRef<FeedListHandle, FeedListProps>(({
   }
 
   return (
+    <VideoQueueContext.Provider value={videoQueueSource}>
     <div>
       {finalPosts && finalPosts.map((item, index) => {
         const itemIsComment = 'parentPostId' in item;
@@ -194,11 +234,6 @@ const FeedList = forwardRef<FeedListHandle, FeedListProps>(({
                 onPostCreated={onPostCreated}
                 isSinglePostView={false}
               />
-            )}
-            
-            {/* Um anúncio a cada 15 posts: desligado em siteConfig.adsEnabled, estrutura mantida. */}
-            {siteConfig.adsEnabled && (index + 1) % 15 === 0 && (
-              <AdPostCard />
             )}
           </Fragment>
         )
@@ -235,6 +270,7 @@ const FeedList = forwardRef<FeedListHandle, FeedListProps>(({
         </>
       )}
     </div>
+    </VideoQueueContext.Provider>
   );
 });
 FeedList.displayName = 'FeedList';

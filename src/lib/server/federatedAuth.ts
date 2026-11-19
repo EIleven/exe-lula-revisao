@@ -1,10 +1,13 @@
 // src/lib/server/federatedAuth.ts
 // Provisionamento e autenticação de contas criadas/logadas via Fediverso (ActivityPub/Mastodon) ou Atmosfera (Bluesky).
 import { createHash, randomBytes } from 'node:crypto';
-import { FieldValue, Timestamp } from 'firebase-admin/firestore';
+import { FieldValue, Timestamp, type Firestore } from 'firebase-admin/firestore';
 import { enableFederation } from '@/lib/activitypub/account';
+import { remoteUserIdOf } from '@/lib/activitypub/remoteIdentity';
 import { federation } from '@/lib/server/federation';
 import { adminAuth, adminFirestore } from '@/lib/server/firebaseAdmin';
+import { mintClientAuthCredential, type ClientAuthCredential } from '@/lib/server/clientCredential';
+import type { FederatedSyncConsent } from '@/lib/server/federatedSync';
 
 export interface FederatedProfileInput {
   provider: 'fediverse' | 'bluesky';
@@ -18,6 +21,7 @@ export interface FederatedProfileInput {
   actorId?: string;
   did?: string;
   locale: string;
+  consent?: FederatedSyncConsent;
 }
 
 const hashKey = (value: string) => createHash('sha256').update(value).digest('hex');
@@ -41,9 +45,103 @@ async function allocateUniqueUsername(baseRaw: string): Promise<string> {
   return `u_${randomBytes(4).toString('hex')}`.slice(0, 15);
 }
 
+/**
+ * Unifica automaticamente qualquer espelho remoto `ap_...` pré-existente (ex.: @vivian@organica.social)
+ * na conta real autenticada (`uid`), migrando grupos (GENTE FINA E ELEGANTE, etc.) e conversas diretas
+ * para que a pessoa nunca fique duplicada nem perca o acesso aos grupos para os quais foi convidada.
+ */
+async function unifyRemoteMirrorIntoFederatedAccount(
+  db: Firestore,
+  uid: string,
+  handle: string,
+  actorId?: string
+): Promise<void> {
+  try {
+    const candidateApIds = new Set<string>();
+    if (actorId && actorId.startsWith('https://')) {
+      candidateApIds.add(remoteUserIdOf(actorId));
+    }
+    const cleanHandle = handle.replace(/^@+/, '').trim();
+    if (cleanHandle.includes('@')) {
+      const byHandleSnap = await db
+        .collection('users')
+        .where('username', '==', cleanHandle)
+        .limit(5)
+        .get();
+      for (const doc of byHandleSnap.docs) {
+        if (doc.id !== uid && doc.id.startsWith('ap_')) {
+          candidateApIds.add(doc.id);
+        }
+      }
+    }
+
+    for (const apId of candidateApIds) {
+      if (!apId || apId === uid) continue;
+
+      const convSnap = await db
+        .collection('conversations')
+        .where('participantIds', 'array-contains', apId)
+        .get();
+
+      for (const convDoc of convSnap.docs) {
+        const cData = convDoc.data();
+        const pids: string[] = Array.isArray(cData.participantIds) ? cData.participantIds : [];
+
+        if (cData.isGroup === true) {
+          const nextPids = Array.from(new Set([...pids.filter((id) => id !== apId), uid]));
+          await convDoc.ref.update({ participantIds: nextPids });
+        } else if (pids.length === 2) {
+          const otherUid = pids.find((id) => id !== apId);
+          if (!otherUid || otherUid === uid) continue;
+          const sortedPair = [uid, otherUid].sort();
+          const targetConvId = `${sortedPair[0]}_${sortedPair[1]}`;
+          const targetConvRef = db.collection('conversations').doc(targetConvId);
+
+          const msgsSnap = await convDoc.ref.collection('messages').limit(200).get();
+          const batch = db.batch();
+          for (const mDoc of msgsSnap.docs) {
+            const mData = mDoc.data();
+            batch.set(
+              targetConvRef.collection('messages').doc(mDoc.id),
+              {
+                ...mData,
+                conversationId: targetConvId,
+                senderId: mData.senderId === apId ? uid : mData.senderId,
+              },
+              { merge: true }
+            );
+            batch.delete(mDoc.ref);
+          }
+          batch.set(
+            targetConvRef,
+            {
+              participantIds: sortedPair,
+              isGroup: false,
+              createdBy: cData.createdBy === apId ? uid : cData.createdBy || otherUid,
+              createdAt: cData.createdAt || FieldValue.serverTimestamp(),
+              lastMessageId: cData.lastMessageId || null,
+              lastMessageText: cData.lastMessageText || '',
+              lastMessageSenderId:
+                cData.lastMessageSenderId === apId ? uid : cData.lastMessageSenderId || otherUid,
+              lastMessageAt: cData.lastMessageAt || FieldValue.serverTimestamp(),
+            },
+            { merge: true }
+          );
+          batch.delete(convDoc.ref);
+          await batch.commit();
+        }
+      }
+
+      await db.collection('users').doc(apId).delete().catch(() => null);
+    }
+  } catch (err) {
+    console.warn('unifyRemoteMirrorIntoFederatedAccount warning:', err);
+  }
+}
+
 export async function provisionOrLoginFederatedUser(
   input: FederatedProfileInput,
-): Promise<{ uid: string; isNewUser: boolean; customToken: string }> {
+): Promise<ClientAuthCredential & { uid: string; isNewUser: boolean }> {
   const db = adminFirestore();
   const auth = adminAuth();
   const identityDocId = `${input.provider}_${hashKey(input.externalId).slice(0, 32)}`;
@@ -67,18 +165,25 @@ export async function provisionOrLoginFederatedUser(
     isNewUser = true;
     const username = await allocateUniqueUsername(input.handle);
     const displayName = (input.name || username).slice(0, 60);
-    const created = await auth.createUser({ displayName });
+    const created = await auth.createUser({
+      displayName,
+      emailVerified: true,
+    });
     uid = created.uid;
+    const syntheticEmail = `${uid.toLowerCase()}@federated.hiperverso.app`;
+    await auth.updateUser(uid, { email: syntheticEmail, emailVerified: true }).catch(() => null);
 
     const nowIso = new Date().toISOString();
     const batch = db.batch();
     batch.set(db.collection('usernames').doc(username.toLowerCase()), {
+      userId: uid,
       uid,
       createdAt: FieldValue.serverTimestamp(),
     });
     batch.set(db.collection('users').doc(uid), {
       id: uid,
       name: displayName,
+      name_lowercase: displayName.toLowerCase(),
       username,
       email: '',
       bio: input.bio.slice(0, 500),
@@ -88,7 +193,7 @@ export async function provisionOrLoginFederatedUser(
       followersCount: 0,
       followingCount: 0,
       postsCount: 0,
-      dmPreference: 'all',
+      dmPreference: 'everyone',
       isAdmin: false,
       isModerator: false,
       profileVisibility: 'public',
@@ -96,6 +201,7 @@ export async function provisionOrLoginFederatedUser(
       updatedAt: FieldValue.serverTimestamp(),
       federatedLoginProvider: input.provider,
       federatedLoginHandle: input.handle,
+      ...(input.consent ? { federatedConsent: input.consent } : {}),
     });
     batch.set(identityRef, {
       uid,
@@ -105,44 +211,68 @@ export async function provisionOrLoginFederatedUser(
       createdAt: FieldValue.serverTimestamp(),
     });
     await batch.commit();
+  } else {
+    const authRecord = await auth.getUser(uid).catch(() => null);
+    if (authRecord && !authRecord.emailVerified) {
+      const syntheticEmail = authRecord.email || `${uid.toLowerCase()}@federated.hiperverso.app`;
+      await auth.updateUser(uid, { email: syntheticEmail, emailVerified: true }).catch(() => null);
+    }
+
+    if (input.consent?.syncProfile !== false) {
+      const refreshFields: Record<string, unknown> = {
+        federatedLoginProvider: input.provider,
+        federatedLoginHandle: input.handle,
+        dmPreference: 'everyone',
+        updatedAt: FieldValue.serverTimestamp(),
+        ...(input.consent ? { federatedConsent: input.consent } : {}),
+      };
+      if (input.name) {
+        refreshFields.name = input.name.slice(0, 60);
+        refreshFields.name_lowercase = input.name.slice(0, 60).toLowerCase();
+      }
+      if (input.bio) refreshFields.bio = input.bio.slice(0, 500);
+      if (input.avatarUrl) refreshFields.avatarUrl = input.avatarUrl;
+      if (input.coverImageUrl) refreshFields.coverImageUrl = input.coverImageUrl;
+      if (input.website) refreshFields.website = input.website;
+      await db.collection('users').doc(uid).set(refreshFields, { merge: true });
+    }
   }
 
-  await auth.setCustomUserClaims(uid, { member: true });
+  await auth.setCustomUserClaims(uid, { member: true, federatedVerified: true });
+
+  // Unifica qualquer espelho ap_ anterior (grupos, DMs e perfil duplicado) na conta autenticada
+  await unifyRemoteMirrorIntoFederatedAccount(db, uid, input.handle, input.actorId);
 
   // Ativa @handle@exercitodolula.app automaticamente para unificar a identidade dentro e fora da rede
   try {
     const accountDeps = federation().account();
-    const res = await enableFederation(accountDeps, uid, { emailVerified: true });
-    if (res.ok && input.actorId) {
-      const f = federation();
-      const existing = await f.store.getAccount(uid);
-      const currentAliases = existing?.alsoKnownAs ?? [];
-      if (!currentAliases.includes(input.actorId) && currentAliases.length < 5) {
-        await db
-          .collection('users')
-          .doc(uid)
-          .collection('private')
-          .doc('federation')
-          .set({ alsoKnownAs: [...currentAliases, input.actorId] }, { merge: true });
-      }
-    }
+    // Só liga o handle local. A conta de origem NÃO é gravada como `alsoKnownAs`: esse vínculo ia para o ator público e
+    // entregava, sem autenticação, o mapa de identidades da pessoa em outros servidores.
+    await enableFederation(accountDeps, uid, { emailVerified: true });
   } catch (err) {
     console.warn('Auto-enable federation warning:', err instanceof Error ? err.message : String(err));
   }
 
-  const customToken = await auth.createCustomToken(uid);
-  return { uid, isNewUser, customToken };
+  const credential = await mintClientAuthCredential(uid, {
+    member: true,
+    federatedVerified: true,
+  });
+  return { uid, isNewUser, ...credential };
 }
 
 export async function createLoginTicket(payload: {
-  customToken: string;
+  customToken?: string;
+  emailLink?: string;
+  email?: string;
   uid: string;
   isNewUser: boolean;
 }): Promise<string> {
   const ticket = randomBytes(24).toString('base64url');
   const db = adminFirestore();
   await db.collection('auth_login_tickets').doc(hashKey(ticket)).set({
-    customToken: payload.customToken,
+    customToken: payload.customToken ?? null,
+    emailLink: payload.emailLink ?? null,
+    email: payload.email ?? null,
     uid: payload.uid,
     isNewUser: payload.isNewUser,
     expiresAt: Date.now() + 5 * 60 * 1000,
@@ -154,7 +284,7 @@ export async function createLoginTicket(payload: {
 
 export async function consumeLoginTicket(
   ticket: string,
-): Promise<{ customToken: string; uid: string; isNewUser: boolean } | null> {
+): Promise<(ClientAuthCredential & { uid: string; isNewUser: boolean }) | null> {
   if (!ticket || ticket.length > 256) return null;
   const db = adminFirestore();
   const ref = db.collection('auth_login_tickets').doc(hashKey(ticket));
@@ -163,19 +293,22 @@ export async function consumeLoginTicket(
     if (!snap.exists) return null;
     tx.delete(ref);
     const data = snap.data() as {
-      customToken?: string;
+      customToken?: string | null;
+      emailLink?: string | null;
+      email?: string | null;
       uid?: string;
       isNewUser?: boolean;
       expiresAt?: number;
     };
-    if (!data.customToken || !data.uid || (data.expiresAt ?? 0) < Date.now()) {
+    const hasCredential = Boolean(data.customToken || (data.emailLink && data.email));
+    if (!hasCredential || !data.uid || (data.expiresAt ?? 0) < Date.now()) {
       return null;
     }
     return {
-      customToken: data.customToken,
+      ...(data.customToken ? { customToken: data.customToken } : {}),
+      ...(data.emailLink && data.email ? { emailLink: data.emailLink, email: data.email } : {}),
       uid: data.uid,
       isNewUser: Boolean(data.isNewUser),
     };
   });
 }
-

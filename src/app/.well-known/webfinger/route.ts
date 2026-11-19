@@ -6,7 +6,7 @@
 import type { NextRequest } from 'next/server';
 import { isInstanceWebfingerResource, parseWebfingerResource } from '@/lib/activitypub/identity';
 import { renderInstanceWebfinger, renderWebfinger } from '@/lib/activitypub/render';
-import { federation } from '@/lib/server/federation';
+import { federation, legacyFederationOrigin, publicHost } from '@/lib/server/federation';
 import { requestIp, takeRateLimit } from '@/lib/server/requestAuth';
 
 export const dynamic = 'force-dynamic';
@@ -21,13 +21,20 @@ export async function GET(request: NextRequest) {
   const resource = request.nextUrl.searchParams.get('resource');
   if (!resource) return new Response(null, { status: 400, headers: CORS });
 
+  // Pedido pelo domínio ANTIGO: `acct:usuario@dominio-antigo` precisa continuar resolvendo, senão ninguém de fora
+  // reencontra a conta para descobrir que ela se mudou. A resposta aponta para o ator daquele domínio, que é o que
+  // carrega o `movedTo`.
+  const antigo = legacyFederationOrigin(request);
+  const hostDoPedido = antigo ? publicHost(request) : f.ownHost;
+  const origemDoPedido = antigo ?? f.origin;
+
   let r;
-  if (isInstanceWebfingerResource(resource, f.ownHost, f.origin)) {
+  if (isInstanceWebfingerResource(resource, hostDoPedido, origemDoPedido)) {
     r = await renderInstanceWebfinger(f.render);
   } else {
-    const handle = parseWebfingerResource(resource, f.ownHost, f.origin);
+    const handle = parseWebfingerResource(resource, hostDoPedido, origemDoPedido);
     if (!handle) return new Response(null, { status: 404, headers: CORS });
-    r = await renderWebfinger(f.render, handle);
+    r = await renderWebfinger(f.render, handle, { legacyOrigin: antigo, legacyHost: antigo ? hostDoPedido : null });
   }
   if (r.status !== 200) return new Response(null, { status: r.status, headers: CORS });
   return new Response(JSON.stringify(r.body), {

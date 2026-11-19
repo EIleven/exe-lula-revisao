@@ -17,6 +17,8 @@ import { Separator } from '@/components/ui/separator';
 import { updateUserSettings } from '@/lib/services/userService';
 import { useCurrentUser } from '@/contexts/CurrentUserContext';
 import AccountSecuritySection from './AccountSecuritySection';
+import ConfirmacaoDeLeituraSwitch from './ConfirmacaoDeLeituraSwitch';
+import ConfiguracoesDeBusca from './ConfiguracoesDeBusca';
 import RecommendationSettingsDialog from '@/components/recommendations/RecommendationSettingsDialog';
 import { Button } from '@/components/ui/button';
 import { SlidersHorizontal } from 'lucide-react';
@@ -27,7 +29,7 @@ interface SettingsProps {
 
 export default function PrivacySecuritySettings({ user }: SettingsProps) {
   const { toast } = useToast();
-  const { refreshCurrentUser } = useCurrentUser();
+  const { currentUser, refreshCurrentUser } = useCurrentUser();
   const [isUpdating, setIsUpdating] = useState<string | null>(null);
   const [recDialogOpen, setRecDialogOpen] = useState(false);
 
@@ -114,6 +116,24 @@ export default function PrivacySecuritySettings({ user }: SettingsProps) {
             <SlidersHorizontal className="h-4 w-4 mr-1.5" />
             Configurar
           </Button>
+        </div>
+
+        <Separator />
+
+        <div className="space-y-2">
+          <Label className="text-base font-medium">Mensagens</Label>
+          {/* Mesmo botao do HiperChat: a escolha e do aparelho e vale nos dois apps. */}
+          <ConfirmacaoDeLeituraSwitch userId={currentUser?.id} />
+        </div>
+
+        <Separator />
+
+        <div className="space-y-2">
+          <Label className="text-base font-medium">Busca</Label>
+          <p className="text-sm text-muted-foreground">
+            Tudo aqui fica neste aparelho. O historico de busca nunca vai para o servidor.
+          </p>
+          <ConfiguracoesDeBusca userId={currentUser?.id} />
         </div>
 
         <Separator />

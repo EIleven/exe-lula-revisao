@@ -16,6 +16,7 @@
  */
 import { createMemoryStore } from './helpers/ap-memory-store.mjs';
 import { createFirestoreStore } from '../src/lib/activitypub/firestoreStore.ts';
+import { buildActor } from '../src/lib/activitypub/activity.ts';
 
 const FS_HOST = process.env.FIRESTORE_EMULATOR_HOST ?? '127.0.0.1:8080';
 const PROJETO = 'demo-soberan';
@@ -164,6 +165,14 @@ async function bateria(F) {
   const conta = { uid: 'U_ANA', enabled: true, paused: false, handle: 'ana', eligibleSince: T0 + 5, enabledAtMs: T0, publicKeyPem: 'PEM', updatedAtMs: T0, alsoKnownAs: ['https://x.org/u/a'], movedTo: null };
   await S.saveAccount(conta);
   confere(rot('conta: ida e volta com todos os campos'), igual(await S.getAccount('U_ANA'), conta), JSON.stringify(await S.getAccount('U_ANA')));
+  // RETROCOMPATIBILIDADE: documentos antigos ainda têm `alsoKnownAs` gravado e continuam sendo lidos sem quebrar...
+  const legado = await S.getAccount('U_ANA');
+  confere(rot('conta: alsoKnownAs legado continua sendo LIDO do banco (documento antigo não quebra)'), Array.isArray(legado.alsoKnownAs) && legado.alsoKnownAs.length === 1, JSON.stringify(legado.alsoKnownAs));
+  // ...mas o ator público, montado a partir dessa mesma conta, NÃO o publica (nem o endereço que estava lá).
+  // O que a pessoa cadastrava continua no banco (leitura retrocompativel) e NAO pode ser repassado ao ator: quem monta o
+  // ator e o render, que ignora esse campo e so aceita o auto-alias da migracao vindo da rota.
+  const atorDoLegado = buildActor({ id: 'https://hiperverso.social/ap/users/ana', handle: 'ana', name: 'Ana', summaryHtml: '', profileUrl: 'https://hiperverso.social/ana', inbox: 'i', outbox: 'o', followers: 'f', following: 'g', sharedInbox: 's', keyId: 'k', publicKeyPem: legado.publicKeyPem, publishedIso: '2026-01-01T00:00:00Z', movedTo: legado.movedTo });
+  confere(rot('conta: o alsoKnownAs gravado pela pessoa NAO chega ao ator publico'), !JSON.stringify(atorDoLegado).includes('x.org/u/a'), JSON.stringify(atorDoLegado).slice(0, 160));
 
   // chave
   const selada = { v: 1, alg: 'A256GCM', kid: 'k1', iv: 'aXY=', ct: 'Y3Q=', tag: 'dGFn' };

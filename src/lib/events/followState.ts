@@ -6,15 +6,17 @@ export interface FollowStateEventDetail {
   activeUserId: string;
   targetUserId: string;
   isFollowing: boolean;
+  /** Perfil do Fediverso fechado: o pedido de seguir foi enviado e ainda não foi aceito (`isFollowing` segue false). */
+  followRequested?: boolean;
   followersCount?: number;
 }
 
-const followCache = new Map<string, { isFollowing: boolean; followersCount?: number }>();
+const followCache = new Map<string, { isFollowing: boolean; followRequested?: boolean; followersCount?: number }>();
 
 export function getCachedFollowState(
   activeUserId: string | null | undefined,
   targetUserId: string | null | undefined
-): { isFollowing: boolean; followersCount?: number } | undefined {
+): { isFollowing: boolean; followRequested?: boolean; followersCount?: number } | undefined {
   if (!activeUserId || !targetUserId) return undefined;
   return followCache.get(`${activeUserId}:${targetUserId}`);
 }
@@ -26,6 +28,7 @@ export function dispatchFollowState(detail: FollowStateEventDetail): void {
   if (typeof window === 'undefined') return;
   followCache.set(`${detail.activeUserId}:${detail.targetUserId}`, {
     isFollowing: detail.isFollowing,
+    followRequested: detail.followRequested,
     followersCount: detail.followersCount,
   });
   window.dispatchEvent(new CustomEvent<FollowStateEventDetail>(FOLLOW_STATE_EVENT, { detail }));

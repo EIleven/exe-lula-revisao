@@ -132,21 +132,23 @@ const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
             />
           </div>
         ) : (
-          <Link href={`/${locale}`} aria-label="HiperVerso.App Home" className="flex flex-col items-center justify-center py-8 group">
-            <Image
-              src="/brand/lula-logo.svg"
-              alt="HiperVerso.App Logo"
-              width={isCompact ? 40 : 48}
-              height={isCompact ? 40 : 48}
-              className="group-hover:opacity-80 transition-all"
-            />
+          <Link href={`/${locale}`} aria-label="HiperVerso Início" className="flex flex-col items-center justify-center py-8 group">
             <span
+              aria-hidden="true"
               className={cn(
-                "text-xl font-bold text-foreground group-hover:text-primary transition-colors mt-2",
-                isCompact && "hidden"
+                'inline-flex items-center justify-center rounded-2xl bg-primary/15 text-primary border border-primary/30 font-black tracking-tight group-hover:bg-primary/20 transition-all',
+                isCompact ? 'h-10 w-10 text-sm' : 'h-12 w-12 text-lg',
               )}
             >
-              HiperVerso.App
+              HV
+            </span>
+            <span
+              className={cn(
+                'text-xl font-bold tracking-tight text-foreground group-hover:text-primary transition-colors mt-2',
+                isCompact && 'hidden',
+              )}
+            >
+              HiperVerso
             </span>
           </Link>
         )}

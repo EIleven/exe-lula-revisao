@@ -1,10 +1,11 @@
 // src/app/api/auth/bluesky/start/route.ts
-// Inicia OAuth com a Atmosfera (Bluesky) para login/cadastro no Exe. Lula.
+// Inicia OAuth com a Atmosfera (Bluesky) para login/cadastro no HiperVerso.
 import { NextResponse } from 'next/server';
 import { getBlueskyOAuthClient } from '@/lib/server/blueskyOAuth';
 import { requestIp, takeRateLimit } from '@/lib/server/requestAuth';
 import { blueskyConfigured } from '@/lib/server/socialConfig';
 import { createLinkState } from '@/lib/server/socialStore';
+import { normalizeFederatedConsent } from '@/lib/server/federatedSync';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,7 +17,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: 'A integração com a Atmosfera (Bluesky) não está configurada.' }, { status: 503 });
   }
 
-  const body = (await request.json().catch(() => ({}))) as { handle?: unknown; locale?: unknown };
+  const body = (await request.json().catch(() => ({}))) as { handle?: unknown; locale?: unknown; consent?: unknown };
+  const consent = normalizeFederatedConsent(body.consent);
   const handle = String(body.handle ?? '').trim().replace(/^@/, '').toLowerCase();
   if (!/^(?:did:[a-z0-9:%._-]+|[a-z0-9](?:[a-z0-9.-]{1,251}[a-z0-9])?)$/i.test(handle)) {
     return NextResponse.json({ message: 'Informe um endereço válido do Bluesky (ex: voce.bsky.social).' }, { status: 400 });
@@ -24,7 +26,7 @@ export async function POST(request: Request) {
 
   try {
     const locale = body.locale === 'en' ? 'en' : 'pt-BR';
-    const state = await createLinkState({ uid: '__login__', provider: 'bluesky', locale });
+    const state = await createLinkState({ uid: '__login__', provider: 'bluesky', locale, consent });
     const client = await getBlueskyOAuthClient();
     const url = await client.authorize(handle, { state, ui_locales: locale === 'en' ? 'en' : 'pt-BR pt en' });
     return NextResponse.json({ url: url.href });

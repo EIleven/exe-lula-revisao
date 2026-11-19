@@ -5,11 +5,22 @@ import { json } from '@/lib/server/federation';
 import { localUserIdOfHandle } from '@/lib/server/localIdentity';
 import { resolveRemoteProfile } from '@/lib/server/remoteProfile';
 import { requestIp, takeRateLimit } from '@/lib/server/requestAuth';
+import { evaluateRequestSecurity } from '@/lib/security/antiBotGuard';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
-  if (!takeRateLimit(`ap-lookup:${requestIp(request)}`, 30, 60_000)) {
+  const ip = requestIp(request);
+  const guard = evaluateRequestSecurity({
+    ip,
+    path: '/api/ap/lookup',
+    userAgent: request.headers.get('user-agent'),
+    acceptLanguage: request.headers.get('accept-language'),
+  });
+  if (!guard.allowed && guard.action === 'block') {
+    return json(429, { error: 'bloqueio-anti-bot' }, { 'Retry-After': String(guard.retryAfterSec || 30) });
+  }
+  if (!takeRateLimit(`ap-lookup:${ip}`, 30, 60_000)) {
     return json(429, { error: 'muitas-requisicoes' }, { 'Retry-After': '30' });
   }
 
@@ -31,5 +42,7 @@ export async function GET(request: NextRequest) {
     summary: p.summary,
     iconUrl: p.iconUrl,
     url: p.url,
+    // Perfil que aprova seguidores manualmente: o botão vira "Pedir para seguir" (e abre o bilhete cordial).
+    manuallyApprovesFollowers: p.manuallyApprovesFollowers === true,
   });
 }

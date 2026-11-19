@@ -2,7 +2,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { JSDOM, VirtualConsole } from 'jsdom';
 import { assertSafeUrl, safeFetchText, UnsafeUrlError } from '@/lib/security/safe-fetch';
-import { takeRateLimit, verifyRequestUser } from '@/lib/server/requestAuth';
+import { requestIp, takeRateLimit, verifyRequestUser } from '@/lib/server/requestAuth';
+import { evaluateRequestSecurity } from '@/lib/security/antiBotGuard';
 
 const EXTRACTIONS_PER_WINDOW = 20;
 const EXTRACTION_WINDOW_MS = 10 * 60 * 1000;
@@ -50,6 +51,21 @@ const cleanArticleContent = (element: Element): string => {
 
 export async function POST(request: NextRequest) {
   try {
+    const ip = requestIp(request);
+    const guard = evaluateRequestSecurity({
+      ip,
+      path: '/api/extract-article',
+      method: 'POST',
+      userAgent: request.headers.get('user-agent'),
+      acceptLanguage: request.headers.get('accept-language'),
+      isAuthenticated: Boolean(request.headers.get('authorization')),
+    });
+    if (!guard.allowed && guard.action === 'block') {
+      return NextResponse.json(
+        { message: 'Bloqueio temporário anti-bot.' },
+        { status: 429, headers: { 'Retry-After': String(guard.retryAfterSec || 30) } }
+      );
+    }
     // Só quem está logado, e com limite de ritmo: antes qualquer pessoa, sem conta, usava o servidor para buscar
     // páginas da internet.
     const uid = await verifyRequestUser(request);

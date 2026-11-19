@@ -354,9 +354,6 @@ export default function RightSidebar() {
             >
               Acessibilidade
             </Link>
-            <Link href={`/${locale}/ads-info`} className="hover:text-foreground hover:underline">
-              Anúncios
-            </Link>
             <Link href={`/${locale}/fediverse`} className="hover:text-foreground hover:underline">
               Fediverso
             </Link>
@@ -368,7 +365,7 @@ export default function RightSidebar() {
             </Link>
           </nav>
           <p className="mt-2.5 text-[11px] text-muted-foreground/80">
-            © {new Date().getFullYear()} Exe. Lula
+            © {new Date().getFullYear()} HiperVerso
           </p>
         </footer>
       </div>

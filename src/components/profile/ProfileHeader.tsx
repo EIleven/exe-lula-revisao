@@ -488,6 +488,9 @@ export default function ProfileHeader({
                username={profileUser.username}
                userId={profileUser.id}
                isRemoteFediverse={(profileUser as User & { isRemoteFediverse?: boolean }).isRemoteFediverse}
+               federatedLoginProvider={profileUser.federatedLoginProvider}
+               federatedLoginHandle={profileUser.federatedLoginHandle}
+               matrixHandle={profileUser.matrixHandle}
              />
              {profileUser.federatedLoginHandle && (
                <Badge variant="outline" className="text-[11px] font-normal text-muted-foreground">

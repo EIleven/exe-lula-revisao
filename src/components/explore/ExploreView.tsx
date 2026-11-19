@@ -174,7 +174,7 @@ export default function ExploreView() {
             <Input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Buscar no Exe. Lula"
+              placeholder="Buscar no HiperVerso"
               className="h-9 sm:h-10 rounded-full border-border/70 bg-muted/35 pl-10 pr-4 text-sm focus-visible:ring-primary"
             />
           </form>

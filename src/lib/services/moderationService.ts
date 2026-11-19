@@ -1,5 +1,5 @@
 // src/lib/services/moderationService.ts
-import { db } from '@/lib/firebase';
+import { auth, db } from '@/lib/firebase';
 import type { Post, Comment, User } from '@/lib/types';
 import {
   collection,
@@ -152,13 +152,31 @@ export const subscribeToReportedContent = (
 };
 
 
+async function postModerationAction(payload: Record<string, unknown>): Promise<void> {
+    const token = await auth.currentUser?.getIdToken();
+    if (!token) {
+        throw new Error('Sessão expirada. Entre novamente para moderar.');
+    }
+    const res = await fetch('/api/admin/moderation', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+    });
+    const json = (await res.json().catch(() => null)) as { error?: string } | null;
+    if (!res.ok) {
+        throw new Error(json?.error || 'Falha ao processar moderação.');
+    }
+}
+
 /**
  * Marks a report as resolved (ignored) without taking action on the content.
  * @param reportId The ID of the report to ignore.
  */
 export const ignoreReport = async (reportId: string): Promise<void> => {
-    const reportRef = doc(db, 'reports', reportId);
-    await updateDoc(reportRef, { status: 'resolved' });
+    await postModerationAction({ action: 'ignore', reportId });
 };
 
 /**
@@ -167,14 +185,11 @@ export const ignoreReport = async (reportId: string): Promise<void> => {
  */
 export const deleteReportedContent = async (item: ReportedItem): Promise<void> => {
     const { reportId, contentType, reportedContent } = item;
-
-    if (contentType === 'post') {
-        await deletePost(reportedContent.id, (reportedContent as Post).userId);
-    } else if (contentType === 'comment') {
-        await deleteComment((reportedContent as Comment).parentPostId, reportedContent.id, (reportedContent as Comment).userId);
-    }
-
-    // After successfully deleting the content, mark the report as resolved.
-    const reportRef = doc(db, 'reports', reportId);
-    await updateDoc(reportRef, { status: 'resolved' });
+    await postModerationAction({
+        action: 'remove',
+        reportId,
+        contentType,
+        contentId: reportedContent.id,
+        postId: contentType === 'comment' ? (reportedContent as Comment).parentPostId : undefined,
+    });
 };

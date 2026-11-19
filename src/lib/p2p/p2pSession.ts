@@ -24,7 +24,7 @@ import {
   type P2pSignal,
   type SessionDescription,
   type SignalRejection,
-  type WireMessage,
+  type WirePacket,
   type WireRejection,
 } from './p2pProtocol.ts';
 
@@ -82,7 +82,8 @@ export interface P2pCoreDeps {
   };
   newSessionId(): string;
   onState(state: P2pConnectionState, reason: P2pFailureReason | null): void;
-  onMessage(message: WireMessage): void;
+  /** Mensagem OU confirmacao de leitura: quem recebe despacha pelo `kind`. */
+  onMessage(message: WirePacket): void;
   /** Termina de preparar o que a conexão precisa (servidores TURN, por exemplo) antes da primeira tentativa. */
   ready?: Promise<unknown>;
   /** A aba está visível? Só a visível atende uma oferta. */
@@ -118,7 +119,7 @@ export const DEFAULT_P2P_CONFIG: P2pCoreConfig = {
 
 export interface P2pCore {
   /** `true` se a mensagem foi entregue ao túnel aberto. */
-  sendWire(message: WireMessage): boolean;
+  sendWire(message: WirePacket): boolean;
   /** Recomeça agora, por vontade da pessoa. */
   reconnect(): void;
   /** A aba voltou a ficar visível: quem ignorou uma oferta pede outra. */

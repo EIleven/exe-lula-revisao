@@ -1,7 +1,7 @@
 // src/components/feed/SharePostDialog.tsx
 'use client';
 
-// Compartilhar um post do Exe. Lula: link para as redes mais usadas no Brasil e imagem pronta (no visual da rede, com
+// Compartilhar um post do HiperVerso: link para as redes mais usadas no Brasil e imagem pronta (no visual da rede, com
 // a lula) para o Instagram — feed e story/reels. O Instagram não aceita publicação por link de outro site, então o
 // caminho honesto é a imagem: a pessoa compartilha pelo celular ou baixa e publica.
 import { useState } from 'react';
@@ -62,7 +62,7 @@ export default function SharePostDialog({ post, open, onOpenChange }: Props) {
 
   const url = `${siteConfig.baseUrl}/${locale}/post/${post.id}`;
   const autor = post.user?.username ? `@${post.user.username}` : 'alguém';
-  const titulo = post.headline || `Post de ${autor} no Exe. Lula`;
+  const titulo = post.headline || `Post de ${autor} no HiperVerso`;
   const textoCurto = `${titulo} — ${url}`;
   const imagemUrl = `/api/post-image/${post.id}?formato=${formato}`;
   // Post só para seguidores não vira imagem nem prévia (o servidor devolve a marca): avisamos antes.

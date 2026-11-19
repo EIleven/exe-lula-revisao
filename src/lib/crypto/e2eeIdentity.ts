@@ -271,7 +271,13 @@ export function createIdentityService(deps: IdentityDeps) {
     return { ok: false, reason: minhaNoPayload ? 'decrypt-failed' : 'key-not-in-keyring' };
   }
 
-  return { status, rotate, createNewIdentity, importKeyring, exportKeyring, encrypt, decrypt, invalidate, loadRing };
+  function clearLocalKeys(userId: string) {
+    deps.storage.removeItem(`${KEY_PREFIX_V2}${userId}`);
+    deps.storage.removeItem(`${KEY_PREFIX_V1}${userId}`);
+    invalidate(userId);
+  }
+
+  return { status, rotate, createNewIdentity, importKeyring, exportKeyring, clearLocalKeys, encrypt, decrypt, invalidate, loadRing };
 }
 
 export type IdentityService = ReturnType<typeof createIdentityService>;
