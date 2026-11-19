@@ -6,6 +6,7 @@ export const SUSPENDED_FEDIVERSE_DOMAINS = [
   'bolha.us',
   'ursal.zone',
   'alquimidia.social.br',
+  'comuna.social.br',
 ] as const;
 
 export function isSuspendedFediverseHost(host: string | null | undefined): boolean {

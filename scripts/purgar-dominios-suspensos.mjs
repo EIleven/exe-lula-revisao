@@ -5,7 +5,7 @@
 import admin from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
 
-const TARGET_DOMAINS = ['bolha.one', 'bolha.us', 'ursal.zone', 'alquimidia.social.br'];
+const TARGET_DOMAINS = ['bolha.one', 'bolha.us', 'ursal.zone', 'alquimidia.social.br', 'comuna.social.br'];
 const DRY_RUN = process.argv.includes('--dry-run');
 const PAGE_SIZE = 300;
 const PROJECT_ID = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'echo-b5aw9';

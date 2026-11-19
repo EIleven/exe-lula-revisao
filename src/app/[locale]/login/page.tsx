@@ -121,7 +121,6 @@ function safeRedirectPath(value: string | null, fallback: string): string {
 const BR_FEDIVERSE_INSTANCES = [
   { domain: 'organica.social', label: 'Orgânica (organica.social)' },
   { domain: 'social.teia.bio.br', label: 'Teia (social.teia.bio.br)' },
-  { domain: 'comuna.social.br', label: 'Comuna (comuna.social.br)' },
   { domain: 'mato.social', label: 'Mato (mato.social)' },
 ] as const;
 
