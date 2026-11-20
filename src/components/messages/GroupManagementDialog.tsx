@@ -263,7 +263,7 @@ export function GroupManagementDialog({
     if (!isAdmin || isAdding || selectedToAdd.length === 0) return;
     setIsAdding(true);
     try {
-      const { addedUsers, remoteNotified } = await addGroupParticipants(
+      const { addedUsers, remoteNotified, recusados } = await addGroupParticipants(
         conversation.id,
         currentUserId,
         selectedToAdd,
@@ -280,12 +280,18 @@ export function GroupManagementDialog({
           `Boas-vindas a ${addedHandles.join(' ')} no grupo "${groupTitle}"! Quem quiser chegar junto na conversa entra em 1 toque:\n${inviteLink}`
         );
       }
+      // Conta quem ENTROU, não quem foi pedido: parte da seleção pode ter sido recusada por escolha da própria
+      // pessoa (caixa de entrada fechada, "só de quem eu sigo") ou por bloqueio. Dizer "5 adicionadas" quando
+      // entraram 3 é mentir na cara de quem está olhando a lista.
+      const quantos = addedUsers.length;
+      const partes = [`${quantos} pessoa(s) adicionada(s) ao grupo.`];
+      if (remoteNotified > 0) partes.push(`${remoteNotified} convite(s) enviado(s) ao Fediverso.`);
+      if (recusados.length > 0) {
+        partes.push(recusados.map((r) => `${r.nome} ${r.emPalavras}`).join('; ') + '.');
+      }
       toast({
-        title: 'Participantes adicionados',
-        description:
-          remoteNotified > 0
-            ? `${selectedToAdd.length} pessoa(s) adicionada(s) e ${remoteNotified} convite(s) enviado(s) ao Fediverso.`
-            : `${selectedToAdd.length} pessoa(s) adicionada(s) ao grupo.`,
+        title: recusados.length > 0 ? 'Adicionado em parte' : 'Participantes adicionados',
+        description: partes.join(' '),
       });
       setSelectedToAdd([]);
       setTab('invite');

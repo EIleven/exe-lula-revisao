@@ -15,6 +15,9 @@ service firebase.storage {
         && request.auth.uid == userId
         && mediaId.matches('^[A-Za-z0-9_-]{22}$')
         && request.resource.size > 0
+        // Teto de 5 GB na FONTE. Sem teto, um upload so podia custar armazenamento sem limite e ainda enfileirar
+        // ate 2h50 de transcodificacao -- gasto de maquina que quem envia escolhe e a instancia paga.
+        && request.resource.size <= 5 * 1024 * 1024 * 1024
         && request.resource.contentType.matches('video/.*')
         && request.resource.metadata.mediaId == mediaId
         && request.resource.metadata.pipeline == 'ffmpeg-v1';

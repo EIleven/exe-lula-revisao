@@ -5,6 +5,7 @@ import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import type { User } from '@/lib/types';
 import { decideInstance } from '@/lib/activitypub/gate';
 import { pausaDeConsentimento } from '@/lib/activitypub/consentimentoDeDominio';
+import { isFromSuspendedFediverseDomain, isSuspendedFediverseHost } from '@/lib/federation/suspendedDomains';
 import { safeFetchText } from '@/lib/security/safe-fetch';
 import { federation } from '@/lib/server/federation';
 import { adminFirestore } from '@/lib/server/firebaseAdmin';
@@ -109,6 +110,23 @@ async function resolveAccountToUser(
   if (!acct) return null;
   const handle = acct.includes('@') ? acct : `${acct}@${fallbackDomain}`;
   const itemDomain = handle.split('@').pop()?.toLowerCase() || fallbackDomain;
+
+  if (
+    isSuspendedFediverseHost(itemDomain) ||
+    isFromSuspendedFediverseDomain({ username: handle, remoteUrl: actorId })
+  ) {
+    return null;
+  }
+
+  const f = federation();
+  const politica = await f.store.getInstancePolicy();
+  if (itemDomain !== ownHostLower && decideInstance(itemDomain, politica, f.ownHost).decision === 'reject') {
+    return null;
+  }
+  const saude = await f.store.getDomainHealth(itemDomain).catch(() => null);
+  if (pausaDeConsentimento(saude, Date.now()).pausado) {
+    return null;
+  }
 
   const db = adminFirestore();
   if (itemDomain === ownHostLower) {
@@ -379,6 +397,7 @@ export async function syncRemotePostComments(postId: string): Promise<number> {
     const objId = s.uri || s.url || '';
     const text = typeof s.content === 'string' ? stripHtml(s.content).slice(0, 2000) : '';
     if (!objId || !text || !s.account) continue;
+    if (isFromSuspendedFediverseDomain({ remoteUrl: objId })) continue;
 
     const resolvedAuthor = await resolveAccountToUser(s.account, loc.domain, ownHostLower);
     if (!resolvedAuthor) continue;

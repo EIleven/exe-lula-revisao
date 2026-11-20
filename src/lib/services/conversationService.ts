@@ -28,6 +28,12 @@ import { v4 as uuidv4 } from 'uuid'; // For unique file names
 
 import { deepCopyConversation, deepCopyDirectMessage, deepCopyUser } from '../utils/dataTransformers';
 import { getUser, fetchPublicUsersByIds } from './userService';
+import {
+  MOTIVO_EM_PALAVRAS,
+  triarEntradas,
+  type MotivoDaRecusa,
+  type SinaisDaRelacao,
+} from '../messages/entradaEmGrupo';
 import { getCurrentUserId } from './authService';
 import { getPostById } from './postReadService';
 
@@ -169,44 +175,43 @@ export const createGroupConversation = async (
     throw new Error("Informe um nome válido para o grupo (1 a 80 caracteres).");
   }
 
-  const participantIds = Array.from(new Set([creatorId, ...selectedUserIds.filter(Boolean)]));
-  if (participantIds.length < 2) {
+  const pedidos = Array.from(new Set(selectedUserIds.filter(Boolean))).filter((id) => id !== creatorId);
+  if (pedidos.length < 1) {
     throw new Error("Selecione pelo menos um participante além de você.");
   }
-  if (participantIds.length > 1000) {
-    throw new Error("O grupo pode ter no máximo 1000 participantes.");
+
+  // Criação e adição de participantes passam pela rota autenticada /api/messages/group-members
+  // (as firestore.rules barram adição direta de terceiros pelo SDK do cliente).
+  const token = await auth.currentUser?.getIdToken().catch(() => null);
+  if (!token) {
+    throw new Error("Sessão inválida. Faça login novamente para criar o grupo.");
   }
 
-  const conversationId = `grp_${uuidv4().replace(/-/g, '').slice(0, 20)}`;
-  const conversationRef = doc(conversationsCollection, conversationId);
-
-  const unreadCounts: Record<string, number> = {};
-  for (const pid of participantIds) {
-    unreadCounts[pid] = 0;
-  }
-
-  const newGroupData = {
-    isGroup: true,
-    groupName: trimmedName,
-    groupAvatarUrl: null,
-    participantIds,
-    adminIds: [creatorId],
-    createdBy: creatorId,
-    createdAt: serverTimestamp(),
-    lastMessageAt: serverTimestamp(),
-    lastMessageId: null,
-    lastMessageText: null,
-    lastMessageSenderId: null,
-    unreadCounts,
-    userLeftAt: {},
+  const res = await fetch('/api/messages/group-members', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      action: 'create',
+      groupName: trimmedName,
+      userIds: pedidos,
+    }),
+  });
+  const payload = (await res.json().catch(() => ({}))) as {
+    conversationId?: string;
+    message?: string;
   };
+  if (!res.ok || !payload.conversationId) {
+    throw new Error(payload.message || 'Não foi possível criar o grupo.');
+  }
 
-  await setDoc(conversationRef, newGroupData);
-  const created = await firestoreToConversation(
-    conversationId,
-    { ...newGroupData, createdAt: Timestamp.now(), lastMessageAt: Timestamp.now() },
-    activeUserId
-  );
+  const convSnap = await getDoc(doc(conversationsCollection, payload.conversationId));
+  if (!convSnap.exists()) {
+    throw new Error("Não foi possível carregar o grupo recém-criado.");
+  }
+  const created = await firestoreToConversation(convSnap.id, convSnap.data(), activeUserId);
   if (!created) {
     throw new Error("Não foi possível carregar o grupo recém-criado.");
   }
@@ -240,29 +245,95 @@ export interface AddGroupParticipantsOptions {
   announceInGroup?: boolean;
 }
 
+/** Quem não entrou e por quê. Vai para a tela: sumir com a pessoa da lista calado é o que parece aplicativo quebrado. */
+export interface RecusaDeEntrada {
+  userId: string;
+  nome: string;
+  motivo: MotivoDaRecusa;
+  emPalavras: string;
+}
+
+/**
+ * Lê os sinais de consentimento de cada pessoa que seria adicionada. Quatro leituras no máximo por candidato, todas
+ * permitidas pelas regras: o documento público (já lido por `fetchPublicUsersByIds`), o bloqueio nos dois sentidos e
+ * -- só quando a preferência é 'followed' -- o seguimento.
+ *
+ * NÃO existe `catch` aqui de propósito. Um erro de leitura num teste de BLOQUEIO que "falha aberto" é pior que erro
+ * nenhum: adicionaria justamente quem bloqueou. Se não der para conferir, a adição inteira para e a pessoa tenta de
+ * novo.
+ */
+const sinaisDeEntradaEmGrupo = async (
+  actorUserId: string,
+  ids: string[],
+  perfilPorId: Map<string, User>,
+): Promise<Map<string, SinaisDaRelacao>> => {
+  const pares = await Promise.all(
+    ids.map(async (id): Promise<[string, SinaisDaRelacao]> => {
+      const perfil = perfilPorId.get(id);
+      const ehRemoto = id.startsWith('ap_') || (perfil?.username || '').includes('@');
+      const [alvoBloqueouOAtor, atorBloqueouOAlvo] = await Promise.all([
+        getDoc(doc(db, 'users', id, 'blockedUsers', actorUserId)).then((s) => s.exists()),
+        getDoc(doc(db, 'users', actorUserId, 'blockedUsers', id)).then((s) => s.exists()),
+      ]);
+      const dmPreference = perfil?.dmPreference;
+      const alvoSegueOAtor =
+        dmPreference === 'followed'
+          ? await getDoc(doc(db, 'users', id, 'following', actorUserId)).then((s) => s.exists())
+          : undefined;
+      return [id, { dmPreference, ehRemoto, alvoBloqueouOAtor, atorBloqueouOAlvo, alvoSegueOAtor }];
+    }),
+  );
+  return new Map(pares);
+};
+
 export const addGroupParticipants = async (
   conversationId: string,
   actorUserId: string,
   userIdsToAdd: string[],
   options: AddGroupParticipantsOptions = {}
-): Promise<{ addedUsers: User[]; remoteNotified: number }> => {
-  const { conversationRef, data } = await assertGroupAdmin(conversationId, actorUserId);
+): Promise<{ addedUsers: User[]; remoteNotified: number; recusados: RecusaDeEntrada[] }> => {
+  const { data } = await assertGroupAdmin(conversationId, actorUserId);
   const currentIds: string[] = Array.isArray(data.participantIds) ? data.participantIds : [];
-  const newlyAddedIds = userIdsToAdd.filter((id) => Boolean(id) && !currentIds.includes(id));
-  const nextIds = Array.from(new Set([...currentIds, ...userIdsToAdd.filter(Boolean)]));
-  if (nextIds.length > 1000) {
-    throw new Error("O grupo pode ter no máximo 1000 participantes.");
+  const pedidos = userIdsToAdd.filter((id) => Boolean(id) && !currentIds.includes(id));
+  if (pedidos.length === 0) {
+    return { addedUsers: [], remoteNotified: 0, recusados: [] };
   }
 
-  // Atualiza apenas participantIds para cumprir estritamente a regra isGroupAdminUpdating do Firestore
-  await updateDoc(conversationRef, {
-    participantIds: nextIds,
-  });
+  const authToken = await auth.currentUser?.getIdToken().catch(() => null);
+  if (!authToken) {
+    throw new Error("Sessão inválida. Faça login novamente.");
+  }
 
-  const addedUsers =
-    newlyAddedIds.length > 0
-      ? await fetchPublicUsersByIds(newlyAddedIds, actorUserId).catch(() => [] as User[])
-      : [];
+  const addRes = await fetch('/api/messages/group-members', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${authToken}`,
+    },
+    body: JSON.stringify({
+      action: 'add',
+      conversationId,
+      userIds: pedidos,
+    }),
+  });
+  const addPayload = (await addRes.json().catch(() => ({}))) as {
+    addedIds?: string[];
+    recusados?: RecusaDeEntrada[];
+    message?: string;
+  };
+  if (!addRes.ok) {
+    throw new Error(addPayload.message || 'Ninguém foi adicionado.');
+  }
+
+  const newlyAddedIds = Array.isArray(addPayload.addedIds) ? addPayload.addedIds : [];
+  const recusados: RecusaDeEntrada[] = Array.isArray(addPayload.recusados) ? addPayload.recusados : [];
+  const nextIds = Array.from(new Set([...currentIds, ...newlyAddedIds]));
+  const perfis = newlyAddedIds.length > 0 ? await fetchPublicUsersByIds(newlyAddedIds, actorUserId) : [];
+  const perfilPorId = new Map(perfis.map((u) => [u.id, u]));
+
+  const addedUsers = newlyAddedIds
+    .map((id) => perfilPorId.get(id))
+    .filter((u): u is User => Boolean(u));
 
   let remoteNotified = 0;
   const groupTitle = (data.groupName || 'Grupo').trim();
@@ -320,7 +391,7 @@ export const addGroupParticipants = async (
     }
   }
 
-  return { addedUsers, remoteNotified };
+  return { addedUsers, remoteNotified, recusados };
 };
 
 export const removeGroupParticipant = async (

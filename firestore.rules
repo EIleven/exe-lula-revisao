@@ -213,9 +213,14 @@ service cloud.firestore {
         allow get: if isAuthenticated() && (isOwner(userId) || isOwner(blockedId));
       }
 
+      // Quem avisa que quer ser avisado e a PROPRIA pessoa. Antes o dono do perfil tambem podia criar aqui, o que
+      // deixava qualquer um inscrever estranhos para receber push de cada post seu -- spam com a nossa assinatura,
+      // partindo do nosso servidor. Receber notificacao e escolha de quem recebe, nunca de quem publica.
+      //
+      // Apagar continua valendo para os dois: o dono pode tirar um inscrito, e o inscrito pode sair sozinho.
       match /subscribers/{subscriberId} {
         allow read: if isAuthenticated() && (isOwner(userId) || isOwner(subscriberId));
-        allow create, update: if isVerifiedMember() && (isOwner(userId) || isOwner(subscriberId));
+        allow create, update: if isVerifiedMember() && isOwner(subscriberId);
         allow delete: if isAuthenticated() && (isOwner(userId) || isOwner(subscriberId));
       }
       match /bookmarks/{postId} { allow read, write: if isOwner(userId); }
@@ -289,6 +294,7 @@ service cloud.firestore {
           && other != me
           && request.resource.data.get('createdBy', me) == me
           && pref != 'none'
+          && pref != 'nobody'
           && (pref != 'followed' || exists(/databases/$(database)/documents/users/$(other)/following/$(me)))
           && !exists(/databases/$(database)/documents/users/$(other)/blockedUsers/$(me))
           && !exists(/databases/$(database)/documents/users/$(me)/blockedUsers/$(other));
@@ -306,9 +312,7 @@ service cloud.firestore {
           && request.resource.data.get('createdBy', '') == me
           && request.resource.data.get('adminIds', []) == [me]
           && ids is list
-          && ids.size() >= 2
-          && ids.size() <= 1000
-          && me in ids;
+          && ids == [me];
       }
 
       function isValidSelfConversation(conversationId) {
@@ -347,7 +351,9 @@ service cloud.firestore {
              ));
       }
 
-      // Admins do grupo podem adicionar/remover participantes (até 1000), promover/rebaixar admins e renomear o grupo.
+      // Admins do grupo podem remover participantes existentes, promover/rebaixar admins e renomear o grupo.
+      // Adição de novos participantes passa obrigatoriamente pela rota de servidor (/api/messages/group-members),
+      // que valida bloqueios e dmPreference sem o limite de 10 leituras das regras.
       function isGroupAdminUpdating() {
         let me = request.auth.uid;
         let changed = request.resource.data.diff(resource.data).affectedKeys();
@@ -360,6 +366,7 @@ service cloud.firestore {
           && newIds is list
           && newIds.size() >= 1
           && newIds.size() <= 1000
+          && (!changed.hasAny(['participantIds']) || resource.data.participantIds.hasAll(newIds))
           && newAdmins is list
           && newAdmins.size() >= 1
           && newAdmins.size() <= 1000
@@ -843,28 +850,19 @@ service cloud.firestore {
       function publicKind(kind) {
         return kind == 'postMedia' || kind == 'avatar' || kind == 'cover';
       }
-      function isValidMedia() {
-        return request.resource.data.keys().hasOnly(
-                 ['storagePath', 'contentType', 'size', 'ownerUid', 'visibility', 'kind', 'createdAt'])
-          && request.resource.data.ownerUid == request.auth.uid
-          && request.resource.data.storagePath is string
-          && request.resource.data.storagePath.size() <= 500
-          // O caminho tem de estar na pasta da propria pessoa: sem isto alguem registraria o objeto de outro
-          // e ganharia uma URL publica para ele.
-          && request.resource.data.storagePath.matches('user_uploads/' + request.auth.uid + '/.*')
-          && request.resource.data.contentType is string
-          && request.resource.data.contentType.size() <= 120
-          && request.resource.data.size is number
-          && request.resource.data.size >= 0
-          && request.resource.data.kind is string
-          && request.resource.data.visibility ==
-               (publicKind(request.resource.data.kind) ? 'public' : 'private')
-          && request.resource.data.createdAt == request.time;
-      }
       allow get: if isOwner(resource.data.ownerUid) || isAdminUser();
       // Ninguem lista: listar daria um mapa de todas as midias.
       allow list: if false;
-      allow create: if isVerifiedMember() && isValidMedia();
+      // NINGUEM cria pelo cliente. Quem registra midia e o servidor, pelo Admin SDK, nas rotas /api/media/* --
+      // nenhum codigo de cliente escreve aqui (conferido).
+      //
+      // Por que `false` e nao uma validacao melhor: a regra antiga exigia que `contentType` fosse texto de ate 120
+      // caracteres, mas nao restringia o VALOR. Um membro logado podia subir um .txt na propria pasta (permitido
+      // pelas regras do Storage) e registra-lo como `text/html`, publico. A rota /m/{id} servia aquilo como
+      // documento HTML no dominio principal -- script executando no site e dentro da WebView do app, com acesso ao
+      // que o navegador guarda. Lista de tipos permitidos na regra resolveria este caso; fechar a escrita resolve
+      // tambem os proximos, porque o cliente nunca precisou disto.
+      allow create: if false;
       // Depois de criado so o tombstone muda, e so o dono o marca.
       allow update: if isOwner(resource.data.ownerUid)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deletedAt']);
@@ -897,6 +895,17 @@ service cloud.firestore {
 
     match /access_agg_daily/{aggId} {
       allow read, list: if isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+      allow write, create, update, delete: if false;
+    }
+
+    // Indice da aba Fontes: resumo (titulo, descricao, capa) das paginas que a rede citou. So o SERVIDOR escreve,
+    // pelo Admin SDK, e so depois de a politica de indexacao aprovar (noindex, host nosso, arquivo de midia).
+    //
+    // Leitura tambem negada ao cliente, de proposito: a busca de Fontes responde por /api, nao por consulta direta.
+    // Assim o que sai e o que a nossa rota decidir mostrar -- e um dominio bloqueado pelo painel do admin nao
+    // continua alcancavel por quem souber montar a consulta.
+    match /fontes/{fonteId} {
+      allow read, list: if false;
       allow write, create, update, delete: if false;
     }
   }

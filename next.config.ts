@@ -56,9 +56,32 @@ const nextConfig: NextConfig = {
     ignoreDuringBuilds: true,
   },
 
-  // 5. Controle de cache customizado só na rota de posts
+  // 5. Cabeçalhos de segurança + controle de cache
   async headers() {
     return [
+      // ── Cabeçalhos de segurança, em TODA página ──
+      //
+      // Estes quatro não dependem de nada do app e não quebram tela nenhuma; deveriam estar aqui desde sempre.
+      // `frame-ancestors 'none'` fecha clickjacking: sem ele, o site pode ser carregado dentro de um iframe
+      // invisível de outro domínio, com um botão falso por cima — a pessoa pensa que clica numa coisa e clica em
+      // outra, dentro da sessão dela.
+      //
+      // Não entra aqui um CSP completo (`default-src`, `script-src`). Um CSP apertado num app Next sem o nonce
+      // montado página a página quebra a aplicação inteira, e um CSP frouxo dá falsa sensação de proteção. O
+      // caminho certo é medir antes de bloquear: ver `Content-Security-Policy-Report-Only` abaixo.
+      {
+        source: '/:path*',
+        headers: [
+          { key: 'X-Frame-Options', value: 'DENY' },
+          { key: 'Content-Security-Policy', value: "frame-ancestors 'none'" },
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+          // HSTS: o navegador passa a recusar http neste domínio. Hospedagem é só https, então não corta ninguém.
+          { key: 'Strict-Transport-Security', value: 'max-age=31536000; includeSubDomains' },
+          // Nada de câmera, microfone ou localização por padrão: o app pede o que precisa via plugin nativo.
+          { key: 'Permissions-Policy', value: 'camera=(self), microphone=(self), geolocation=(), interest-cohort=()' },
+        ],
+      },
       // Download do app Android: tipo correto para o instalador e latest.json sempre revalidado (versão nova aparece na hora).
       {
         source: '/downloads/:file*.apk',

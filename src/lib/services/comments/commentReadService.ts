@@ -20,6 +20,7 @@ import { getUser } from '@/lib/services/userService';
 import { getCurrentUserId } from '@/lib/services/authService';
 import { getPostById, PaginatedPostsResponse, PaginatedPostsOptions } from '@/lib/services/postService';
 import { getViewerActions } from '@/lib/services/viewerActions';
+import { isFromSuspendedFediverseDomain } from '@/lib/federation/suspendedDomains';
 
 const createEmbeddedUserDetails = (user: User): EmbeddedUserDetails => {
   let avatarToEmbed = user.avatarUrl;
@@ -65,6 +66,9 @@ export const getCommentById = async (postId: string, commentId: string, activeUs
         if (!commentSnap.exists()) return undefined;
 
         const rawCommentData = commentSnap.data() as any;
+        if (isFromSuspendedFediverseDomain({ ...rawCommentData, remoteUrl: rawCommentData.remoteUrl || rawCommentData.apObjectId, remoteActorId: rawCommentData.remoteActorUrl, username: rawCommentData.remoteHandle })) {
+            return undefined;
+        }
 
         const commentAuthor = await getUser(rawCommentData.userId, activeUserId);
         if (!commentAuthor) {
@@ -160,6 +164,9 @@ export const getCommentsForPost = async (postId: string, activeUserId: string | 
 
     for (const commentDoc of commentsSnapshot.docs) {
       const rawCommentData = commentDoc.data() as any;
+      if (isFromSuspendedFediverseDomain({ ...rawCommentData, remoteUrl: rawCommentData.remoteUrl || rawCommentData.apObjectId, remoteActorId: rawCommentData.remoteActorUrl, username: rawCommentData.remoteHandle })) {
+        continue;
+      }
 
       const commentAuthor = await getCachedUser(rawCommentData.userId);
       if (!commentAuthor) {

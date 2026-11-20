@@ -18,6 +18,7 @@ import {
   parseRange,
   rangeLength,
 } from '@/lib/media/mediaId';
+import { canRenderInline } from '@/lib/media/privateAccess';
 
 export const dynamic = 'force-dynamic';
 
@@ -171,7 +172,12 @@ async function servir(
     'Cache-Control': MEDIA_CACHE_CONTROL,
     'Accept-Ranges': 'bytes',
     ETag: etag,
-    'Content-Disposition': 'inline',
+    // `inline` SO para o que o navegador pode desenhar sem virar documento. HTML, SVG e XML viram pagina com
+    // script no nosso proprio dominio -- e era por ai que um registro forjado virava invasao. `canRenderInline`
+    // ja existia e ja barrava esses tipos: a rota privada usava, esta aqui nao usava.
+    'Content-Disposition': canRenderInline(contentType) ? 'inline' : 'attachment',
+    // Segunda tranca, independente da primeira: mesmo aberto como documento, nada carrega e nada executa.
+    'Content-Security-Policy': "default-src 'none'; sandbox",
     // Mídia pública precisa ser incorporável fora do site; é o que faz o card do WhatsApp e o vídeo no X abrirem.
     ...CORS_PUBLICO,
     'Cross-Origin-Resource-Policy': 'cross-origin',

@@ -64,9 +64,23 @@ function run(command, args, onLine) {
   });
 }
 
+/**
+ * Formatos que este worker aceita abrir. Lista fechada de proposito.
+ *
+ * Sem ela, o FFmpeg aceita tambem demuxers de LISTA (concat, hls, m3u8) e protocolos de entrada (file:, http:).
+ * Um arquivo que se diz video e e, na verdade, uma playlist pode mandar o FFmpeg ler arquivo local ou buscar URL
+ * -- e este processo roda com a credencial de servico do projeto. O resultado sairia dentro do video transcodificado,
+ * publicado pela propria rede. E um caminho conhecido de exfiltracao, nao uma hipotese.
+ */
+const FORMATOS_ACEITOS = 'mov,mp4,m4a,3gp,3g2,mj2,matroska,webm,avi,mpegts,mpeg,ogg,flv,asf';
+/** So arquivo local. Nada de http, nem concat, nem pipe de rede. */
+const PROTOCOLOS_ACEITOS = 'file';
+
 async function probeVideo(inputPath) {
   const {stdout} = await run('ffprobe', [
     '-v', 'error',
+    '-format_whitelist', FORMATOS_ACEITOS,
+    '-protocol_whitelist', PROTOCOLOS_ACEITOS,
     '-show_entries', 'format=duration:stream=index,codec_type,width,height,avg_frame_rate',
     '-of', 'json',
     inputPath,
@@ -151,6 +165,9 @@ async function main() {
   let progressWrite = Promise.resolve();
   await run('ffmpeg', [
     '-hide_banner', '-y',
+    // As duas travas valem na ENTRADA, por isso vem antes do -i.
+    '-format_whitelist', FORMATOS_ACEITOS,
+    '-protocol_whitelist', PROTOCOLOS_ACEITOS,
     '-i', input,
     '-map', '0:v:0', '-map', '0:a:0?',
     '-vf', "scale='min(1920,iw)':'min(1080,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2",

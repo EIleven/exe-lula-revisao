@@ -221,6 +221,12 @@ async function buildPostFromSnapshot(
     if (!postData.originalPostDetails) return undefined;
     const embeddedDetails = postData.originalPostDetails;
     const quotedId = typeof embeddedDetails.id === 'string' ? embeddedDetails.id : '';
+    if (
+      isFromSuspendedFediverseDomain(embeddedDetails) ||
+      isFromSuspendedFediverseDomain({ remoteUrl: quotedId })
+    ) {
+      return unavailableQuote(embeddedDetails as OriginalPostDetails);
+    }
     if (postData.type === 'quote' && quotedId && !quotedId.startsWith('http')) {
       return resolveQuotedOriginal(embeddedDetails as OriginalPostDetails);
     }
