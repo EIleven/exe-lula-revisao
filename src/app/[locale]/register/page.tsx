@@ -366,7 +366,7 @@ function RegisterPageContent() {
                 className="flex items-center justify-center gap-2 rounded-xl border border-border/80 bg-muted/25 px-3 py-2 text-xs font-medium text-foreground transition-colors hover:border-primary/50 hover:bg-primary/10"
               >
                 <Globe className="h-3.5 w-3.5 text-primary" />
-                <span>Entrar com Fediverso (Mastodon / Organica)</span>
+                <span>Entrar com Fediverso (Mastodon / Pleroma)</span>
               </Link>
               <Link
                 href={`/${locale}/login?federated=bluesky`}

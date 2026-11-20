@@ -107,7 +107,14 @@ export default function UserListItem({
                 </Avatar>
                 <div className="min-w-0">
                     <p className={cn('truncate font-medium text-foreground group-hover:underline', isCompact && 'text-sm')}>{userToList.name}</p>
-                    <p className="text-xs text-muted-foreground truncate">@{userToList.username}</p>
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <p className="text-xs text-muted-foreground truncate">@{userToList.username}</p>
+                      {variant === 'default' && activeUserId && activeUserId !== userToList.id && userToList.isFollowedBy && (
+                        <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                          Segue você
+                        </span>
+                      )}
+                    </div>
                     {isCompact && recommendationText && (
                       <p className="mt-0.5 flex items-center gap-1 truncate text-[11px] text-primary/90" title={recommendationText}>
                         <Sparkles className="h-3 w-3 shrink-0" aria-hidden="true" />

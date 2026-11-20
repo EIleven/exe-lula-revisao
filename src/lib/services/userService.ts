@@ -442,16 +442,20 @@ export const fetchPublicUsersByIds = async (
   const uniqueIds = Array.from(new Set(userIds.filter(Boolean)));
   if (uniqueIds.length === 0) return [];
 
-  const [followedIds, blockedIds] = activeUserId
+  const [followedIds, followerIds, blockedIds] = activeUserId
     ? await Promise.all([
         getFollowedUserIds(activeUserId).catch(() => [] as string[]),
+        getDocs(collection(db, 'users', activeUserId, 'followers'))
+          .then((s) => s.docs.map((d) => d.id))
+          .catch(() => [] as string[]),
         getDocs(collection(db, 'users', activeUserId, 'blockedUsers'))
           .then((s) => s.docs.map((d) => d.id))
           .catch(() => [] as string[]),
       ])
-    : [[] as string[], [] as string[]];
+    : [[] as string[], [] as string[], [] as string[]];
 
   const followedSet = new Set(followedIds);
+  const followerSet = new Set(followerIds);
   const blockedSet = new Set(blockedIds);
 
   const chunks: string[][] = [];
@@ -473,6 +477,7 @@ export const fetchPublicUsersByIds = async (
         isFollowing: followedSet.has(docSnap.id),
       });
       if (user) {
+        user.isFollowedBy = followerSet.has(docSnap.id);
         user.isBlocked = blockedSet.has(docSnap.id);
         byId.set(docSnap.id, user);
       }

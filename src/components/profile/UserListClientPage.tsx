@@ -13,7 +13,10 @@ import { useCurrentUser } from '@/contexts/CurrentUserContext';
 import { ArrowLeft, Heart, Repeat2, Users, Edit3, List, UserX, Search, X } from 'lucide-react';
 import { getFollowersOfUser, getUsersFollowedBy, getUser as serverGetUser } from '@/lib/services/userService';
 import { Skeleton } from '@/components/ui/skeleton';
+import { cn } from '@/lib/utils';
 import { useTranslations } from 'next-intl';
+
+type FollowRelationFilter = 'all' | 'mutual' | 'followingOnly' | 'followerOnly';
 
 // Define a mapping from string names to icon components
 const iconMap = {
@@ -78,6 +81,7 @@ export default function UserListClientPage({
   const [isLoading, setIsLoading] = useState(!initialUsers || Boolean(remoteInteractionsUrl));
   const [isRemoteRestricted, setIsRemoteRestricted] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [relationFilter, setRelationFilter] = useState<FollowRelationFilter>('all');
   const { currentUser, firebaseUser } = useCurrentUser();
   const router = useRouter();
   
@@ -204,16 +208,39 @@ export default function UserListClientPage({
     ? (listType === 'followers' ? tFollowers('description', { username: profileUser.username }) : tFollowing('description', { username: profileUser.username }))
     : '...');
 
+  const showRelationFilters = Boolean(currentUser && (listType === 'followers' || listType === 'following'));
+
+  const relationCounts = useMemo(() => {
+    let mutual = 0;
+    let followingOnly = 0;
+    let followerOnly = 0;
+    for (const u of userList) {
+      const iFollow = Boolean(u.isFollowing);
+      const followsMe = Boolean(u.isFollowedBy);
+      if (iFollow && followsMe) mutual++;
+      else if (iFollow && !followsMe) followingOnly++;
+      else if (!iFollow && followsMe) followerOnly++;
+    }
+    return { all: userList.length, mutual, followingOnly, followerOnly };
+  }, [userList]);
+
   const filteredUsers = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
-    if (!q) return userList;
     return userList.filter((u) => {
+      if (showRelationFilters && relationFilter !== 'all') {
+        const iFollow = Boolean(u.isFollowing);
+        const followsMe = Boolean(u.isFollowedBy);
+        if (relationFilter === 'mutual' && !(iFollow && followsMe)) return false;
+        if (relationFilter === 'followingOnly' && !(iFollow && !followsMe)) return false;
+        if (relationFilter === 'followerOnly' && !(!iFollow && followsMe)) return false;
+      }
+      if (!q) return true;
       const name = (u.name || '').toLowerCase();
       const username = (u.username || '').toLowerCase();
       const bio = (u.bio || '').toLowerCase();
       return name.includes(q) || username.includes(q) || bio.includes(q);
     });
-  }, [userList, searchTerm]);
+  }, [userList, searchTerm, showRelationFilters, relationFilter]);
 
   const finalEmptyStateText =
     userList.length === 0 && isRemoteRestricted
@@ -266,6 +293,33 @@ export default function UserListClientPage({
               )}
             </div>
           )}
+          {!isLoading && showRelationFilters && userList.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 pt-3" role="group" aria-label="Filtrar por relação">
+              {(
+                [
+                  { id: 'all', label: `Todos (${relationCounts.all})` },
+                  { id: 'mutual', label: `Mútuos (${relationCounts.mutual})` },
+                  { id: 'followingOnly', label: `Só você segue (${relationCounts.followingOnly})` },
+                  { id: 'followerOnly', label: `Só te segue (${relationCounts.followerOnly})` },
+                ] as const
+              ).map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => setRelationFilter(opt.id)}
+                  aria-pressed={relationFilter === opt.id}
+                  className={cn(
+                    'rounded-full px-3 py-1 text-xs font-medium transition-colors border',
+                    relationFilter === opt.id
+                      ? 'bg-primary text-primary-foreground border-primary'
+                      : 'bg-muted/40 text-muted-foreground border-border hover:bg-muted hover:text-foreground',
+                  )}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          )}
         </CardHeader>
         
         {isLoading ? <ListSkeleton /> : (
@@ -281,10 +335,14 @@ export default function UserListClientPage({
                         />
                     ))}
                     </div>
-                ) : userList.length > 0 && searchTerm.trim() ? (
+                ) : userList.length > 0 && (searchTerm.trim() || relationFilter !== 'all') ? (
                     <div className="p-6 text-center text-muted-foreground border-t">
                        <Search className="mx-auto h-10 w-10 mb-3 opacity-50" />
-                       <p>Nenhuma pessoa encontrada para &ldquo;{searchTerm.trim()}&rdquo;.</p>
+                       <p>
+                         {searchTerm.trim()
+                           ? <>Nenhuma pessoa encontrada para &ldquo;{searchTerm.trim()}&rdquo;.</>
+                           : 'Nenhuma pessoa encontrada neste filtro.'}
+                       </p>
                     </div>
                 ) : (
                     <div className="p-6 text-center text-muted-foreground border-t">

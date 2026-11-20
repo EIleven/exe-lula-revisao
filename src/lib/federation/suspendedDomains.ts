@@ -9,6 +9,7 @@ export const SUSPENDED_FEDIVERSE_DOMAINS = [
   'comuna.social.br',
   'social.groselhas.com.br',
   'marte.city',
+  'organica.social',
 ] as const;
 
 export function isSuspendedFediverseHost(host: string | null | undefined): boolean {
